@@ -18,7 +18,8 @@ strict_tdd_note: >
 rules:
   proposal:
     - Include rollback plan for risky changes
-    - Stack/architecture decisions belong in the first proposal, not in sdd-init
+    - Keep the proposal at intent/scope/approach altitude; it may state constraints
+      the stack must satisfy, but stack and architecture selection belongs to sdd-design
   specs:
     - Use Given/When/Then for scenarios
     - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
