@@ -73,6 +73,16 @@ Un **turnero digital** con tres caras:
 | Ausencia confirmada por una persona | **Se pierde la seña** |
 | Procesamiento del reembolso | **Siempre automático** por la pasarela, sin aprobación manual |
 
+**La seña solo se cobra en la web.** Durante la transición del papel a lo digital va a seguir entrando mucha llamada, y frenar esos turnos para cobrar una seña por teléfono sería ponerle un palo en la rueda al negocio. La estrategia es **empujar a los clientes hacia la web**, no castigar al que llama.
+
+| Canal | ¿Lleva seña? |
+|-------|-------------|
+| Web | ✅ 50% |
+| Teléfono (carga la secretaria) | ❌ Por ahora no |
+| Walk-in | ❌ Nunca |
+
+> **Consecuencia para el diseño:** la seña es **opcional** en el modelo de turnos, no obligatoria. Toda la lógica que la toca — reembolso por cancelación, pérdida por ausencia, reembolso automático al vencer un hold — tiene que funcionar igual cuando no hay seña que devolver. No es un caso raro: van a ser la mayoría de los turnos al principio.
+
 ### 3.2 Ciclo de vida del turno
 
 Un turno tiene estados **explícitos y separados**. Nunca se mezclan: la diferencia entre "cancelado" y "ausente" define si la plata vuelve o no.
@@ -97,7 +107,7 @@ stateDiagram-v2
 | **Realizado** | El corte se hizo; alguien lo marcó desde el panel | Se aplica al pago del servicio |
 | **Cancelado** | El cliente canceló a tiempo, o canceló el local | Reembolso automático |
 | **Sin registrar** | Pasó el día y nadie lo marcó. **No sabemos qué pasó** | Retenida, sin cambios |
-| **Ausente** | Una persona confirmó que el cliente no vino | **Se pierde** |
+| **Ausente** | Una persona confirmó que el cliente no vino | **Se pierde** (si no había seña, queda solo el registro) |
 
 > **La regla que sostiene todo esto:** el sistema **nunca** marca a alguien como ausente por su cuenta. *Sin registrar* significa "no tenemos el dato", no "el cliente faltó". Solo una persona puede confirmar una ausencia, y solo una ausencia confirmada hace perder la seña.
 
@@ -215,7 +225,9 @@ Con los barberos entrando al sistema, aparecen **tres roles con límites reales 
 
 **Los barberos marcan sus propios cortes como realizados.** Es la persona que hizo el trabajo la que mejor sabe que se hizo, y reparte una carga que si no cae entera sobre la secretaria. Ayuda directamente a que no se acumulen turnos *sin registrar*.
 
-> ⚠️ **Supuesto a confirmar:** que la secretaria pueda operar el día a día (turnos, clientes, walk-ins, ausencias) pero no tocar la configuración de fondo (alta de barberos, horarios base, precios). Se separó lo operativo de lo configurable; falta que el dueño lo valide.
+**La secretaria opera, el dueño configura.** La secretaria maneja todo el día a día — turnos, clientes, walk-ins, ausencias de barberos — pero el alta y baja de barberos, los horarios base y los precios quedan solo en manos del dueño.
+
+> Esto se revisa **el día de la entrega del MVP**. Es posible que el dueño prefiera que la secretaria maneje todo como si fuera él. Por eso conviene que la diferencia entre los dos roles sea un cambio de permisos, no de código.
 
 ### 3.9 Perfil del barbero
 
@@ -318,6 +330,7 @@ Esto es un **requisito de arquitectura** que el stack elegido tiene que soportar
 | **El local no resuelve los turnos sin registrar** | Se acumulan indefinidamente y el problema de arriba persiste, solo que visible | Los pendientes deben ser lo primero que se vea al abrir el panel. Además, cada barbero marca sus propios cortes, así que la carga se reparte en vez de caer entera sobre la secretaria |
 | **El alcance creció con los perfiles de barbero y los roles** | Tres roles con permisos reales, perfiles, estadísticas y vista de agenda es bastante más que el turnero original. Riesgo de que el MVP se estire y la demo se corra de fecha | Los permisos se sostienen en el backend desde el arranque (agregarlos después es rehacer). La vista de agenda se comparte entre el panel y el perfil del barbero. Es muy probable que haga falta partir la entrega en varios PRs encadenados |
 | **La facturación del barbero es teórica** | Sale de precios de lista, no de plata contada, porque el sistema no ve el 50% del mostrador. Si el número no se explica en pantalla, el barbero desconfía o discute | La pantalla debe decir explícitamente que es facturación según precio de lista |
+| **El turno telefónico no lleva seña, y al principio va a ser la mayoría** | El ausentismo —uno de los tres problemas que originaron el proyecto— queda sin resolver justo donde hay más volumen. Y el incentivo apunta al lado equivocado: **llamar sale gratis, reservar por la web cuesta el 50% por adelantado** | Los recordatorios llegan igual a los turnos telefónicos: es la otra palanca contra el ausentismo y ya está en el alcance. Además el historial de ausencias se registra aunque no haya seña, así que más adelante el dueño puede exigirle seña a los que faltan seguido |
 | **Turno telefónico vs cuenta obligatoria + seña online** | Un cliente que llama no tiene cuenta ni puede pagar online en medio de la llamada | Propuesta: la secretaria crea o busca un registro mínimo del cliente y marca la seña como cobrada en persona. **Requiere confirmación del dueño** |
 | **Límites de Gmail** | ~500 envíos/día en cuentas gratuitas, requiere App Password, mala entregabilidad desde casilla personal | Aceptado conscientemente para la demo. El puerto hace que migrar sea barato |
 | **Email tiene la peor tasa de apertura** para cambios del mismo día | Un cliente puede no enterarse a tiempo de que su barbero faltó | Aceptado como tradeoff temporal hasta migrar a WhatsApp |
@@ -341,13 +354,21 @@ Documentado para que no se pierda:
 
 ## 8. Decisiones abiertas
 
-Estas están **sin resolver** y frenan el avance a la fase de especificación:
+**No queda ninguna decisión bloqueante.** El proyecto está listo para avanzar a la fase de especificación.
 
-1. **Cobro de la seña en el turno telefónico** — un cliente que llama no puede pagar online en medio de la llamada. La parte de la cuenta ya no es problema: como no hay contraseña, la secretaria puede crearla con los datos que el cliente le dicta. Falta definir cómo se cobra la seña.
-2. **Permisos de la secretaria sobre la configuración** — se asumió que maneja el día a día pero no toca alta de barberos, horarios base ni precios. Falta que el dueño lo valide.
-3. **Regla de `openspec/config.yaml`** — dice que el stack se define en la primera propuesta, pero se decidió dejarlo para la fase de diseño. Falta corregir la redacción.
+Resueltas:
 
-> Resuelta el 2026-08-09: ~~mitigación del barrido de las 23:59~~ → se agregó el estado *sin registrar*, que impide que el sistema marque ausencias por su cuenta.
+| Fecha | Decisión | Cómo se resolvió |
+|-------|----------|------------------|
+| 2026-08-09 | Mitigación del barrido de las 23:59 | Se agregó el estado *sin registrar*: el sistema no marca ausencias por su cuenta |
+| 2026-08-10 | Cobro de la seña en el turno telefónico | No se cobra por ahora. Se empuja a los clientes hacia la web |
+| 2026-08-10 | Permisos de la secretaria | Opera el día a día, no toca la configuración. Se revisa el día de la entrega |
+| 2026-08-10 | Dónde se elige el stack | En la fase de diseño. Se corrigió la regla en `openspec/config.yaml` |
+
+Para revisar **el día de la entrega del MVP**, con el dueño presente:
+
+- Si la secretaria debería tener los mismos permisos que el dueño
+- Si conviene empezar a cobrar seña en los turnos telefónicos una vez pasada la transición
 
 ---
 
@@ -357,10 +378,10 @@ Estas están **sin resolver** y frenan el avance a la fase de especificación:
 |------|--------|
 | Inicialización (SDD) | ✅ Completa |
 | Exploración del problema | ✅ Completa |
-| Decisiones de negocio | ✅ Cerradas (3 rondas con el dueño) |
+| Decisiones de negocio | ✅ Cerradas |
 | Propuesta | ✅ Completa |
-| Especificación | ⏸️ Frenada por las decisiones abiertas |
-| Diseño técnico | ⏸️ Frenada por las decisiones abiertas |
+| Especificación | ⬜ Lista para empezar |
+| Diseño técnico | ⬜ Lista para empezar |
 | Implementación | ⬜ Sin empezar |
 
 **Todavía no hay código.** El stack se elige en la fase de diseño.
