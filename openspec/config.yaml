@@ -1,0 +1,42 @@
+schema: spec-driven
+
+context: |
+  Project: JC Barbería MVP web app (real barbershop, Córdoba Capital, Argentina).
+  Status: brand-new, empty directory, not yet a git repo.
+  Tech stack: NOT YET CHOSEN — decide during sdd-explore/sdd-new, not guessed here.
+  Architecture: NOT YET CHOSEN.
+  Testing: no test runner exists yet (see testing capabilities artifact).
+  Persistence: hybrid (Engram + OpenSpec).
+
+strict_tdd: false
+strict_tdd_note: >
+  User's global preference (~/.claude/CLAUDE.md) sets Strict TDD Mode: enabled.
+  No test runner exists yet because no code/stack exists. Recorded as false
+  per sdd-init's "no test runner" fallback; revisit once a stack is chosen in
+  sdd-explore/sdd-new — at that point enable per the user's global preference.
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Stack/architecture decisions belong in the first proposal, not in sdd-init
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Respect the 400-changed-line review budget; recommend chained PRs when at risk
+  apply:
+    guidelines:
+      - Follow existing code patterns once a stack exists
+    tdd: false   # flip to true once a stack + test runner exist, per user's global preference
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
