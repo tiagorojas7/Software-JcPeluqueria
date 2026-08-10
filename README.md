@@ -93,6 +93,10 @@ La adopción de la web se maneja **por acuerdo con el dueño, no por restricció
 >
 > ⚠️ **No la llamemos "seña opcional".** Esa palabra sugiere que el cliente puede saltearla, y llevaría a construir un checkout con un "pagar después" que no existe en ninguna regla del negocio.
 
+**El recordatorio sale 2 horas antes del turno.** Como la ventana de cancelación cierra 1 hora antes, ese aviso es **la última oportunidad del cliente para cancelar y recuperar la seña**. El mensaje tiene que decirlo explícitamente, con la hora límite: si el cliente no lo lee a tiempo, pierde la plata sin haber tenido la chance de decidir.
+
+> Con el canal actual esto queda ajustado: el correo tiene la peor tasa de apertura justo para avisos del mismo día, y 2 horas es una ventana corta para que alguien abra el mail. La elección funciona mucho mejor cuando migremos a WhatsApp, donde los mensajes se leen al instante. Es un motivo más para no quedarse en Gmail más de lo necesario.
+
 ### 3.2 Ciclo de vida del turno
 
 Un turno tiene estados **explícitos y separados**. Nunca se mezclan: la diferencia entre "cancelado" y "ausente" define si la plata vuelve o no.
@@ -213,6 +217,12 @@ La cuenta es **obligatoria** para reservar por la web, pero está diseñada para
 | Momento del registro | **Al final.** Cualquiera navega y ve los horarios libres sin registrarse. Los datos se piden recién al confirmar |
 | Datos obligatorios | Nombre, teléfono, email — los mismos que hacen falta para el turno y el pago |
 | Edad | **Campo opcional.** Se muestra en la agenda del barbero cuando está cargada |
+
+**El cliente que reserva por teléfono y no tiene mail se carga igual**, solo con nombre y teléfono. La secretaria no lo frena por eso.
+
+La contrapartida hay que tenerla clara: **ese cliente no recibe recordatorios ni puede entrar a la web**, porque los dos dependen del correo. Y como el turno telefónico tampoco lleva seña, es el único caso que queda **sin ninguna barrera contra el ausentismo**: ni plata comprometida ni aviso previo.
+
+Se acepta a sabiendas, y por una razón concreta: **el problema se cierra solo al migrar a WhatsApp**, donde el canal pasa a ser el número de teléfono, que ese cliente sí tiene. Es el mismo dato que la secretaria ya le está pidiendo.
 
 **Por qué así.** Buena parte de la clientela de la barbería tiene 40 años o más, y la fricción de registro era una preocupación real. Pero el problema no es dar el nombre y el teléfono: **el problema es inventar y recordar una contraseña**, y después pelearse con el "olvidé mi contraseña". Sacando eso, la cuenta deja de estorbar.
 
@@ -403,9 +413,12 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | Exploración del problema | ✅ Completa |
 | Decisiones de negocio | ✅ Cerradas |
 | Propuesta | ✅ Completa |
-| Especificación | ⬜ Lista para empezar |
-| Diseño técnico | ⬜ Lista para empezar |
+| Especificación | ✅ Completa — 8 dominios, 38 requisitos, 58 escenarios |
+| Diseño técnico | ✅ Completo — stack elegido y arquitectura definida |
+| Desglose en tareas | ⬜ Listo para empezar |
 | Implementación | ⬜ Sin empezar |
+
+**Stack elegido:** NestJS + React/Vite + PostgreSQL + Drizzle + pg-boss, en monorepo hexagonal. Entrega prevista en **14 PRs encadenados** (~5.050 líneas). El detalle y el fundamento están en `openspec/changes/turnero-digital-jc-barberia/design.md`.
 
 **Todavía no hay código.** El stack se elige en la fase de diseño.
 
