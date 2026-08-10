@@ -15,7 +15,7 @@ Este documento es la fuente de verdad de la **lógica de negocio** del proyecto.
   - [3.2 Ciclo de vida del turno](#32-ciclo-de-vida-del-turno)
   - [3.3 El hold de 15 minutos](#33-el-hold-de-15-minutos)
   - [3.4 Ausencia del barbero](#34-ausencia-del-barbero)
-  - [3.5 Barrido diario de las 23:59](#35-barrido-diario-de-las-2359)
+  - [3.5 Barrido diario de las 23:59 y turnos sin registrar](#35-barrido-diario-de-las-2359)
   - [3.6 Operación del local](#36-operación-del-local)
 - [4. Alcance del MVP](#4-alcance-del-mvp)
 - [5. Decisiones técnicas tomadas](#5-decisiones-técnicas-tomadas)
@@ -50,7 +50,7 @@ Un **turnero digital** con dos caras:
 | Cara | Para quién | Qué resuelve |
 |------|-----------|--------------|
 | **Web pública** | Clientes | Reservar turno con seña, cancelar, ver sus turnos |
-| **Panel admin** | Dueño y secretaria | Crear/editar/cancelar turnos, marcar realizados, manejar ausencias de barberos, configurar horarios y precios |
+| **Panel admin** | Dueño y secretaria | Crear/editar/cancelar turnos, marcar realizados, resolver turnos sin registrar, manejar ausencias de barberos, configurar horarios y precios |
 
 ---
 
@@ -64,7 +64,7 @@ Un **turnero digital** con dos caras:
 | Momento del cobro | Al reservar |
 | Ventana de cancelación del cliente | Hasta **1 hora antes** del turno |
 | Cancelación dentro de la ventana | Reembolso automático |
-| Cancelación fuera de la ventana o ausencia | **Se pierde la seña** |
+| Ausencia confirmada por una persona | **Se pierde la seña** |
 | Procesamiento del reembolso | **Siempre automático** por la pasarela, sin aprobación manual |
 
 ### 3.2 Ciclo de vida del turno
@@ -73,11 +73,14 @@ Un turno tiene estados **explícitos y separados**. Nunca se mezclan: la diferen
 
 ```mermaid
 stateDiagram-v2
+    state "Sin registrar" as SinRegistrar
     [*] --> Reservado: cliente paga la seña
-    Reservado --> Realizado: personal lo marca durante el día
-    Reservado --> Cancelado: cliente cancela (hasta 1h antes)
-    Reservado --> Ausente: barrido de las 23:59, sin marcar
-    Realizado --> [*]
+    Reservado --> Realizado: el personal lo marca durante el día
+    Reservado --> Cancelado: cancela el cliente (hasta 1h antes)<br/>o cancela el local
+    Reservado --> SinRegistrar: barrido automático de las 23:59
+    SinRegistrar --> Realizado: una persona confirma que vino
+    SinRegistrar --> Ausente: una persona confirma que no vino
+    Realizado --> [*]: seña aplicada al servicio
     Cancelado --> [*]: seña reembolsada
     Ausente --> [*]: seña perdida
 ```
@@ -87,7 +90,10 @@ stateDiagram-v2
 | **Reservado** | Turno confirmado y señado | Retenida |
 | **Realizado** | El corte se hizo; alguien lo marcó desde el panel | Se aplica al pago del servicio |
 | **Cancelado** | El cliente canceló a tiempo, o canceló el local | Reembolso automático |
-| **Ausente** | Pasó la hora y nadie lo marcó como realizado | **Se pierde** |
+| **Sin registrar** | Pasó el día y nadie lo marcó. **No sabemos qué pasó** | Retenida, sin cambios |
+| **Ausente** | Una persona confirmó que el cliente no vino | **Se pierde** |
+
+> **La regla que sostiene todo esto:** el sistema **nunca** marca a alguien como ausente por su cuenta. *Sin registrar* significa "no tenemos el dato", no "el cliente faltó". Solo una persona puede confirmar una ausencia, y solo una ausencia confirmada hace perder la seña.
 
 ### 3.3 El hold de 15 minutos
 
@@ -147,11 +153,13 @@ Durante el día, el personal marca los turnos como **realizados** desde el panel
 
 Todos los días a las **23:59 (hora Argentina, UTC-3 fijo, sin horario de verano)** corre un proceso automático:
 
-> Todo turno con seña pagada que **no** fue marcado como realizado pasa a estado **ausente**, y la seña **no se devuelve**.
+> Todo turno con seña pagada que **no** fue marcado ni como realizado ni como cancelado pasa a **sin registrar**. La seña **queda retenida, sin cambios**.
 
-**Por qué es híbrido:** el marcado manual permite distinguir un cliente que vino de uno que no. El barrido automático evita que la secretaria tenga que marcar ausencias una por una al cierre.
+Al día siguiente, el local resuelve esos turnos desde el panel: **realizado** o **ausente**. Recién ahí, si se confirma la ausencia, se pierde la seña.
 
-⚠️ **Este mecanismo tiene un riesgo operativo real.** Ver [Riesgos conocidos](#6-riesgos-conocidos).
+**Por qué el estado intermedio.** El barrido detecta turnos sin resolver, pero **no decide qué pasó con ellos**. Que nadie haya marcado un turno no prueba que el cliente faltó — prueba que no tenemos el dato. Sancionar sobre esa suposición castigaría a un cliente que vino y se cortó normalmente, y ensuciaría el historial de ausencias que justamente queremos usar para detectar a los que faltan seguido.
+
+**Por qué el marcado es crítico.** El sistema **no registra el 50% restante** que se cobra en el mostrador — el POS quedó fuera de alcance. Entonces marcar "realizado" es la **única evidencia de que el servicio existió y se cobró**. No es un trámite administrativo: es el registro contable del trabajo hecho.
 
 ### 3.6 Operación del local
 
@@ -173,7 +181,7 @@ Todos los días a las **23:59 (hora Argentina, UTC-3 fijo, sin horario de verano
 - Reserva desde la web con seña del 50%
 - Cancelación del cliente desde la web (hasta 1h antes) con reembolso automático
 - Hold de 15 minutos como infraestructura de reservas
-- Ciclo de vida completo del turno con el barrido de las 23:59
+- Ciclo de vida completo del turno, con el barrido de las 23:59 y la resolución de los turnos sin registrar
 - Flujo de ausencia del barbero
 - Panel admin: crear turnos telefónicos, editar, cancelar, marcar realizados, ocupación por walk-in
 - Configuración de horarios (local y por barbero) y precios
@@ -228,7 +236,8 @@ Esto es un **requisito de arquitectura** que el stack elegido tiene que soportar
 
 | Riesgo | Impacto | Mitigación |
 |--------|---------|------------|
-| **El personal se olvida de marcar un turno como realizado** | El barrido de las 23:59 lo pasa a *ausente* y un cliente que **sí vino** pierde la seña. Reclamo asegurado | Propuesta: que el admin pueda corregir el estado retroactivamente + un listado de cierre de día con los turnos sin marcar. **Todavía sin decidir si entra al MVP** |
+| **El personal se olvida de marcar los turnos** | Los turnos caen a *sin registrar* y se acumulan. El local pierde el registro de qué servicios se prestaron y cobraron, y el historial de ausencias deja de ser confiable. **El cliente no pierde plata** (ya pagó el 50% online y el resto en el mostrador), pero la contabilidad y el seguimiento de ausencias quedan ciegos | ✅ Resuelto en el diseño: el estado *sin registrar* impide que se sancione a nadie por un olvido. Los pendientes tienen que verse de forma prominente en el panel para que se resuelvan al día siguiente |
+| **El local no resuelve los turnos sin registrar** | Se acumulan indefinidamente y el problema de arriba persiste, solo que visible | Los pendientes deben ser lo primero que se vea al abrir el panel. Definir en la fase de diseño |
 | **Turno telefónico vs cuenta obligatoria + seña online** | Un cliente que llama no tiene cuenta ni puede pagar online en medio de la llamada | Propuesta: la secretaria crea o busca un registro mínimo del cliente y marca la seña como cobrada en persona. **Requiere confirmación del dueño** |
 | **Límites de Gmail** | ~500 envíos/día en cuentas gratuitas, requiere App Password, mala entregabilidad desde casilla personal | Aceptado conscientemente para la demo. El puerto hace que migrar sea barato |
 | **Email tiene la peor tasa de apertura** para cambios del mismo día | Un cliente puede no enterarse a tiempo de que su barbero faltó | Aceptado como tradeoff temporal hasta migrar a WhatsApp |
@@ -243,7 +252,8 @@ Documentado para que no se pierda:
 - **Migración a WhatsApp Business API** como canal principal (requiere verificación de Meta Business + alta con un BSP pago)
 - **Reprogramación en el lugar** para el cliente, manteniendo la misma seña (hoy: solo cancelar y reservar de nuevo)
 - **Resolución definitiva del turno telefónico** (cuenta mínima + seña en persona)
-- **Recordatorio de cierre de día** con turnos sin marcar + corrección retroactiva de estado
+- **Corregir un turno mal marcado** como ausente o realizado después de resuelto
+- **Registrar el 50% restante** cobrado en el mostrador, para que el sistema tenga la foto completa del ingreso
 - **Activar TDD estricto** una vez que haya stack y test runner
 
 ---
@@ -253,8 +263,9 @@ Documentado para que no se pierda:
 Estas están **sin resolver** y frenan el avance a la fase de especificación:
 
 1. **Turno telefónico** — cómo se maneja un cliente que llama y no tiene cuenta ni puede pagar online. Hay recomendación escrita, falta confirmación del dueño.
-2. **Mitigación del barrido de las 23:59** — si la corrección retroactiva + el aviso de fin de día entran al MVP o quedan como trabajo futuro.
-3. **Regla de `openspec/config.yaml`** — dice que el stack se define en la primera propuesta, pero se decidió dejarlo para la fase de diseño. Falta corregir la redacción.
+2. **Regla de `openspec/config.yaml`** — dice que el stack se define en la primera propuesta, pero se decidió dejarlo para la fase de diseño. Falta corregir la redacción.
+
+> Resuelta el 2026-08-09: ~~mitigación del barrido de las 23:59~~ → se agregó el estado *sin registrar*, que impide que el sistema marque ausencias por su cuenta.
 
 ---
 
