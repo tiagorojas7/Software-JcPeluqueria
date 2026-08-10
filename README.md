@@ -17,6 +17,9 @@ Este documento es la fuente de verdad de la **lógica de negocio** del proyecto.
   - [3.4 Ausencia del barbero](#34-ausencia-del-barbero)
   - [3.5 Barrido diario de las 23:59 y turnos sin registrar](#35-barrido-diario-de-las-2359)
   - [3.6 Operación del local](#36-operación-del-local)
+  - [3.7 Cuenta del cliente](#37-cuenta-del-cliente)
+  - [3.8 Roles y permisos](#38-roles-y-permisos)
+  - [3.9 Perfil del barbero](#39-perfil-del-barbero)
 - [4. Alcance del MVP](#4-alcance-del-mvp)
 - [5. Decisiones técnicas tomadas](#5-decisiones-técnicas-tomadas)
 - [6. Riesgos conocidos](#6-riesgos-conocidos)
@@ -45,12 +48,15 @@ Eso genera tres problemas concretos:
 
 ## 2. Qué construimos
 
-Un **turnero digital** con dos caras:
+Un **turnero digital** con tres caras:
 
 | Cara | Para quién | Qué resuelve |
 |------|-----------|--------------|
 | **Web pública** | Clientes | Reservar turno con seña, cancelar, ver sus turnos |
-| **Panel admin** | Dueño y secretaria | Crear/editar/cancelar turnos, marcar realizados, resolver turnos sin registrar, manejar ausencias de barberos, configurar horarios y precios |
+| **Panel admin** | Dueño y secretaria | Crear/editar/cancelar turnos, marcar realizados, resolver turnos sin registrar, manejar ausencias de barberos, cargar walk-ins, gestionar clientes y barberos, configurar horarios y precios |
+| **Perfil del barbero** | Cada barbero | Su agenda del día, sus cortes hechos, lo que facturó |
+
+**El sistema es híbrido a propósito.** Lo digital no reemplaza al teléfono ni al walk-in: convive con ellos. El cliente que no quiere saber nada de la web sigue llamando, y la secretaria le carga el turno igual.
 
 ---
 
@@ -167,9 +173,65 @@ Al día siguiente, el local resuelve esos turnos desde el panel: **realizado** o
 |---------|-------|
 | Barberos | Varios, **cada uno con su propio horario y días libres** |
 | Servicios | **Todos los barberos hacen todos los servicios** (sin especialidades) |
-| Walk-ins | **Conviven** con los turnos digitales. El sistema debe poder marcar un hueco como ocupado por walk-in para que no se pise con una reserva online |
+| Walk-ins | **Conviven** con los turnos digitales. Se cargan con **servicio y barbero**, sin seña, y quedan directamente como *realizados*. Ocupan el hueco para que no se pise con una reserva online |
 | Horario del local | Fijo en general, pero **modificable** desde el panel admin |
-| Configurable desde el panel | Horarios del local, horarios de cada barbero, precios de los servicios |
+| Configurable desde el panel | Horarios del local, horarios de cada barbero, precios de los servicios, alta y baja de barberos, gestión de clientes |
+
+**Por qué el walk-in registra servicio y barbero.** Si fuera solo un bloque de "ocupado", los cortes sin turno no contarían para las estadísticas de nadie y los números de cada barbero quedarían siempre por debajo de la realidad. Un barbero que desconfía de sus propios números deja de mirarlos.
+
+### 3.7 Cuenta del cliente
+
+La cuenta es **obligatoria** para reservar por la web, pero está diseñada para pesar lo menos posible.
+
+| Regla | Cómo funciona |
+|-------|---------------|
+| Contraseña | **No hay.** Se entra con un código o link que llega al mail (después, WhatsApp) |
+| Momento del registro | **Al final.** Cualquiera navega y ve los horarios libres sin registrarse. Los datos se piden recién al confirmar |
+| Datos obligatorios | Nombre, teléfono, email — los mismos que hacen falta para el turno y el pago |
+| Edad | **Campo opcional.** Se muestra en la agenda del barbero cuando está cargada |
+
+**Por qué así.** Buena parte de la clientela de la barbería tiene 40 años o más, y la fricción de registro era una preocupación real. Pero el problema no es dar el nombre y el teléfono: **el problema es inventar y recordar una contraseña**, y después pelearse con el "olvidé mi contraseña". Sacando eso, la cuenta deja de estorbar.
+
+Vale la pena notar que a esta persona ya le estamos pidiendo pagar el 50% por MercadoPago. Quien completa un pago online no se traba en un formulario de tres campos.
+
+Y para el que igual no quiere saber nada de la web, la salida está: **llama por teléfono y la secretaria le carga el turno.**
+
+### 3.8 Roles y permisos
+
+Con los barberos entrando al sistema, aparecen **tres roles con límites reales entre ellos**.
+
+| | Dueño | Secretaria | Barbero |
+|---|:---:|:---:|:---:|
+| Turnos (crear, editar, cancelar) | ✅ | ✅ | — |
+| Marcar realizados y resolver pendientes | ✅ | ✅ | Solo los suyos |
+| Cargar walk-ins | ✅ | ✅ | — |
+| Marcar ausencia de un barbero | ✅ | ✅ | — |
+| Gestionar clientes | ✅ | ✅ | — |
+| Alta/baja de barberos, horarios base, precios | ✅ | — | — |
+| Plata del local (facturación, señas) | ✅ | — | — |
+| Su propio perfil y agenda | ✅ | — | ✅ |
+
+**Un barbero solo ve lo suyo.** No accede a la facturación del local ni a los números de sus compañeros. Esa frontera es de autorización, no de pantalla: se sostiene en el backend, no escondiendo botones.
+
+**Los barberos marcan sus propios cortes como realizados.** Es la persona que hizo el trabajo la que mejor sabe que se hizo, y reparte una carga que si no cae entera sobre la secretaria. Ayuda directamente a que no se acumulen turnos *sin registrar*.
+
+> ⚠️ **Supuesto a confirmar:** que la secretaria pueda operar el día a día (turnos, clientes, walk-ins, ausencias) pero no tocar la configuración de fondo (alta de barberos, horarios base, precios). Se separó lo operativo de lo configurable; falta que el dueño lo valide.
+
+### 3.9 Perfil del barbero
+
+Cada barbero tiene su perfil. **No es opcional**: es la puerta por la que entra al sistema.
+
+**Qué ve:**
+
+- **Su agenda del día**, en vista visual de columnas por horario, con el nombre del cliente y su edad si está cargada
+- **Cantidad de cortes** realizados en el día, mes y período
+- **Facturación generada** por esos cortes
+
+**Sobre el número de facturación.** Es lo que vendieron sus cortes según **precio de lista**, no plata contada. El sistema no registra el 50% que se cobra en el mostrador, así que la pantalla tiene que decir eso con todas las letras. Un número ambiguo genera discusiones.
+
+**Facturación no es ganancia.** Cuánto se lleva cada barbero depende de un modelo de comisión que todavía no está definido y que quedó fuera del MVP. Ver [Trabajo futuro](#7-trabajo-futuro).
+
+**La vista de agenda ya la necesitábamos.** Para manejar ausencias, ver disponibilidad y cargar walk-ins, el panel admin necesita la vista del día con una columna por barbero. La agenda del barbero es esa misma vista filtrada a su propia columna.
 
 ---
 
@@ -177,20 +239,36 @@ Al día siguiente, el local resuelve esos turnos desde el panel: **realizado** o
 
 ### Adentro
 
-- Cuenta de cliente **obligatoria** (permite historial de turnos y seguimiento de ausencias)
-- Reserva desde la web con seña del 50%
+**Reserva y pago**
+- Cuenta de cliente obligatoria, **sin contraseña**, creada al final del flujo
+- Reserva desde la web con seña del 50% por MercadoPago
 - Cancelación del cliente desde la web (hasta 1h antes) con reembolso automático
 - Hold de 15 minutos como infraestructura de reservas
+
+**Turnos y operación**
 - Ciclo de vida completo del turno, con el barrido de las 23:59 y la resolución de los turnos sin registrar
 - Flujo de ausencia del barbero
-- Panel admin: crear turnos telefónicos, editar, cancelar, marcar realizados, ocupación por walk-in
-- Configuración de horarios (local y por barbero) y precios
 - Disponibilidad modelada **por barbero**
+- Walk-ins con servicio y barbero
+
+**Panel admin**
+- Crear turnos telefónicos, editar, cancelar, marcar realizados, resolver pendientes
+- Vista del día con una columna por barbero
+- Gestión de clientes y de barberos
+- Configuración de horarios (local y por barbero) y precios
+
+**Perfil del barbero**
+- Su agenda del día en vista visual
+- Cantidad de cortes y facturación generada
+- Marcar sus propios cortes como realizados
+
+**Base**
+- Tres roles con permisos reales (dueño, secretaria, barbero)
 - Notificaciones detrás de un puerto (ver [Decisiones técnicas](#5-decisiones-técnicas-tomadas))
 
 ### Afuera
 
-Inventario de productos · Sueldos y comisiones · POS completo del corte · Programas de fidelización · Marketing masivo · Multi-sucursal · Reportes y analítica avanzada · Reseñas y calificaciones
+Inventario de productos · **Modelo de comisiones y liquidación de sueldos** · POS completo del corte · Programas de fidelización · Marketing masivo · Multi-sucursal · Reportes y analítica avanzada · Reseñas y calificaciones
 
 ---
 
@@ -199,7 +277,7 @@ Inventario de productos · Sueldos y comisiones · POS completo del corte · Pro
 | Decisión | Elección | Por qué |
 |----------|----------|---------|
 | Pasarela de pago | **MercadoPago** | Medio de pago dominante en Argentina; cobra la seña y procesa los reembolsos automáticos |
-| Identidad del cliente | **Cuenta obligatoria** | Habilita historial y seguimiento de ausencias reincidentes |
+| Identidad del cliente | **Cuenta obligatoria sin contraseña**, creada al final del flujo | Habilita historial y seguimiento de ausencias sin la fricción del password, que es lo que realmente frena al público mayor |
 | Canal de notificación (objetivo) | **WhatsApp Business API** | Mejor adopción en Argentina y más barato por mensaje |
 | Canal de notificación (MVP) | **Email vía Gmail** — provisorio | WhatsApp requiere verificación de Meta Business + proveedor pago (BSP) con tiempo de alta real, que bloquearía la demo |
 | Stack | **Sin definir** | Se decide en la fase de diseño |
@@ -237,7 +315,9 @@ Esto es un **requisito de arquitectura** que el stack elegido tiene que soportar
 | Riesgo | Impacto | Mitigación |
 |--------|---------|------------|
 | **El personal se olvida de marcar los turnos** | Los turnos caen a *sin registrar* y se acumulan. El local pierde el registro de qué servicios se prestaron y cobraron, y el historial de ausencias deja de ser confiable. **El cliente no pierde plata** (ya pagó el 50% online y el resto en el mostrador), pero la contabilidad y el seguimiento de ausencias quedan ciegos | ✅ Resuelto en el diseño: el estado *sin registrar* impide que se sancione a nadie por un olvido. Los pendientes tienen que verse de forma prominente en el panel para que se resuelvan al día siguiente |
-| **El local no resuelve los turnos sin registrar** | Se acumulan indefinidamente y el problema de arriba persiste, solo que visible | Los pendientes deben ser lo primero que se vea al abrir el panel. Definir en la fase de diseño |
+| **El local no resuelve los turnos sin registrar** | Se acumulan indefinidamente y el problema de arriba persiste, solo que visible | Los pendientes deben ser lo primero que se vea al abrir el panel. Además, cada barbero marca sus propios cortes, así que la carga se reparte en vez de caer entera sobre la secretaria |
+| **El alcance creció con los perfiles de barbero y los roles** | Tres roles con permisos reales, perfiles, estadísticas y vista de agenda es bastante más que el turnero original. Riesgo de que el MVP se estire y la demo se corra de fecha | Los permisos se sostienen en el backend desde el arranque (agregarlos después es rehacer). La vista de agenda se comparte entre el panel y el perfil del barbero. Es muy probable que haga falta partir la entrega en varios PRs encadenados |
+| **La facturación del barbero es teórica** | Sale de precios de lista, no de plata contada, porque el sistema no ve el 50% del mostrador. Si el número no se explica en pantalla, el barbero desconfía o discute | La pantalla debe decir explícitamente que es facturación según precio de lista |
 | **Turno telefónico vs cuenta obligatoria + seña online** | Un cliente que llama no tiene cuenta ni puede pagar online en medio de la llamada | Propuesta: la secretaria crea o busca un registro mínimo del cliente y marca la seña como cobrada en persona. **Requiere confirmación del dueño** |
 | **Límites de Gmail** | ~500 envíos/día en cuentas gratuitas, requiere App Password, mala entregabilidad desde casilla personal | Aceptado conscientemente para la demo. El puerto hace que migrar sea barato |
 | **Email tiene la peor tasa de apertura** para cambios del mismo día | Un cliente puede no enterarse a tiempo de que su barbero faltó | Aceptado como tradeoff temporal hasta migrar a WhatsApp |
@@ -251,7 +331,8 @@ Documentado para que no se pierda:
 
 - **Migración a WhatsApp Business API** como canal principal (requiere verificación de Meta Business + alta con un BSP pago)
 - **Reprogramación en el lugar** para el cliente, manteniendo la misma seña (hoy: solo cancelar y reservar de nuevo)
-- **Resolución definitiva del turno telefónico** (cuenta mínima + seña en persona)
+- **Modelo de comisiones** — cómo cobra cada barbero (porcentaje, fijo, monto por corte), para poder mostrar ganancia real en vez de facturación
+- **Resolución definitiva del turno telefónico** (cómo se cobra la seña de un cliente que llama)
 - **Corregir un turno mal marcado** como ausente o realizado después de resuelto
 - **Registrar el 50% restante** cobrado en el mostrador, para que el sistema tenga la foto completa del ingreso
 - **Activar TDD estricto** una vez que haya stack y test runner
@@ -262,8 +343,9 @@ Documentado para que no se pierda:
 
 Estas están **sin resolver** y frenan el avance a la fase de especificación:
 
-1. **Turno telefónico** — cómo se maneja un cliente que llama y no tiene cuenta ni puede pagar online. Hay recomendación escrita, falta confirmación del dueño.
-2. **Regla de `openspec/config.yaml`** — dice que el stack se define en la primera propuesta, pero se decidió dejarlo para la fase de diseño. Falta corregir la redacción.
+1. **Cobro de la seña en el turno telefónico** — un cliente que llama no puede pagar online en medio de la llamada. La parte de la cuenta ya no es problema: como no hay contraseña, la secretaria puede crearla con los datos que el cliente le dicta. Falta definir cómo se cobra la seña.
+2. **Permisos de la secretaria sobre la configuración** — se asumió que maneja el día a día pero no toca alta de barberos, horarios base ni precios. Falta que el dueño lo valide.
+3. **Regla de `openspec/config.yaml`** — dice que el stack se define en la primera propuesta, pero se decidió dejarlo para la fase de diseño. Falta corregir la redacción.
 
 > Resuelta el 2026-08-09: ~~mitigación del barrido de las 23:59~~ → se agregó el estado *sin registrar*, que impide que el sistema marque ausencias por su cuenta.
 
