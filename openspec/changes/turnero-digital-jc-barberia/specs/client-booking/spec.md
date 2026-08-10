@@ -18,7 +18,7 @@ El sistema MUST permitir a cualquier visitante consultar servicios, barberos y h
 
 ### Requirement: Cuenta sin contraseña creada al final del flujo
 
-El sistema MUST diferir la creación de la cuenta del cliente hasta el paso de confirmación final de la reserva, y MUST NOT exigir contraseña en ningún momento. Esta ausencia de contraseña aplica únicamente a los clientes; el personal (dueño, secretaria, barbero) se autentica con usuario y contraseña según `access-control`. El acceso del cliente a su cuenta MUST realizarse mediante un código o enlace enviado por el canal de notificación configurado (ver `notification-port`); ese código o enlace MUST ser de un solo uso, MUST expirar en un plazo acotado, y el sistema MUST limitar la frecuencia de solicitudes de acceso de un mismo cliente para evitar abuso. Los datos obligatorios de la cuenta son nombre, teléfono y email; la edad es OPCIONAL.
+El sistema MUST diferir la creación de la cuenta del cliente hasta el paso de confirmación final de la reserva, y MUST NOT exigir contraseña en ningún momento. Esta ausencia de contraseña aplica únicamente a los clientes; el personal (dueño, secretaria, barbero) se autentica con usuario y contraseña según `access-control`. El acceso del cliente a su cuenta MUST realizarse mediante un código o enlace enviado por el canal de notificación configurado (ver `notification-port`); ese código o enlace MUST ser de un solo uso, MUST expirar en un plazo acotado, y el sistema MUST limitar la frecuencia de solicitudes de acceso de un mismo cliente para evitar abuso. Los datos obligatorios de la cuenta son nombre, teléfono y email; la edad es OPCIONAL. El email es obligatorio en este flujo específicamente porque el acceso sin contraseña depende de él para entregar el código o enlace; un cliente cuyo único registro proviene de un turno telefónico sin email (ver `admin-operations`) MUST NOT poder acceder a la cuenta web hasta que se cargue un email válido.
 
 #### Scenario: Registro al confirmar la reserva
 
@@ -61,7 +61,7 @@ El sistema MUST exigir el pago del 50% del precio del servicio como seña para t
 
 ### Requirement: Cancelación del cliente con reembolso automático
 
-El sistema MUST permitir que el cliente cancele su propio turno reservado por la web hasta 1 hora antes de la hora del turno. Toda cancelación dentro de esa ventana MUST disparar un reembolso automático de la seña por la pasarela de pago, sin aprobación manual.
+El sistema MUST permitir que el cliente cancele su propio turno reservado por la web hasta 1 hora antes de la hora del turno. Toda cancelación dentro de esa ventana MUST disparar un reembolso automático de la seña por la pasarela de pago, sin aprobación manual. El recordatorio de turno (ver `notification-port`), despachado 2 horas antes, es la última notificación que le da al cliente un margen real —aproximadamente 1 hora— para usar esta ventana antes de que se cierre.
 
 #### Scenario: Cancelación dentro de la ventana permitida
 

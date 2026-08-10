@@ -8,13 +8,38 @@ Cubre las acciones operativas que el dueño y la secretaria ejecutan desde el pa
 
 ### Requirement: Creación de turnos telefónicos sin seña
 
-El sistema MUST permitir que el personal autorizado cree un turno directamente en `reservado` para un cliente que llama por teléfono, asociado a un registro de cliente nuevo o existente, sin exigir el flujo de cuenta sin contraseña de `client-booking`. La seña no aplica en el canal telefónico: el sistema MUST NOT cobrarla ni condicionarla a una elección del personal o del cliente.
+El sistema MUST permitir que el personal autorizado cree un turno directamente en `reservado` para un cliente que llama por teléfono, asociado a un registro de cliente nuevo o existente, sin exigir el flujo de cuenta sin contraseña de `client-booking`. Los datos mínimos obligatorios del registro de cliente telefónico son nombre y teléfono; email y edad son OPCIONALES. El sistema MUST NOT bloquear la creación del turno ni del registro de cliente por la ausencia de email. La seña no aplica en el canal telefónico: el sistema MUST NOT cobrarla ni condicionarla a una elección del personal o del cliente.
 
 #### Scenario: Turno telefónico creado sin seña
 
 - GIVEN un cliente que llama por teléfono
 - WHEN el personal autorizado carga el turno con servicio, barbero y horario
 - THEN el turno queda en `reservado` sin ninguna seña asociada
+
+#### Scenario: Turno telefónico creado sin email
+
+- GIVEN un cliente que llama por teléfono y no provee un email
+- WHEN el personal autorizado carga el turno con nombre y teléfono
+- THEN el sistema crea el turno y el registro de cliente sin exigir email
+- AND MUST NOT bloquear la operación por esa ausencia
+
+### Requirement: Consecuencias de un turno telefónico sin email
+
+Un cliente cuyo registro no incluye email MUST NOT recibir ningún recordatorio ni ninguna otra notificación, porque el único canal implementado en el MVP es email (ver `notification-port`). Ese mismo cliente MUST NOT poder acceder a la cuenta web self-service, porque el acceso sin contraseña de `client-booking` depende de un email válido para entregar el código o enlace. Combinado con la ausencia de seña en el canal telefónico, este cliente queda sin ninguna mitigación de ausentismo: ni dinero comprometido ni aviso previo del turno.
+
+Este riesgo se acepta conscientemente para el MVP porque se resuelve con la futura migración a WhatsApp Business API (ver `notification-port`), donde el canal de notificación pasa a ser el número de teléfono — dato que la secretaria ya recolecta en este mismo flujo. No corresponde resolverlo haciendo obligatorio el email telefónico: eso reintroduciría la fricción de registro que la cuenta sin contraseña buscó eliminar.
+
+#### Scenario: Cliente telefónico sin email no recibe recordatorio
+
+- GIVEN un turno telefónico `reservado` cuyo cliente no tiene email registrado
+- WHEN se aproxima la hora del recordatorio
+- THEN el sistema MUST NOT despachar ningún recordatorio a ese cliente
+
+#### Scenario: Cliente telefónico sin email no puede acceder a la cuenta web
+
+- GIVEN un cliente cuyo único registro proviene de un turno telefónico sin email
+- WHEN intenta solicitar acceso a la cuenta web
+- THEN el sistema MUST NOT poder entregarle un código o enlace de acceso
 
 ### Requirement: Edición y cancelación administrativa
 

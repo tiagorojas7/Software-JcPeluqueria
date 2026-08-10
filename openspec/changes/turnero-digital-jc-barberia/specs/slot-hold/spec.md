@@ -46,7 +46,7 @@ Si el hold no se confirma dentro de los 15 minutos, el sistema MUST liberarlo au
 
 ### Requirement: Re-validación inmediatamente antes de confirmar
 
-El sistema MUST re-validar la disponibilidad del horario retenido inmediatamente antes de confirmar el turno. Si la re-validación falla porque el horario dejó de estar libre, el sistema MUST ofrecer automáticamente el horario más cercano disponible del mismo día calendario.
+El sistema MUST re-validar la disponibilidad del horario retenido inmediatamente antes de confirmar el turno. Si la re-validación falla porque el horario dejó de estar libre, el sistema MUST ofrecer automáticamente el horario más cercano disponible dentro del alcance de días que define el flujo que originó el hold: sin restricción de día para una reserva ordinaria de `client-booking`, y limitado al mismo día calendario para una oferta de `barber-absence-reassignment`. La restricción de mismo día es una regla propia de `barber-absence-reassignment` (el local canceló y le debe al cliente una resolución rápida ese mismo día); no aplica por defecto a una reserva ordinaria, donde el cliente navega y elige libremente — los dos flujos no convergen en la misma regla. Si no existe ningún horario disponible dentro de ese alcance, el sistema MUST NOT crear un nuevo hold automático, y MUST mostrarle al cliente la disponibilidad actualizada para que elija manualmente.
 
 #### Scenario: Re-validación exitosa
 
@@ -54,9 +54,23 @@ El sistema MUST re-validar la disponibilidad del horario retenido inmediatamente
 - WHEN el cliente confirma y el sistema re-valida el horario
 - THEN el horario sigue libre y el turno se confirma sobre ese hold
 
-#### Scenario: Re-validación falla y se ofrece el siguiente horario
+#### Scenario: Re-validación falla en una reserva ordinaria, sin restricción de día
 
-- GIVEN un hold activo cuyo horario dejó de estar libre por un cruce
+- GIVEN un hold activo de una reserva ordinaria cuyo horario dejó de estar libre por un cruce
 - WHEN el sistema re-valida inmediatamente antes de confirmar
-- THEN el sistema MUST ofrecer automáticamente el horario más cercano disponible del mismo día
+- THEN el sistema MUST ofrecer automáticamente el horario más cercano disponible, sin restringirlo al mismo día
 - AND MUST crear un nuevo hold de 15 minutos sobre ese horario alternativo
+
+#### Scenario: Re-validación falla en una oferta de ausencia de barbero, limitada al mismo día
+
+- GIVEN un hold activo de una oferta de `barber-absence-reassignment` cuyo horario dejó de estar libre por un cruce
+- WHEN el sistema re-valida inmediatamente antes de confirmar
+- THEN el sistema MUST ofrecer automáticamente el horario más cercano disponible del mismo día calendario
+- AND MUST NOT ofrecer horarios de otro día
+
+#### Scenario: No queda ningún horario disponible tras la falla de re-validación
+
+- GIVEN un hold activo de una reserva ordinaria cuyo horario dejó de estar libre, sin ningún otro horario disponible dentro del alcance correspondiente
+- WHEN el sistema re-valida inmediatamente antes de confirmar
+- THEN el sistema MUST NOT crear un nuevo hold automático
+- AND MUST mostrarle al cliente la disponibilidad actualizada para que elija manualmente

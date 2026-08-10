@@ -39,7 +39,7 @@ Reemplazar o agregar un adaptador de canal — por ejemplo, WhatsApp a futuro �
 
 ### Requirement: Eventos mínimos que deben notificarse
 
-El sistema MUST despachar, como mínimo, notificación para: el código o enlace de acceso a la cuenta sin contraseña, la confirmación de cancelación con reembolso, la oferta de reasignación por ausencia de barbero, y el recordatorio de turno antes de la hora agendada. El recordatorio MUST enviarse tanto para turnos reservados por la web como para turnos telefónicos, tengan o no seña asociada.
+El sistema MUST despachar, como mínimo, notificación para: el código o enlace de acceso a la cuenta sin contraseña, la confirmación de cancelación con reembolso, la oferta de reasignación por ausencia de barbero, y el recordatorio de turno, despachado 2 horas antes de la hora agendada. El recordatorio MUST enviarse tanto para turnos reservados por la web como para turnos telefónicos, tengan o no seña asociada, siempre que el cliente tenga un email registrado; un cliente sin email no recibe ningún recordatorio (ver las consecuencias en `admin-operations`).
 
 #### Scenario: Envío del código de acceso a la cuenta
 
@@ -49,6 +49,23 @@ El sistema MUST despachar, como mínimo, notificación para: el código o enlace
 
 #### Scenario: Recordatorio para un turno telefónico sin seña
 
-- GIVEN un turno `reservado` creado por teléfono, sin seña
-- WHEN se aproxima la hora del recordatorio
+- GIVEN un turno `reservado` creado por teléfono, sin seña, con email registrado
+- WHEN se aproxima la hora del recordatorio, 2 horas antes del turno
 - THEN el sistema MUST despachar el recordatorio igual que para un turno reservado por la web
+
+### Requirement: El recordatorio informa la última oportunidad de cancelar
+
+Para todo turno con seña asociada, el recordatorio MUST indicar explícitamente que esa es la última oportunidad para cancelar y recuperar la seña, y MUST incluir la hora exacta hasta la cual el cliente puede cancelar (la hora del turno menos 1 hora, según la ventana de `client-booking`). El margen real entre el recordatorio y ese límite es de aproximadamente 1 hora. Para un turno sin seña, el recordatorio MUST NOT incluir ninguna mención a recuperar una seña, porque no existe ninguna.
+
+#### Scenario: Recordatorio de un turno con seña incluye el límite de cancelación
+
+- GIVEN un turno reservado por la web con seña, a 2 horas de su hora agendada
+- WHEN el sistema despacha el recordatorio
+- THEN el mensaje indica explícitamente que es la última oportunidad para cancelar y recuperar la seña
+- AND incluye la hora exacta hasta la cual puede cancelar
+
+#### Scenario: Recordatorio de un turno sin seña no menciona una seña inexistente
+
+- GIVEN un turno telefónico `reservado`, sin seña, con email registrado, a 2 horas de su hora agendada
+- WHEN el sistema despacha el recordatorio
+- THEN el mensaje MUST NOT incluir ninguna mención a recuperar una seña
