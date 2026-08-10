@@ -179,7 +179,9 @@ Durante el día, el personal marca los turnos como **realizados** desde el panel
 
 Todos los días a las **23:59 (hora Argentina, UTC-3 fijo, sin horario de verano)** corre un proceso automático:
 
-> Todo turno con seña pagada que **no** fue marcado ni como realizado ni como cancelado pasa a **sin registrar**. La seña **queda retenida, sin cambios**.
+> Todo turno que sigue en **reservado** —es decir, que no fue marcado ni como realizado ni como cancelado— pasa a **sin registrar**. Si tenía seña, **queda retenida, sin cambios**.
+
+**El barrido no distingue si el turno tenía seña.** Alcanza a los telefónicos igual que a los de la web. El objetivo no es solo la plata: es saber qué pasó con cada turno. Si el barrido solo mirara los turnos con seña, los telefónicos quedarían en *reservado* para siempre y el local nunca tendría registro de si ese cliente vino o no — perdiendo justo el historial de ausencias que después permite exigirle seña a quien falta seguido.
 
 Al día siguiente, el local resuelve esos turnos desde el panel: **realizado** o **ausente**. Recién ahí, si se confirma la ausencia, se pierde la seña.
 
