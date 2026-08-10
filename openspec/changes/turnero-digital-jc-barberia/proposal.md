@@ -97,7 +97,7 @@ Sobre esa base va el hold de 15 minutos como infraestructura compartida de reser
 
 | Restricción | Detalle |
 |-------------|---------|
-| **La seña es opcional** | Solo los turnos web la llevan. Toda la lógica de reembolso, pérdida y vencimiento tiene que funcionar sin seña. No es un caso borde: al principio va a ser la mayoría |
+| **El canal decide si hay seña** | En la web es obligatoria y no existe camino para reservar sin pagarla; por teléfono y walk-in no aplica. El cliente nunca elige. Como conviven turnos con seña y sin seña, toda la lógica de reembolso, pérdida y vencimiento tiene que funcionar cuando no hay nada que devolver. No es un caso borde: al principio va a ser la mayoría |
 | **Zona horaria** | El barrido de las 23:59 usa UTC-3 fijo de Argentina, sin horario de verano. Nunca hora del servidor ni UTC |
 | **Procesos de fondo** | Tres procesos independientes: vencimiento de holds, barrido diario, recordatorios |
 | **Canal intercambiable** | El dominio emite intenciones de notificación y desconoce el transporte. Migrar a WhatsApp debe ser cambiar de adaptador |
