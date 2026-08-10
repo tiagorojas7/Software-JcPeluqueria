@@ -203,6 +203,8 @@ Al día siguiente, el local resuelve esos turnos desde el panel: **realizado** o
 
 ### 3.7 Cuenta del cliente
 
+> Esta sección habla de las cuentas de **clientes**. El personal entra de otra forma — ver [Roles y permisos](#38-roles-y-permisos).
+
 La cuenta es **obligatoria** para reservar por la web, pero está diseñada para pesar lo menos posible.
 
 | Regla | Cómo funciona |
@@ -236,6 +238,15 @@ Con los barberos entrando al sistema, aparecen **tres roles con límites reales 
 **Un barbero solo ve lo suyo.** No accede a la facturación del local ni a los números de sus compañeros. Esa frontera es de autorización, no de pantalla: se sostiene en el backend, no escondiendo botones.
 
 **Los barberos marcan sus propios cortes como realizados.** Es la persona que hizo el trabajo la que mejor sabe que se hizo, y reparte una carga que si no cae entera sobre la secretaria. Ayuda directamente a que no se acumulen turnos *sin registrar*.
+
+**El personal entra con contraseña.** A diferencia de los clientes, que no tienen ninguna.
+
+| | Clientes | Personal |
+|---|---|---|
+| Cómo entra | Código o link al mail | Usuario y contraseña |
+| Frecuencia de uso | Ocasional, una vez cada tanto | Todos los días |
+
+La razón es que la fricción que queríamos evitar era la del **cliente ocasional**, no la de tres o seis personas que abren el sistema cada mañana. Pedirles un link por mail en cada turno de trabajo sería peor experiencia, no mejor. Además, un código de 6 dígitos enviado por mail es una protección floja para la cuenta del dueño, que ve la facturación del local.
 
 **La secretaria opera, el dueño configura.** La secretaria maneja todo el día a día — turnos, clientes, walk-ins, ausencias de barberos — pero el alta y baja de barberos, los horarios base y los precios quedan solo en manos del dueño.
 
