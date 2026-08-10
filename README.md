@@ -26,7 +26,8 @@ Este documento es la fuente de verdad de la **lógica de negocio** del proyecto.
 - [7. Trabajo futuro](#7-trabajo-futuro)
 - [8. Decisiones abiertas](#8-decisiones-abiertas)
 - [9. Estado del proyecto](#9-estado-del-proyecto)
-- [10. Cómo trabajamos](#10-cómo-trabajamos)
+- [10. Plan de construcción](#10-plan-de-construcción)
+- [11. Cómo trabajamos](#11-cómo-trabajamos)
 
 ---
 
@@ -415,8 +416,8 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | Propuesta | ✅ Completa |
 | Especificación | ✅ Completa — 8 dominios, 38 requisitos, 58 escenarios |
 | Diseño técnico | ✅ Completo — stack elegido y arquitectura definida |
-| Desglose en tareas | ⬜ Listo para empezar |
-| Implementación | ⬜ Sin empezar |
+| Desglose en tareas | ✅ Completo — 191 tareas en 14 fases |
+| Implementación | ⬜ Sin empezar — arranca por la fase 0 |
 
 **Stack elegido:** NestJS + React/Vite + PostgreSQL + Drizzle + pg-boss, en monorepo hexagonal. Entrega prevista en **14 PRs encadenados** (~5.050 líneas). El detalle y el fundamento están en `openspec/changes/turnero-digital-jc-barberia/design.md`.
 
@@ -424,7 +425,54 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 
 ---
 
-## 10. Cómo trabajamos
+## 10. Plan de construcción
+
+**191 tareas en 14 fases, entregadas como 14 PRs encadenados.** El detalle tarea por tarea está en `openspec/changes/turnero-digital-jc-barberia/tasks.md`.
+
+| # | Fase | Qué deja andando | Tareas |
+|---|------|------------------|:------:|
+| 0 | Fundación | Monorepo, Vitest, Docker Compose, Drizzle, CI. **Activa el TDD estricto** | 13 |
+| 1 | Modelo de disponibilidad | Barberos, servicios, horarios, días libres, generación de huecos | 9 |
+| 2 | **Ocupación y hold** | El núcleo de concurrencia. Sin interfaz todavía | 17 |
+| 3a | Identidad | Acceso sin contraseña del cliente, contraseña del personal, sesiones | 19 |
+| 3b | Autorización | Guard deny-by-default y contrato ruta × rol | 13 |
+| 4 | Ciclo de vida del turno | Los cinco estados y sus transiciones | 10 |
+| 5 | Pagos | MercadoPago: cobro, webhook firmado, reembolsos | 20 |
+| 6 | Procesos de fondo | Vencimiento del hold, barrido de las 23:59, recordatorios | 13 |
+| 7 | Notificaciones | El puerto y el adaptador de Gmail | 11 |
+| 8 | Vista del día | `DayBoard`, compartido por panel, web y perfil del barbero | 8 |
+| 9 | Web pública | Elegir hueco, hold, pagar, crear cuenta, cancelar | 17 |
+| 10 | Operación del panel | Turnos telefónicos, walk-ins, edición, clientes, configuración | 15 |
+| 11 | Perfil del barbero | Agenda propia, estadísticas, marcado propio | 13 |
+| 12 | **Reasignación por ausencia** | El flujo completo de ausencia del barbero | 13 |
+
+### Por qué ese orden
+
+**El modelo de disponibilidad va primero** porque sin el concepto de "hueco libre" no hay nada que reservar ni que ofrecer. Es prerequisito duro de todo lo demás.
+
+**La vista del día se construye una sola vez**, en la fase 8, y la consumen el panel, la web pública y el perfil del barbero. Por eso va antes que las tres.
+
+**La reasignación por ausencia va última** aunque sea el problema que originó el proyecto. Acumula más dependencias que cualquier otra fase: necesita el hold, los procesos de fondo, las notificaciones y el panel funcionando. Es también la que mejor le vende el sistema al dueño, así que conviene que llegue completa y no a medias.
+
+### Cómo se testea
+
+**Test primero, siempre.** De la fase 1 en adelante, la tarea de test precede a la de implementación. La fase 0 deja el TDD estricto activado.
+
+Tres cosas se prueban contra infraestructura real, no contra dobles:
+
+- **El hold**, con 20 transacciones simultáneas peleando por el mismo horario contra una base de datos real. Es el único test que prueba de verdad que no hay doble reserva
+- **La autenticación**, contra el hash real
+- **El webhook de MercadoPago**, con su firma
+
+### Lo que hay que tener presente
+
+**Cinco de las catorce fases rozan el techo de 400 líneas** — las de ocupación, pagos, vista del día, web pública y panel. Las estimaciones no se comprimieron para que entraran. Cuando lleguemos a cada una hay que decidir si se parte en dos o se acepta la excepción.
+
+**La fase 5 tiene un bloqueo duro:** su primera tarea es verificar la documentación oficial de MercadoPago. El diseño escribió los detalles de la API de memoria, sin acceso a documentación, así que el formato de la firma, la ventana de reembolso y el comportamiento de los reembolsos parciales hay que confirmarlos antes de escribir código de pagos.
+
+---
+
+## 11. Cómo trabajamos
 
 El proyecto usa **SDD (Spec-Driven Development)**: primero se entiende el problema, después se escriben las reglas, recién al final se escribe código.
 
