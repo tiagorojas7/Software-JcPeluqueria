@@ -87,7 +87,11 @@ Esa jerarquía importa: si el teléfono se usa como canal paralelo cómodo en ve
 
 La adopción de la web se maneja **por acuerdo con el dueño, no por restricción del sistema**: nada en el software impide reservar por teléfono. Si las llamadas no bajan, la palanca es comercial antes que técnica.
 
-> **Consecuencia para el diseño:** la seña es **opcional** en el modelo de turnos, no obligatoria. Toda la lógica que la toca — reembolso por cancelación, pérdida por ausencia, reembolso automático al vencer un hold — tiene que funcionar igual cuando no hay seña que devolver. No es un caso raro: van a ser la mayoría de los turnos al principio.
+> **El canal decide si hay seña, nunca el cliente.** Si reserva por la web, la seña es **obligatoria**: no existe la opción de reservar sin pagarla. Por teléfono y walk-in no se cobra, y tampoco es una elección — sencillamente no aplica en esos canales.
+>
+> **Consecuencia para el diseño:** como conviven turnos con seña y turnos sin seña, toda la lógica que la toca — reembolso por cancelación, pérdida por ausencia, reembolso automático al vencer un hold — tiene que funcionar igual cuando no hay nada que devolver. No es un caso raro: van a ser la mayoría de los turnos al principio.
+>
+> ⚠️ **No la llamemos "seña opcional".** Esa palabra sugiere que el cliente puede saltearla, y llevaría a construir un checkout con un "pagar después" que no existe en ninguna regla del negocio.
 
 ### 3.2 Ciclo de vida del turno
 
