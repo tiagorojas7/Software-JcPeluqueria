@@ -56,7 +56,11 @@ Un **turnero digital** con tres caras:
 | **Panel admin** | Dueño y secretaria | Crear/editar/cancelar turnos, marcar realizados, resolver turnos sin registrar, manejar ausencias de barberos, cargar walk-ins, gestionar clientes y barberos, configurar horarios y precios |
 | **Perfil del barbero** | Cada barbero | Su agenda del día, sus cortes hechos, lo que facturó |
 
-**El sistema es híbrido a propósito.** Lo digital no reemplaza al teléfono ni al walk-in: convive con ellos. El cliente que no quiere saber nada de la web sigue llamando, y la secretaria le carga el turno igual.
+**El sistema es híbrido a propósito**, pero los canales no están al mismo nivel.
+
+La web es **el camino principal**. El teléfono queda como **excepción**: para el cliente que tiene un problema concreto o que realmente no puede con la web. Al entregar el MVP se le va a pedir al dueño que empuje activamente a su clientela hacia la web, y que deje la llamada como último recurso.
+
+Esa jerarquía importa: si el teléfono se usa como canal paralelo cómodo en vez de como salida de emergencia, la seña deja de cumplir su función y el ausentismo sigue igual que antes.
 
 ---
 
@@ -75,11 +79,13 @@ Un **turnero digital** con tres caras:
 
 **La seña solo se cobra en la web.** Durante la transición del papel a lo digital va a seguir entrando mucha llamada, y frenar esos turnos para cobrar una seña por teléfono sería ponerle un palo en la rueda al negocio. La estrategia es **empujar a los clientes hacia la web**, no castigar al que llama.
 
-| Canal | ¿Lleva seña? |
-|-------|-------------|
-| Web | ✅ 50% |
-| Teléfono (carga la secretaria) | ❌ Por ahora no |
-| Walk-in | ❌ Nunca |
+| Canal | ¿Lleva seña? | Rol |
+|-------|-------------|-----|
+| Web | ✅ 50% | Camino principal |
+| Teléfono (carga la secretaria) | ❌ Por ahora no | Excepción, último recurso |
+| Walk-in | ❌ Nunca | Atención espontánea |
+
+La adopción de la web se maneja **por acuerdo con el dueño, no por restricción del sistema**: nada en el software impide reservar por teléfono. Si las llamadas no bajan, la palanca es comercial antes que técnica.
 
 > **Consecuencia para el diseño:** la seña es **opcional** en el modelo de turnos, no obligatoria. Toda la lógica que la toca — reembolso por cancelación, pérdida por ausencia, reembolso automático al vencer un hold — tiene que funcionar igual cuando no hay seña que devolver. No es un caso raro: van a ser la mayoría de los turnos al principio.
 
