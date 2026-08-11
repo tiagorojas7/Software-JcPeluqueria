@@ -25,4 +25,14 @@ export interface Clock {
    *   shop's fixed offset (never the server's local time zone).
    */
   businessDayBounds(calendarDate: string): BusinessDayBounds;
+
+  /**
+   * Converts a wall-clock time on a given calendar date to the concrete UTC
+   * instant it represents in the shop's fixed offset. This is how
+   * availability (shop hours, barber schedules) — stored as local wall-clock
+   * time — becomes a comparable, bookable `Date`.
+   * @param calendarDate ISO calendar date, `YYYY-MM-DD`.
+   * @param wallClockTime Local time of day, `HH:mm`.
+   */
+  localTimeToUtc(calendarDate: string, wallClockTime: string): Date;
 }
