@@ -2,18 +2,19 @@ schema: spec-driven
 
 context: |
   Project: JC Barbería MVP web app (real barbershop, Córdoba Capital, Argentina).
-  Status: brand-new, empty directory, not yet a git repo.
-  Tech stack: NOT YET CHOSEN — decide during sdd-explore/sdd-new, not guessed here.
-  Architecture: NOT YET CHOSEN.
-  Testing: no test runner exists yet (see testing capabilities artifact).
+  Status: Phase 0 (Fundación) implemented on feat/turnero-00-fundacion.
+  Tech stack: NestJS + React/Vite + PostgreSQL + Drizzle + pg-boss, TypeScript
+  monorepo (pnpm workspaces) with hexagonal/screaming architecture. See design.md.
+  Architecture: apps/{api,worker,web} + packages/{domain,application,infrastructure,contracts}.
+  Testing: Vitest (root `pnpm test` runs every package's suite recursively).
   Persistence: hybrid (Engram + OpenSpec).
 
-strict_tdd: false
+strict_tdd: true
 strict_tdd_note: >
   User's global preference (~/.claude/CLAUDE.md) sets Strict TDD Mode: enabled.
-  No test runner exists yet because no code/stack exists. Recorded as false
-  per sdd-init's "no test runner" fallback; revisit once a stack is chosen in
-  sdd-explore/sdd-new — at that point enable per the user's global preference.
+  Flipped to true in Phase 0 (task 0.6) now that Vitest exists as the test
+  runner across the monorepo. sanity.spec.ts and ShopClock.businessDayBounds
+  were both written RED-first as the establishing evidence.
 
 rules:
   proposal:
@@ -33,11 +34,11 @@ rules:
   apply:
     guidelines:
       - Follow existing code patterns once a stack exists
-    tdd: false   # flip to true once a stack + test runner exist, per user's global preference
-    test_command: ""
+    tdd: true
+    test_command: "pnpm test"
   verify:
-    test_command: ""
-    build_command: ""
+    test_command: "pnpm test"
+    build_command: "pnpm typecheck && pnpm lint && pnpm depcruise"
     coverage_threshold: 0
   archive:
     - Warn before merging destructive deltas
