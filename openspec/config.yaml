@@ -31,6 +31,11 @@ rules:
     - Group by phase, use hierarchical numbering
     - Keep tasks completable in one session
     - Respect the 400-changed-line review budget; recommend chained PRs when at risk
+    - The 400-line budget counts PRODUCTION CODE ONLY. Tests, test doubles and
+      generated files (drizzle migrations and snapshots, lockfiles) are excluded.
+      The budget exists to protect reviewer attention on dense logic; tests read
+      fast because they document behaviour, and counting them would penalise the
+      strict-TDD discipline this project requires.
   apply:
     guidelines:
       - Follow existing code patterns once a stack exists
