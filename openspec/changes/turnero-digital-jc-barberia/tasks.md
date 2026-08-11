@@ -62,15 +62,15 @@ Requisitos que cierra: ninguno (fundación pura).
 
 ## Phase 1: Modelo de disponibilidad (~400 líneas) — PR 2 (base: PR 1) — depende de 0
 
-- [ ] 1.1 RED: tests de dominio para `Barber`, `Service`, `ShopHours`, `BarberSchedule`, `BarberTimeOff`.
-- [ ] 1.2 GREEN: implementar entidades/value objects en `packages/domain/availability`.
-- [ ] 1.3 Migración Drizzle: tablas `barbers`, `services`, `shop_hours`, `barber_schedules`, `barber_time_off`.
-- [ ] 1.4 RED (Testcontainers): CRUD básico de repositorios de disponibilidad.
-- [ ] 1.5 GREEN: implementar `BarberRepository`, `ServiceRepository`, `ScheduleRepository` en `packages/infrastructure`.
-- [ ] 1.6 RED: `AvailabilityService.freeSlots(barberId, date)` combinando horario del local + del barbero + días libres (sin ocupación, eso es Fase 2).
-- [ ] 1.7 GREEN: implementar generación de huecos read-only.
-- [ ] 1.8 RED: bordes de huso horario en la generación de huecos (vía `ShopClock`, nunca `Date` directo).
-- [ ] 1.9 GREEN: ajustar generación para usar `ShopClock` exclusivamente.
+- [x] 1.1 RED: tests de dominio para `Barber`, `Service`, `ShopHours`, `BarberSchedule`, `BarberTimeOff`.
+- [x] 1.2 GREEN: implementar entidades/value objects en `packages/domain/availability`.
+- [x] 1.3 Migración Drizzle: tablas `barbers`, `services`, `shop_hours`, `barber_schedules`, `barber_time_off`. Generada con `drizzle-kit generate`; **no aplicada ni verificada contra Postgres real** — Docker no está instalado en este entorno.
+- [ ] 1.4 RED (Testcontainers): CRUD básico de repositorios de disponibilidad. **BLOQUEADO**: Docker no está instalado; Testcontainers no puede levantar un contenedor, así que no hay forma de escribir un RED verificable (fallaría por Docker ausente, no por falta de implementación). No se omitió en silencio: queda pendiente para un entorno con Docker.
+- [ ] 1.5 GREEN: implementar `BarberRepository`, `ServiceRepository`, `ScheduleRepository` en `packages/infrastructure`. Depende de 1.4 bajo TDD estricto; no implementado sin su RED.
+- [x] 1.6 RED: `AvailabilityService.freeSlots(barberId, date)` combinando horario del local + del barbero + días libres (sin ocupación, eso es Fase 2).
+- [x] 1.7 GREEN: implementar generación de huecos read-only.
+- [x] 1.8 RED: bordes de huso horario en la generación de huecos (vía `ShopClock`, nunca `Date` directo).
+- [x] 1.9 GREEN: ajustar generación para usar `ShopClock` exclusivamente.
 
 Requisitos que cierra: fundación para admin-operations (Vista del día), client-booking (Exploración sin cuenta), barber-profile — se materializan en Fases 8/9/11.
 
