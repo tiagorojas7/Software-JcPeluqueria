@@ -1,0 +1,7 @@
+{
+  "name": "@jc-barberia/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "NestJS HTTP API + MercadoPago webhook. Implementation starts Phase 3a."
+}

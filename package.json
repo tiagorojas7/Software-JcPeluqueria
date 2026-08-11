@@ -1,0 +1,26 @@
+{
+  "name": "jc-barberia-turnero",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "pnpm -r --if-present run test",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "depcruise": "depcruise --config .dependency-cruiser.cjs packages apps"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.19.0",
+    "@types/node": "^22.10.7",
+    "@typescript-eslint/eslint-plugin": "^8.21.0",
+    "@typescript-eslint/parser": "^8.21.0",
+    "dependency-cruiser": "^16.9.0",
+    "eslint": "^9.19.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  }
+}
