@@ -110,4 +110,47 @@ describe('ConfirmHold', () => {
     expect(result.hold.timeRange).toEqual(sameDayCandidate.window);
     expect(holds.createCalls).toHaveLength(1);
   });
+
+  it('does not create an automatic hold when nothing is free, and returns availability instead', async () => {
+    const { holds, useCase } = buildUseCase();
+    const candidates: AvailableCandidate[] = [];
+
+    const result = await useCase.execute({
+      originalHold,
+      originDate: '2026-09-01',
+      scope: 'any-day',
+      candidates,
+      reofferedHoldId: 'hold-2',
+      reofferedSearchWindow,
+    });
+
+    expect(result).toEqual({ outcome: 'no-slots-available', availability: candidates });
+    expect(holds.createCalls).toEqual([]);
+  });
+
+  // Triangulates the case above: the raw candidate list is NOT empty, but
+  // same-day scope filters out every entry (all on another day) — must be
+  // treated identically to "nothing was free at all", never crash or fall
+  // back to auto-holding an out-of-scope candidate.
+  it('reports no slots when same-day scope filters out every candidate, but still surfaces them', async () => {
+    const { holds, useCase } = buildUseCase();
+    const crossDayOnly: AvailableCandidate[] = [
+      {
+        date: '2026-09-02',
+        window: { start: at('2026-09-02', '00:00'), end: at('2026-09-02', '00:30') },
+      },
+    ];
+
+    const result = await useCase.execute({
+      originalHold,
+      originDate: '2026-09-01',
+      scope: 'same-day',
+      candidates: crossDayOnly,
+      reofferedHoldId: 'hold-2',
+      reofferedSearchWindow,
+    });
+
+    expect(result).toEqual({ outcome: 'no-slots-available', availability: crossDayOnly });
+    expect(holds.createCalls).toEqual([]);
+  });
 });

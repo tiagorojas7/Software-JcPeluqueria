@@ -22,7 +22,8 @@ export interface ConfirmHoldInput {
 
 export type ConfirmHoldResult =
   | { readonly outcome: 'confirmed'; readonly hold: Hold }
-  | { readonly outcome: 'reoffered'; readonly hold: Hold };
+  | { readonly outcome: 'reoffered'; readonly hold: Hold }
+  | { readonly outcome: 'no-slots-available'; readonly availability: readonly AvailableCandidate[] };
 
 /**
  * Re-validates immediately before confirming. The hold transitions
@@ -31,7 +32,10 @@ export type ConfirmHoldResult =
  *
  * When re-validation fails, it offers the nearest candidate allowed by
  * `scope` instead of failing outright, and claims a fresh 15-minute hold on
- * it via `CreateHold` — never an ad hoc insert.
+ * it via `CreateHold` — never an ad hoc insert. When nothing is available
+ * within scope, it does not create a hold at all: it hands back whatever
+ * candidates it was given so the caller can show refreshed availability for
+ * the client to choose from manually.
  */
 export class ConfirmHold {
   constructor(
@@ -52,8 +56,7 @@ export class ConfirmHold {
       scope: input.scope,
     });
     if (!nearest) {
-      // The "nothing available" branch (tasks 2.16/2.17) replaces this.
-      throw new Error('ConfirmHold: no candidate available — not implemented yet (see task 2.16)');
+      return { outcome: 'no-slots-available', availability: input.candidates };
     }
 
     const hold = await this.createHold.execute({
