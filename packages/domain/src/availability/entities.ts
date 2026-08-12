@@ -1,7 +1,18 @@
 /**
  * Availability entities and value objects. Pure data + validation — no I/O,
  * no `Clock`, no persistence. Repositories (packages/infrastructure) map
- * these to/from rows; `AvailabilityService` combines them into free slots.
+ * these to/from rows; `AvailabilityService` combines them into working
+ * windows.
+ *
+ * Business rule — confirmed with the owner's representative: the shop runs
+ * `horario corrido` (no split shifts). It opens and closes exactly once per
+ * day, and so does every barber. `ShopHours` and `BarberSchedule` therefore
+ * each model a SINGLE contiguous `opensAt`/`closesAt` range per day of
+ * week, deliberately. This is not an oversight to "fix" later by allowing a
+ * second row for the same day — a second row for the same
+ * `(dayOfWeek)` / `(barberId, dayOfWeek)` is invalid data, not a lunch
+ * break, and is rejected by a uniqueness constraint at the schema level
+ * (packages/infrastructure/src/db/schema/availability.ts).
  */
 
 export class AvailabilityValidationError extends Error {}

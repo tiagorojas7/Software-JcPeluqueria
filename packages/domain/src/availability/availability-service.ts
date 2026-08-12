@@ -2,7 +2,7 @@ import type { Clock } from '../shared/ports/clock.port';
 import { dayOfWeekOf } from './calendar';
 import type { BarberSchedule, BarberTimeOff, ShopHours } from './entities';
 
-export interface FreeSlotsInput {
+export interface WorkingWindowsInput {
   readonly barberId: string;
   /** ISO calendar date, `YYYY-MM-DD`. */
   readonly date: string;
@@ -19,16 +19,25 @@ export interface TimeWindow {
 
 /**
  * Combines shop hours, one barber's own schedule and their days off into the
- * read-only working window(s) for a given date. Occupancy (holds, booked
- * appointments) is Phase 2's concern — this never subtracts busy ranges, it
- * only answers "is the barber working, and when". All time math goes
- * through the injected `Clock` port; this module never touches `Date`
- * directly (enforced by the `no-restricted-syntax` ESLint rule).
+ * working window(s) for a given date.
+ *
+ * IMPORTANT — this does NOT consider occupancy. It answers only "is the
+ * barber working, and when", never "what's actually free right now". Holds
+ * and booked appointments (`slot_occupancies`, Phase 2) are not subtracted
+ * here. Callers MUST NOT treat this result as bookable availability on its
+ * own — Phase 2 subtracts occupied ranges from these windows before
+ * anything is offered to a client. That's also why this is named
+ * `workingWindows`, not `freeSlots`: the previous name implied occupancy
+ * was already excluded, which it never was.
+ *
+ * All time math goes through the injected `Clock` port; this module never
+ * touches `Date` directly (enforced by the `no-restricted-syntax` ESLint
+ * rule).
  */
 export class AvailabilityService {
   constructor(private readonly clock: Clock) {}
 
-  freeSlots(input: FreeSlotsInput): TimeWindow[] {
+  workingWindows(input: WorkingWindowsInput): TimeWindow[] {
     const dayOfWeek = dayOfWeekOf(input.date);
 
     const shopHoursForDay = input.shopHours.find((h) => h.dayOfWeek === dayOfWeek);

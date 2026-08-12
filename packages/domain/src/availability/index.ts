@@ -1,5 +1,5 @@
 export { dayOfWeekOf } from './calendar';
-export type { FreeSlotsInput, TimeWindow } from './availability-service';
+export type { TimeWindow, WorkingWindowsInput } from './availability-service';
 export { AvailabilityService } from './availability-service';
 export type {
   Barber,
