@@ -116,8 +116,8 @@ Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad ·
 - [x] 3a.11 GREEN: `PasswordService` (argon2) + `StaffLoginUseCase`. Migración `0005`: `users.password_hash`/`password_changed_at`. `Argon2PasswordHasher` (`@node-rs/argon2`, prebuilt — sin paso de build) a los parámetros OWASP (19 MiB, t=2, p=1). `verifyDummy()` paga el mismo costo que `verify()` real contra un hash fijo precomputado, para email inexistente o cuenta desactivada.
 - [x] 3a.12 RED: alta de staff genera link de activación de un solo uso; nunca contraseña en texto plano.
 - [x] 3a.13 GREEN: `ActivateStaffUseCase`. `.invite()` reusa `ChallengeService.issue({purpose:'staff_activation'})`; `.activate()` valida la fortaleza de la contraseña ANTES de consumir el challenge (para no quemar el link de un solo uso con una contraseña débil) y luego consume + `PasswordService.setPassword`.
-- [ ] 3a.14 RED: reset con token de 32 bytes, hash en base, 30 min, un solo uso; no revela la contraseña anterior. → *access-control: Contraseñas del personal almacenadas de forma segura*
-- [ ] 3a.15 GREEN: `ResetPasswordUseCase` (usa `NotificationPort`, fake hasta Fase 7).
+- [x] 3a.14 RED: reset con token de 32 bytes, hash en base, 30 min, un solo uso; no revela la contraseña anterior. → *access-control: Contraseñas del personal almacenadas de forma segura*
+- [x] 3a.15 GREEN: `ResetPasswordUseCase` (usa `NotificationPort`, fake hasta Fase 7). `EXPIRY_MINUTES_BY_PURPOSE` en el dominio: `staff_password_reset` vive 30 min (los otros dos propósitos, 10). `.request(email)` responde exactamente igual exista o no la cuenta (nunca filtra qué emails tienen alta); `.complete()` valida la contraseña antes de consumir, mismo motivo que `ActivateStaffUseCase`. Puerto `NotificationPort` nuevo en `packages/domain/src/notifications` — Fase 7 construye el adaptador real, acá solo `FakeNotificationPort`.
 - [ ] 3a.16 RED: cambiar/resetear contraseña revoca todas las sesiones activas del usuario.
 - [ ] 3a.17 GREEN: revocación de sesiones en `sessions`.
 - [ ] 3a.18 RED: TTL de sesión — cliente 30 días, staff 12h, dueño 8h.

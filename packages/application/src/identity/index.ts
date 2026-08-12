@@ -8,3 +8,9 @@ export { StaffLoginUseCase } from './staff-login';
 export type { StaffLoginInput, StaffLoginResult } from './staff-login';
 export { ActivateStaffUseCase } from './activate-staff';
 export type { ActivateStaffInput, ActivateStaffResult, InviteStaffInput } from './activate-staff';
+export { ResetPasswordUseCase } from './reset-password';
+export type {
+  ResetPasswordCompleteInput,
+  ResetPasswordCompleteResult,
+  ResetPasswordRequestResult,
+} from './reset-password';

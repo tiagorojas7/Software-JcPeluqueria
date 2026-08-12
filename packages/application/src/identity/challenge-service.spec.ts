@@ -58,10 +58,23 @@ describe('ChallengeService.issue', () => {
     const challenges = new FakeAuthChallengeRepository();
     const service = new ChallengeService(challenges, clock);
 
-    const issued = await service.issue({ userId: 'user-2', purpose: 'staff_password_reset' });
+    const issued = await service.issue({ userId: 'user-2', purpose: 'staff_activation' });
 
     expect(issued.expiresAt).toEqual(at('21:00'));
-    expect(challenges.createCalls[0]?.purpose).toBe('staff_password_reset');
+    expect(challenges.createCalls[0]?.purpose).toBe('staff_activation');
+  });
+
+  // Password reset is deliberately longer-lived than the other two purposes
+  // (design.md: "Token de 32 bytes ... 30 minutos") — enough time to open a
+  // mail client without feeling rushed, unlike a same-session login code.
+  it('gives staff_password_reset challenges a 30-minute lifetime, not the 10-minute default', async () => {
+    const clock = new FakeClock(-180, at('20:50'));
+    const challenges = new FakeAuthChallengeRepository();
+    const service = new ChallengeService(challenges, clock);
+
+    const issued = await service.issue({ userId: 'user-2', purpose: 'staff_password_reset' });
+
+    expect(issued.expiresAt).toEqual(at('21:20'));
   });
 });
 

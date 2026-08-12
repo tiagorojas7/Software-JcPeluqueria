@@ -1,17 +1,35 @@
-/** How long a freshly issued challenge remains valid before it must be reissued. */
+/** Default challenge lifetime: `client_login` and `staff_activation` both
+ *  use it — neither spec nor design states a distinct duration for
+ *  activation links, so it falls back to this same-session default. */
 export const CHALLENGE_EXPIRY_MINUTES = 10;
+
+/** `staff_password_reset` gets longer than a same-session login code —
+ *  enough time to open an email client without feeling rushed. See
+ *  design.md's "Staff — contraseña" table: "Token de 32 bytes ... 30
+ *  minutos". */
+export const PASSWORD_RESET_EXPIRY_MINUTES = 30;
 
 /** Wrong-secret submissions allowed before a challenge is permanently invalidated. */
 export const MAX_CHALLENGE_ATTEMPTS = 5;
 
 /**
- * What an issued challenge is for. `client_login` is the only purpose this
- * phase implements; `staff_activation`/`staff_password_reset` share this
- * exact table and mechanism starting Phase 3a's later tasks (out of this
- * slice) — declaring the full set now costs nothing and keeps the type
- * honest about the table's real shape.
+ * What an issued challenge is for. All three purposes share this exact
+ * table and mechanism, distinguished only by this column — a client login
+ * code, a staff activation link, and a staff password-reset link are all
+ * structurally the same one-time secret.
  */
 export type AuthChallengePurpose = 'client_login' | 'staff_activation' | 'staff_password_reset';
+
+/**
+ * `ChallengeService.issue()`'s only source of truth for how long each
+ * purpose's challenge lives — centralizing it here means no caller has to
+ * know (or risk getting wrong) which duration applies to which purpose.
+ */
+export const EXPIRY_MINUTES_BY_PURPOSE: Record<AuthChallengePurpose, number> = {
+  client_login: CHALLENGE_EXPIRY_MINUTES,
+  staff_activation: CHALLENGE_EXPIRY_MINUTES,
+  staff_password_reset: PASSWORD_RESET_EXPIRY_MINUTES,
+};
 
 /**
  * A one-time passwordless credential. The 6-digit code and the magic-link

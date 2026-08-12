@@ -1,5 +1,5 @@
 import {
-  CHALLENGE_EXPIRY_MINUTES,
+  EXPIRY_MINUTES_BY_PURPOSE,
   type AuthChallenge,
   type AuthChallengePurpose,
   type AuthChallengeRepository,
@@ -52,7 +52,7 @@ export class ChallengeService {
     const challengeId = randomUUID();
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     const token = randomBytes(32).toString('hex');
-    const expiresAt = this.clock.addMinutes(this.clock.now(), CHALLENGE_EXPIRY_MINUTES);
+    const expiresAt = this.clock.addMinutes(this.clock.now(), EXPIRY_MINUTES_BY_PURPOSE[input.purpose]);
 
     const challenge: AuthChallenge = {
       id: challengeId,
