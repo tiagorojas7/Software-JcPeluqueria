@@ -15,6 +15,20 @@
       "when": 1786537758740,
       "tag": "0001_availability_unique_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786543274141,
+      "tag": "0002_slot_occupancies",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786543325874,
+      "tag": "0003_slot_occupancy_exclude",
+      "breakpoints": true
     }
   ]
 }
