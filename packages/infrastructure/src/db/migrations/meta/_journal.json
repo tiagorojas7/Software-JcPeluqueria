@@ -8,6 +8,13 @@
       "when": 1786457421849,
       "tag": "0000_availability_model",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786537758740,
+      "tag": "0001_availability_unique_constraints",
+      "breakpoints": true
     }
   ]
 }
