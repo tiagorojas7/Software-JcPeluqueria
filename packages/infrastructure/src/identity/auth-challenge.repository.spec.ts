@@ -25,6 +25,10 @@ describe('auth challenge consumption (Testcontainers)', () => {
   // far enough out that it never collides with whenever this suite actually
   // runs.
   const FAR_FUTURE = clock.localTimeToUtc('2026-09-01', '12:00');
+  // Same reasoning as hold.repository.spec.ts's PAST_HOLD_EXPIRY: a genuinely
+  // expired challenge needs an instant in the past relative to whenever this
+  // suite runs, on its own unrelated calendar date.
+  const PAST = clock.localTimeToUtc('2020-01-01', '12:00');
 
   const newUser = async (): Promise<string> => {
     const id = randomUUID();
@@ -150,5 +154,42 @@ describe('auth challenge consumption (Testcontainers)', () => {
 
     expect(outcomes.filter((outcome) => outcome.consumed)).toHaveLength(1);
     expect(outcomes.filter((outcome) => !outcome.consumed)).toHaveLength(1);
+  });
+
+  // The EXCLUDE constraint's lesson applies here too: expiry must be
+  // enforced by the WHERE clause of the same statement, not read-then-check
+  // in application code. A row genuinely in the past (inserted directly,
+  // since there's no application path to fast-forward Postgres's own now())
+  // must never be consumable, even with the exactly-correct secret.
+  it('rejects consumption of an expired challenge even with the correct secret', async () => {
+    const userId = await newUser();
+    const code = '123456';
+    const id = randomUUID();
+    await client`insert into auth_challenges (id, user_id, purpose, code_hash, token_hash, expires_at)
+                 values (${id}, ${userId}, 'client_login', ${sha256Hex(code)}, ${sha256Hex(randomUUID())}, ${PAST.toISOString()})`;
+
+    const result = await new DrizzleAuthChallengeRepository(db).consume(id, 'client_login', sha256Hex(code));
+
+    expect(result).toEqual({ consumed: false });
+  });
+
+  // 5 failed attempts must invalidate the challenge outright — the 6th
+  // attempt fails even if it finally presents the correct secret.
+  it('invalidates the challenge after 5 failed attempts, even with the correct secret on the 6th try', async () => {
+    const userId = await newUser();
+    const { id, code } = await issueChallenge(userId);
+    const repo = new DrizzleAuthChallengeRepository(db);
+    const wrongHash = sha256Hex('000000');
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const failed = await repo.consume(id, 'client_login', wrongHash);
+      expect(failed).toEqual({ consumed: false });
+    }
+    const rows = await client`select attempts from auth_challenges where id = ${id}`;
+    expect(rows[0]).toEqual({ attempts: 5 });
+
+    const finalTry = await repo.consume(id, 'client_login', sha256Hex(code));
+
+    expect(finalTry).toEqual({ consumed: false });
   });
 });
