@@ -30,7 +30,25 @@ export interface AuthChallenge {
   readonly expiresAt: Date;
 }
 
+export type ConsumeChallengeResult =
+  | { readonly consumed: true; readonly userId: string }
+  | { readonly consumed: false };
+
 export interface AuthChallengeRepository {
   /** Persists a freshly issued challenge. Only hashes are ever written. */
   create(challenge: AuthChallenge): Promise<void>;
+
+  /**
+   * Atomically checks `candidateHash` against either stored hash and, when
+   * the challenge is still alive and scoped to `purpose`, marks it consumed
+   * — one round trip, no read-then-write. `consumed: false` covers every
+   * losing case alike: wrong secret, already consumed, wrong purpose,
+   * expired, or attempts exhausted (see `DrizzleAuthChallengeRepository` for
+   * exactly which of those this phase enforces).
+   */
+  consume(
+    challengeId: string,
+    purpose: AuthChallengePurpose,
+    candidateHash: string,
+  ): Promise<ConsumeChallengeResult>;
 }

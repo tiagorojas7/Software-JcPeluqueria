@@ -64,3 +64,51 @@ describe('ChallengeService.issue', () => {
     expect(challenges.createCalls[0]?.purpose).toBe('staff_password_reset');
   });
 });
+
+describe('ChallengeService.consume', () => {
+  it('hashes the candidate secret before ever asking the repository — never the plaintext', async () => {
+    const clock = new FakeClock(-180, at('12:00'));
+    const challenges = new FakeAuthChallengeRepository();
+    const service = new ChallengeService(challenges, clock);
+    const issued = await service.issue({ userId: 'user-1', purpose: 'client_login' });
+
+    await service.consume({ challengeId: issued.challengeId, purpose: 'client_login', secret: issued.code });
+
+    expect(challenges.consumeCalls).toHaveLength(1);
+    expect(challenges.consumeCalls[0]).toEqual({
+      challengeId: issued.challengeId,
+      purpose: 'client_login',
+      candidateHash: sha256Hex(issued.code),
+    });
+  });
+
+  it('returns the userId the repository reports when consumption succeeds', async () => {
+    const clock = new FakeClock(-180, at('12:00'));
+    const challenges = new FakeAuthChallengeRepository();
+    const service = new ChallengeService(challenges, clock);
+    const issued = await service.issue({ userId: 'user-42', purpose: 'client_login' });
+
+    const result = await service.consume({
+      challengeId: issued.challengeId,
+      purpose: 'client_login',
+      secret: issued.token,
+    });
+
+    expect(result).toEqual({ consumed: true, userId: 'user-42' });
+  });
+
+  it('reports failure without throwing when the secret is wrong', async () => {
+    const clock = new FakeClock(-180, at('12:00'));
+    const challenges = new FakeAuthChallengeRepository();
+    const service = new ChallengeService(challenges, clock);
+    const issued = await service.issue({ userId: 'user-1', purpose: 'client_login' });
+
+    const result = await service.consume({
+      challengeId: issued.challengeId,
+      purpose: 'client_login',
+      secret: 'wrong-secret',
+    });
+
+    expect(result).toEqual({ consumed: false });
+  });
+});

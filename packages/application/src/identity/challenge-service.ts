@@ -4,6 +4,7 @@ import {
   type AuthChallengePurpose,
   type AuthChallengeRepository,
   type Clock,
+  type ConsumeChallengeResult,
 } from '@jc-barberia/domain';
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 
@@ -21,6 +22,14 @@ export interface IssuedChallenge {
   /** Plaintext magic-link token — same one-time existence as `code`. */
   readonly token: string;
   readonly expiresAt: Date;
+}
+
+export interface ConsumeChallengeInput {
+  readonly challengeId: string;
+  readonly purpose: AuthChallengePurpose;
+  /** Whatever the caller typed (the code) or followed (the token) —
+   *  hashed here before it ever reaches the repository. */
+  readonly secret: string;
 }
 
 const sha256Hex = (value: string): string => createHash('sha256').update(value).digest('hex');
@@ -56,5 +65,15 @@ export class ChallengeService {
     await this.challenges.create(challenge);
 
     return { challengeId, code, token, expiresAt };
+  }
+
+  /**
+   * Verifies whatever secret the caller presents (code or token) against
+   * the challenge scoped to `purpose`. The plaintext `secret` is hashed
+   * right here — the repository only ever sees `candidateHash`.
+   */
+  async consume(input: ConsumeChallengeInput): Promise<ConsumeChallengeResult> {
+    const candidateHash = sha256Hex(input.secret);
+    return this.challenges.consume(input.challengeId, input.purpose, candidateHash);
   }
 }
