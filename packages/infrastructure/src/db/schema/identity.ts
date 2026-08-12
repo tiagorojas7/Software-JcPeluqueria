@@ -3,16 +3,16 @@ import { boolean, integer, pgTable, timestamp, uuid, varchar } from 'drizzle-orm
 import { barbers } from './availability';
 
 /**
- * Identity model (Phase 3a, client-login sub-slice). `role_id` and
- * `client_id` carry no foreign key yet — `roles` (Phase 3b) and `clients`
- * (Phase 9/10) don't exist yet, the same deferred-FK pattern
- * `slot_occupancies.client_id`/`deposit_id` used in Phase 2. `barber_id`
- * DOES get its FK now: `barbers` already exists.
+ * Identity model. `role_id` and `client_id` carry no foreign key yet —
+ * `roles` (Phase 3b) and `clients` (Phase 9/10) don't exist yet, the same
+ * deferred-FK pattern `slot_occupancies.client_id`/`deposit_id` used in
+ * Phase 2. `barber_id` DOES get its FK now: `barbers` already exists.
  *
- * Deliberately no `password_hash`/`password_changed_at` column here: staff
- * password storage is explicitly out of scope for this sub-slice (tasks
- * 3a.10+, a separate branch/ledger attempt) and this migration must not add
- * a password column before that work exists to justify it.
+ * `password_hash`/`password_changed_at` (added in migration 0005, Phase 3a
+ * staff sub-slice) are `NULL` for clients — clients never have a password,
+ * see `access-control`'s differentiated-authentication requirement. Only
+ * `PasswordService` ever writes `password_hash`, and always as an
+ * already-hashed argon2id value — the plaintext never reaches this column.
  */
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -21,6 +21,8 @@ export const users = pgTable('users', {
   barberId: uuid('barber_id').references(() => barbers.id),
   clientId: uuid('client_id'),
   active: boolean('active').notNull().default(true),
+  passwordHash: varchar('password_hash', { length: 255 }),
+  passwordChangedAt: timestamp('password_changed_at', { withTimezone: true }),
 });
 
 /**
