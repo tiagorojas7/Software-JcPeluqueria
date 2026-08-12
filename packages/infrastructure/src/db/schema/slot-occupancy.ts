@@ -9,6 +9,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { barbers, services } from './availability';
+import { users } from './identity';
 
 /**
  * `tstzrange` has no first-class Drizzle type. It stays as its raw text
@@ -32,6 +33,9 @@ export const OCCUPYING_STATUSES = ['held', 'reservado', 'realizado'] as const;
  *
  * `client_id` and `deposit_id` carry no foreign key yet: `clients` and
  * `deposits` arrive in later phases and will add the constraint then.
+ * `created_by_user_id`/`marked_by_user_id` were deliberately deferred from
+ * Phase 2 to Phase 3a (see tasks.md 2.1) so their FK to `users` could be
+ * added in one shot instead of landing without a constraint first.
  */
 export const slotOccupancies = pgTable('slot_occupancies', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -52,4 +56,8 @@ export const slotOccupancies = pgTable('slot_occupancies', {
   /** The appointment this row was offered as a replacement for (absence flow). */
   originOccupancyId: uuid('origin_occupancy_id').references((): AnyPgColumn => slotOccupancies.id),
   depositId: uuid('deposit_id'),
+  /** Staff user who created the row (phone booking, walk-in). Null for web/client-originated rows. */
+  createdByUserId: uuid('created_by_user_id').references(() => users.id),
+  /** Staff user who marked the appointment realizado/ausente. Null until resolved. */
+  markedByUserId: uuid('marked_by_user_id').references(() => users.id),
 });

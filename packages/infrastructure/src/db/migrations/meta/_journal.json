@@ -29,6 +29,13 @@
       "when": 1786543325874,
       "tag": "0003_slot_occupancy_exclude",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786572591265,
+      "tag": "0004_identity",
+      "breakpoints": true
     }
   ]
 }
