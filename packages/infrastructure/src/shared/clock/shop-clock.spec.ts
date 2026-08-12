@@ -86,3 +86,38 @@ describe('ShopClock.localTimeToUtc', () => {
     expect(() => clock.localTimeToUtc('2026-08-11', '9:00')).toThrow(/Invalid wall-clock time/);
   });
 });
+
+// Hold expiry ("now + 15 minutes") is the main caller, but this is generic
+// instant arithmetic — no offset/timezone involved, unlike the two suites
+// above. The starting instants still go through `localTimeToUtc` rather than
+// `new Date(...)`, which only `ShopClock`/`FakeClock` may call directly.
+describe('ShopClock.addMinutes', () => {
+  const originalOffset = process.env.SHOP_UTC_OFFSET;
+
+  beforeEach(() => {
+    process.env.SHOP_UTC_OFFSET = '-03:00';
+  });
+
+  afterEach(() => {
+    if (originalOffset === undefined) {
+      delete process.env.SHOP_UTC_OFFSET;
+    } else {
+      process.env.SHOP_UTC_OFFSET = originalOffset;
+    }
+  });
+
+  it('adds whole minutes to an instant', () => {
+    const clock = new ShopClock();
+    const start = clock.localTimeToUtc('2026-08-11', '09:00');
+
+    expect(clock.addMinutes(start, 15).toISOString()).toBe('2026-08-11T12:15:00.000Z');
+  });
+
+  it('rolls over into the next hour and subtracts with a negative value', () => {
+    const clock = new ShopClock();
+    const start = clock.localTimeToUtc('2026-08-11', '09:50');
+
+    expect(clock.addMinutes(start, 15).toISOString()).toBe('2026-08-11T13:05:00.000Z');
+    expect(clock.addMinutes(start, -50).toISOString()).toBe('2026-08-11T12:00:00.000Z');
+  });
+});

@@ -1,5 +1,8 @@
 import type { TimeWindow } from '../availability';
 
+/** Every hold is provisional for exactly this long before it lapses. */
+export const HOLD_DURATION_MINUTES = 15;
+
 /** How the occupancy entered the system. */
 export type OccupancyChannel = 'web' | 'telefonico' | 'walk_in';
 
