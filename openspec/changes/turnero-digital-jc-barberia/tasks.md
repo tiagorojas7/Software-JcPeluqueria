@@ -79,12 +79,12 @@ Requisitos que cierra: fundación para admin-operations (Vista del día), client
 
 ## Phase 2: Ocupación + EXCLUDE + hold (~400 líneas) — PR 3 (base: PR 2) — depende de 1
 
-- [ ] 2.1 Migración: tabla `slot_occupancies` (`time_range tstzrange`, `status`, `hold_expires_at`, `payment_pending`, `origin_occupancy_id`, `deposit_id`).
-- [ ] 2.2 Migración manual SQL: `EXCLUDE USING gist (barber_id WITH =, time_range WITH &&) WHERE status IN ('held','reservado','realizado')`.
-- [ ] 2.3 RED (Testcontainers): dos INSERT concurrentes mismo barbero+rango → uno falla `23P01`. → *slot-hold: Exclusividad del horario retenido*
-- [ ] 2.4 GREEN: `HoldRepository.create()` traduce `23P01` a rechazo de dominio con huecos alternativos.
-- [ ] 2.5 RED **(obligatorio, diseño)**: 20 transacciones concurrentes sobre el mismo hueco → exactamente una gana. → *slot-hold: Exclusividad del horario retenido*
-- [ ] 2.6 GREEN: ajustar pool de conexión/`HoldRepository` hasta que 2.5 sea estable.
+- [x] 2.1 Migración: tabla `slot_occupancies` (`time_range tstzrange`, `status`, `hold_expires_at`, `payment_pending`, `origin_occupancy_id`, `deposit_id`). Migración `0002`, generada con `drizzle-kit` y aplicada contra Postgres real. `created_by_user_id`/`marked_by_user_id` quedan para la Fase 3a, cuando exista `users` y la FK se pueda crear de una sola vez.
+- [x] 2.2 Migración manual SQL: `EXCLUDE USING gist (barber_id WITH =, time_range WITH &&) WHERE status IN ('held','reservado','realizado')`. Migración `0003`, escrita a mano (Drizzle no expresa `EXCLUDE`), con `CREATE EXTENSION IF NOT EXISTS btree_gist`.
+- [x] 2.3 RED (Testcontainers): dos INSERT concurrentes mismo barbero+rango → uno falla `23P01`. → *slot-hold: Exclusividad del horario retenido*
+- [x] 2.4 GREEN: `HoldRepository.create()` traduce `23P01` a rechazo de dominio con huecos alternativos. Puerto `HoldRepository` + `SlotUnavailableError` en `packages/domain/src/booking`; adaptador `DrizzleHoldRepository` en `packages/infrastructure/src/booking`.
+- [x] 2.5 RED **(obligatorio, diseño)**: 20 transacciones concurrentes sobre el mismo hueco → exactamente una gana. → *slot-hold: Exclusividad del horario retenido* Verificado que el test discrimina: sin el constraint ganan las 20.
+- [x] 2.6 GREEN: ajustar pool de conexión/`HoldRepository` hasta que 2.5 sea estable. Pool de 25 conexiones (por encima de los 20 competidores); estable en 4 corridas consecutivas. El `HoldRepository` no necesitó reintentos ni `SERIALIZABLE`.
 - [ ] 2.7 RED: creación de hold al seleccionar un horario disponible. → *slot-hold: Creación del hold*
 - [ ] 2.8 GREEN: implementar `CreateHold`.
 - [ ] 2.9 RED: liberación perezosa de holds vencidos antes de ocupar (`UPDATE ... status='liberado' WHERE hold_expires_at <= now()`). → *slot-hold: Expiración automática*
