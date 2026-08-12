@@ -2,6 +2,7 @@ import {
   assertValidPassword,
   type AuthChallengePurpose,
   type NotificationPort,
+  type SessionRepository,
   type UserCredentialsRepository,
 } from '@jc-barberia/domain';
 
@@ -36,6 +37,7 @@ export class ResetPasswordUseCase {
     private readonly credentials: UserCredentialsRepository,
     private readonly challenges: ChallengeService,
     private readonly passwords: PasswordService,
+    private readonly sessions: SessionRepository,
     private readonly notifications: NotificationPort,
   ) {}
 
@@ -77,6 +79,11 @@ export class ResetPasswordUseCase {
     }
 
     await this.passwords.setPassword(result.userId, input.newPassword);
+    // A reset password only matters if it actually locks out whoever held
+    // the old one — including an attacker with a live session. See
+    // design.md: "cambiar o resetear la contraseña revoca todas las
+    // sesiones activas de ese usuario".
+    await this.sessions.revokeAllForUser(result.userId);
     return { outcome: 'reset', userId: result.userId };
   }
 }

@@ -3,6 +3,7 @@ import {
   FakeClock,
   FakeNotificationPort,
   FakePasswordHasher,
+  FakeSessionRepository,
   FakeUserCredentialsRepository,
   WeakPasswordError,
 } from '@jc-barberia/domain';
@@ -20,6 +21,7 @@ const buildUseCase = () => {
   const challenges = new FakeAuthChallengeRepository();
   const hasher = new FakePasswordHasher();
   const credentials = new FakeUserCredentialsRepository();
+  const sessions = new FakeSessionRepository();
   const notifications = new FakeNotificationPort();
   const challengeService = new ChallengeService(challenges, clock);
   const passwordService = new PasswordService(hasher, credentials);
@@ -27,9 +29,10 @@ const buildUseCase = () => {
     challenges,
     hasher,
     credentials,
+    sessions,
     notifications,
     challengeService,
-    useCase: new ResetPasswordUseCase(credentials, challengeService, passwordService, notifications),
+    useCase: new ResetPasswordUseCase(credentials, challengeService, passwordService, sessions, notifications),
   };
 };
 
@@ -159,5 +162,46 @@ describe('ResetPasswordUseCase.complete', () => {
       newPassword: 'a-strong-enough-password',
     });
     expect(result).toEqual({ outcome: 'reset', userId: 'owner-1' });
+  });
+});
+
+// → access-control: Contraseñas del personal almacenadas de forma segura
+// ("Efecto del cambio: cambiar o resetear la contraseña revoca todas las
+// sesiones activas de ese usuario" — design.md).
+describe('ResetPasswordUseCase.complete revokes sessions', () => {
+  it('revokes all of the user’s active sessions after a successful reset', async () => {
+    const { credentials, sessions, challengeService, useCase } = buildUseCase();
+    credentials.seed({ id: 'owner-1', email: 'dueno@jcbarberia.com', passwordHash: 'fake-hash:old-password', active: true });
+    await sessions.create({ id: 'session-1', userId: 'owner-1', expiresAt: at('17:00') });
+    await sessions.create({ id: 'session-2', userId: 'owner-1', expiresAt: at('17:00') });
+    const issued = await challengeService.issue({ userId: 'owner-1', purpose: 'staff_password_reset' });
+
+    await useCase.complete({ challengeId: issued.challengeId, secret: issued.token, newPassword: 'a-brand-new-password' });
+
+    expect(sessions.revokeAllForUserCalls).toEqual(['owner-1']);
+    expect(sessions.isRevoked('session-1')).toBe(true);
+    expect(sessions.isRevoked('session-2')).toBe(true);
+  });
+
+  it('never revokes another user’s sessions', async () => {
+    const { credentials, sessions, challengeService, useCase } = buildUseCase();
+    credentials.seed({ id: 'owner-1', email: 'dueno@jcbarberia.com', passwordHash: 'fake-hash:old-password', active: true });
+    await sessions.create({ id: 'other-users-session', userId: 'secretary-1', expiresAt: at('17:00') });
+    const issued = await challengeService.issue({ userId: 'owner-1', purpose: 'staff_password_reset' });
+
+    await useCase.complete({ challengeId: issued.challengeId, secret: issued.token, newPassword: 'a-brand-new-password' });
+
+    expect(sessions.isRevoked('other-users-session')).toBe(false);
+  });
+
+  it('does NOT revoke any session when the reset attempt is rejected', async () => {
+    const { credentials, sessions, useCase } = buildUseCase();
+    credentials.seed({ id: 'owner-1', email: 'dueno@jcbarberia.com', passwordHash: 'fake-hash:old-password', active: true });
+    await sessions.create({ id: 'session-1', userId: 'owner-1', expiresAt: at('17:00') });
+
+    await useCase.complete({ challengeId: 'does-not-exist', secret: 'wrong', newPassword: 'a-brand-new-password' });
+
+    expect(sessions.revokeAllForUserCalls).toHaveLength(0);
+    expect(sessions.isRevoked('session-1')).toBe(false);
   });
 });

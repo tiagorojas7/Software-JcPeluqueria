@@ -118,8 +118,8 @@ Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad ·
 - [x] 3a.13 GREEN: `ActivateStaffUseCase`. `.invite()` reusa `ChallengeService.issue({purpose:'staff_activation'})`; `.activate()` valida la fortaleza de la contraseña ANTES de consumir el challenge (para no quemar el link de un solo uso con una contraseña débil) y luego consume + `PasswordService.setPassword`.
 - [x] 3a.14 RED: reset con token de 32 bytes, hash en base, 30 min, un solo uso; no revela la contraseña anterior. → *access-control: Contraseñas del personal almacenadas de forma segura*
 - [x] 3a.15 GREEN: `ResetPasswordUseCase` (usa `NotificationPort`, fake hasta Fase 7). `EXPIRY_MINUTES_BY_PURPOSE` en el dominio: `staff_password_reset` vive 30 min (los otros dos propósitos, 10). `.request(email)` responde exactamente igual exista o no la cuenta (nunca filtra qué emails tienen alta); `.complete()` valida la contraseña antes de consumir, mismo motivo que `ActivateStaffUseCase`. Puerto `NotificationPort` nuevo en `packages/domain/src/notifications` — Fase 7 construye el adaptador real, acá solo `FakeNotificationPort`.
-- [ ] 3a.16 RED: cambiar/resetear contraseña revoca todas las sesiones activas del usuario.
-- [ ] 3a.17 GREEN: revocación de sesiones en `sessions`.
+- [x] 3a.16 RED: cambiar/resetear contraseña revoca todas las sesiones activas del usuario.
+- [x] 3a.17 GREEN: revocación de sesiones en `sessions`. Puerto `SessionRepository` (dominio) + `DrizzleSessionRepository.revokeAllForUser()` — un solo `UPDATE ... WHERE user_id AND revoked_at IS NULL`, nunca un loop por sesión. `ResetPasswordUseCase.complete()` la invoca después de `PasswordService.setPassword`. Probado con Testcontainers: revoca todas las sesiones del usuario y ninguna de otro usuario.
 - [ ] 3a.18 RED: TTL de sesión — cliente 30 días, staff 12h, dueño 8h.
 - [ ] 3a.19 GREEN: `SessionService` con TTLs diferenciados por rol.
 
