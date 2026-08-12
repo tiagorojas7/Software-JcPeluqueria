@@ -18,5 +18,6 @@ export type { UserCredentials, UserCredentialsRepository } from './user-credenti
 export { FakePasswordHasher } from './testing/fake-password-hasher';
 export { FakeUserCredentialsRepository } from './testing/fake-user-credentials-repository';
 export type { FakeUser } from './testing/fake-user-credentials-repository';
-export type { Session, SessionRepository } from './session';
+export type { Session, SessionRepository, SessionSubjectKind } from './session';
+export { SESSION_TTL_MINUTES_BY_SUBJECT } from './session';
 export { FakeSessionRepository } from './testing/fake-session-repository';

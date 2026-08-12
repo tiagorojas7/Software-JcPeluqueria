@@ -14,3 +14,5 @@ export type {
   ResetPasswordCompleteResult,
   ResetPasswordRequestResult,
 } from './reset-password';
+export { SessionService } from './session-service';
+export type { CreateSessionInput } from './session-service';
