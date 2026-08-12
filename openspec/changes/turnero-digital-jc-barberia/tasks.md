@@ -85,19 +85,21 @@ Requisitos que cierra: fundación para admin-operations (Vista del día), client
 - [x] 2.4 GREEN: `HoldRepository.create()` traduce `23P01` a rechazo de dominio con huecos alternativos. Puerto `HoldRepository` + `SlotUnavailableError` en `packages/domain/src/booking`; adaptador `DrizzleHoldRepository` en `packages/infrastructure/src/booking`.
 - [x] 2.5 RED **(obligatorio, diseño)**: 20 transacciones concurrentes sobre el mismo hueco → exactamente una gana. → *slot-hold: Exclusividad del horario retenido* Verificado que el test discrimina: sin el constraint ganan las 20.
 - [x] 2.6 GREEN: ajustar pool de conexión/`HoldRepository` hasta que 2.5 sea estable. Pool de 25 conexiones (por encima de los 20 competidores); estable en 4 corridas consecutivas. El `HoldRepository` no necesitó reintentos ni `SERIALIZABLE`.
-- [ ] 2.7 RED: creación de hold al seleccionar un horario disponible. → *slot-hold: Creación del hold*
-- [ ] 2.8 GREEN: implementar `CreateHold`.
-- [ ] 2.9 RED: liberación perezosa de holds vencidos antes de ocupar (`UPDATE ... status='liberado' WHERE hold_expires_at <= now()`). → *slot-hold: Expiración automática*
-- [ ] 2.10 GREEN: integrar la liberación perezosa en creación de hold y lectura de disponibilidad.
-- [ ] 2.11 RED: confirmación atómica `UPDATE ... status='reservado' WHERE status='held' AND hold_expires_at > now() RETURNING *`; cero filas → hold vencido/perdido. → *slot-hold: Re-validación inmediatamente antes de confirmar*
-- [ ] 2.12 GREEN: `ConfirmHold` como transición de estado, nunca INSERT.
-- [ ] 2.13 RED: re-validación fallida en reserva ordinaria ofrece el hueco más cercano sin restricción de día. → *slot-hold: Re-validación — sin restricción de día*
-- [ ] 2.14 RED: re-validación fallida en oferta de ausencia se limita al mismo día calendario. → *slot-hold: Re-validación — mismo día*
-- [ ] 2.15 GREEN: `findNearestAvailable(scope: 'any-day' | 'same-day')` conectado a 2.13/2.14.
-- [ ] 2.16 RED: sin huecos disponibles tras fallo de re-validación → no crea hold automático, devuelve disponibilidad actualizada. → *slot-hold: Re-validación — sin huecos*
-- [ ] 2.17 GREEN: implementar la rama sin resultados.
+- [x] 2.7 RED: creación de hold al seleccionar un horario disponible. → *slot-hold: Creación del hold*
+- [x] 2.8 GREEN: implementar `CreateHold`. Caso de uso en `packages/application/src/booking/create-hold.ts`: calcula `holdExpiresAt = clock.addMinutes(clock.now(), HOLD_DURATION_MINUTES)` vía el puerto `Clock` (nunca `new Date()`) y delega en `HoldRepository.create()`. Agregado `Clock.addMinutes` (ShopClock + FakeClock) como única aritmética de instantes del puerto.
+- [x] 2.9 RED: liberación perezosa de holds vencidos antes de ocupar (`UPDATE ... status='liberado' WHERE hold_expires_at <= now()`). → *slot-hold: Expiración automática*
+- [x] 2.10 GREEN: integrar la liberación perezosa en creación de hold y lectura de disponibilidad. `DrizzleHoldRepository.releaseExpiredHolds()` corre antes del `INSERT` en `create()`, sobre la misma `searchWindow` que después alimenta el cálculo de alternativas (`SlotUnavailableError.alternatives`) — una sola llamada cubre ambos usos.
+- [x] 2.11 RED: confirmación atómica `UPDATE ... status='reservado' WHERE status='held' AND hold_expires_at > now() RETURNING *`; cero filas → hold vencido/perdido. → *slot-hold: Re-validación inmediatamente antes de confirmar*
+- [x] 2.12 GREEN: `ConfirmHold` como transición de estado, nunca INSERT. `HoldRepository.confirm()` (Drizzle) hace el UPDATE condicional descripto arriba (`RETURNING id`, no `*` — no hace falta más para decidir éxito/fracaso); `ConfirmHold` (aplicación) delega y devuelve `confirmed` o (en 2.12) `expired`.
+- [x] 2.13 RED: re-validación fallida en reserva ordinaria ofrece el hueco más cercano sin restricción de día. → *slot-hold: Re-validación — sin restricción de día*
+- [x] 2.14 RED: re-validación fallida en oferta de ausencia se limita al mismo día calendario. → *slot-hold: Re-validación — mismo día*
+- [x] 2.15 GREEN: `findNearestAvailable(scope: 'any-day' | 'same-day')` conectado a 2.13/2.14. Función pura en `packages/domain/src/booking/nearest-available.ts`, sin I/O: recibe una lista de `AvailableCandidate` ya computados (fecha + ventana libre) y elige el más cercano al instante original, descartando los de otro día calendario cuando `scope='same-day'`. `ConfirmHold` la conecta a su rama de fallo y crea un nuevo hold de 15 min sobre el candidato elegido vía `CreateHold` (2.8) — nunca un INSERT ad hoc.
+- [x] 2.16 RED: sin huecos disponibles tras fallo de re-validación → no crea hold automático, devuelve disponibilidad actualizada. → *slot-hold: Re-validación — sin huecos*
+- [x] 2.17 GREEN: implementar la rama sin resultados. `ConfirmHold` devuelve `outcome: 'no-slots-available'` con los candidatos recibidos (sin filtrar por scope, para que el cliente pueda elegir manualmente incluso otro día) y no invoca `CreateHold`. Cubre tanto lista vacía como lista no vacía completamente filtrada por `scope='same-day'`.
 
-Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad · Expiración automática · Re-validación).
+Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad · Expiración automática · Re-validación). **17/17 tareas de la fase completas.**
+
+**Nota de diseño (2.13-2.17)**: la generación de `AvailableCandidate[]` a través de varios días calendario (para `scope='any-day'` cuando el mismo día no alcanza) queda deliberadamente fuera de esta fase — `ConfirmHold` recibe los candidatos ya calculados por quien la invoque. Combinar `AvailabilityService.workingWindows()` (Fase 1) con la ocupación real día por día para un horizonte de búsqueda de varios días es trabajo de integración de una fase con endpoint real (Fase 9), no de esta pieza del núcleo de concurrencia; construirlo ahora sin un consumidor real habría sido abstracción especulativa.
 
 ## Phase 3a: Identidad (~400 líneas) — PR 4 (base: PR 2, puede desarrollarse en paralelo a Fase 1) — depende de 0
 
