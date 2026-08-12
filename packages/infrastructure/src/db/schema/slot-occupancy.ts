@@ -18,6 +18,9 @@ import { barbers, services } from './availability';
  */
 const tstzrange = customType<{ data: string }>({ dataType: () => 'tstzrange' });
 
+/** Statuses that consume the barber's time. Mirrors the EXCLUDE predicate in migration 0003. */
+export const OCCUPYING_STATUSES = ['held', 'reservado', 'realizado'] as const;
+
 /**
  * One physical table for every kind of occupancy: a hold, a booked
  * appointment and a walk-in all consume the same barber time. Confirming a

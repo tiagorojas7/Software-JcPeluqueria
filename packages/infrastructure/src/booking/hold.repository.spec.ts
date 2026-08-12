@@ -1,5 +1,5 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { createBarber, createService } from '@jc-barberia/domain';
+import { createBarber, createService, SlotUnavailableError, type Hold } from '@jc-barberia/domain';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DrizzleBarberRepository } from '../availability/barber.repository';
 import { DrizzleServiceRepository } from '../availability/service.repository';
 import { ShopClock } from '../shared/clock/shop-clock';
+import { DrizzleHoldRepository } from './hold.repository';
 
 // Slot exclusivity is a database guarantee, not an application one, so it can
 // only be proven against a real PostgreSQL engine. The pool is sized above the
@@ -30,6 +31,27 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
   const rawHold = (from: string, to: string) =>
     client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
            values (${barberId}, ${serviceId}, 'web', 'held', ${range(from, to)}::tstzrange)`;
+
+  // The barber's working window for the day, as Phase 1's
+  // AvailabilityService.workingWindows() would return it. Alternatives are
+  // only ever searched inside it.
+  const workingWindow = { start: at('09:00'), end: at('18:00') };
+  const holdFor = (barber: string, from: string, to: string): Hold => ({
+    id: crypto.randomUUID(),
+    barberId: barber,
+    serviceId,
+    clientId: null,
+    channel: 'web',
+    timeRange: { start: at(from), end: at(to) },
+    holdExpiresAt: at('23:00'),
+  });
+  // Each competing scenario gets its own barber: the constraint is scoped per
+  // barber, so this keeps the tests from occupying each other's ranges.
+  const newBarber = async (): Promise<string> => {
+    const barber = createBarber({ id: crypto.randomUUID(), name: 'Barbero', active: true });
+    await new DrizzleBarberRepository(db).create(barber);
+    return barber.id;
+  };
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer('postgres:16')
@@ -69,5 +91,40 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
     const rejected = results.filter((result) => result.status === 'rejected');
     expect(rejected).toHaveLength(1);
     expect((rejected[0] as PromiseRejectedResult).reason.code).toBe('23P01');
+  });
+
+  it('stores a hold over a free range', async () => {
+    const hold = holdFor(await newBarber(), '11:00', '11:30');
+
+    await new DrizzleHoldRepository(db).create(hold, workingWindow);
+
+    const rows = await client`select status, time_range = ${range('11:00', '11:30')}::tstzrange as exact
+                                from slot_occupancies where id = ${hold.id}`;
+    expect([...rows]).toEqual([{ status: 'held', exact: true }]);
+  });
+
+  it('translates 23P01 into a domain rejection carrying the free ranges left in the day', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const barber = await newBarber();
+    await repo.create(holdFor(barber, '10:00', '10:30'), workingWindow);
+
+    const error = await repo.create(holdFor(barber, '10:00', '10:30'), workingWindow).catch((e) => e);
+
+    expect(error).toBeInstanceOf(SlotUnavailableError);
+    expect(error.alternatives).toEqual([
+      { start: at('09:00'), end: at('10:00') },
+      { start: at('10:30'), end: at('18:00') },
+    ]);
+  });
+
+  it('offers no gap between two occupancies that touch', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const barber = await newBarber();
+    await repo.create(holdFor(barber, '09:00', '12:00'), workingWindow);
+    await repo.create(holdFor(barber, '12:00', '17:00'), workingWindow);
+
+    const error = await repo.create(holdFor(barber, '10:00', '10:30'), workingWindow).catch((e) => e);
+
+    expect(error.alternatives).toEqual([{ start: at('17:00'), end: at('18:00') }]);
   });
 });
