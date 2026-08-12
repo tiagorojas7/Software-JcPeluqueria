@@ -16,8 +16,17 @@ export interface RecordedCreateCall {
  */
 export class FakeHoldRepository implements HoldRepository {
   readonly createCalls: RecordedCreateCall[] = [];
+  readonly confirmCalls: string[] = [];
+
+  /** @param confirmResult What every `confirm()` call resolves to. */
+  constructor(private readonly confirmResult: boolean = true) {}
 
   async create(hold: Hold, searchWindow: TimeWindow): Promise<void> {
     this.createCalls.push({ hold, searchWindow });
+  }
+
+  async confirm(holdId: string): Promise<boolean> {
+    this.confirmCalls.push(holdId);
+    return this.confirmResult;
   }
 }

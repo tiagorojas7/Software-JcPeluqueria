@@ -41,4 +41,12 @@ export interface HoldRepository {
    * `searchWindow` (normally the barber's working window for that day).
    */
   create(hold: Hold, searchWindow: TimeWindow): Promise<void>;
+
+  /**
+   * Atomically re-validates and confirms — a status transition on the same
+   * row, never a second `create`/insert. Returns `false` when nothing was
+   * updated: the hold expired, or something else already consumed it. The
+   * caller must treat that as a failed re-validation, not throw.
+   */
+  confirm(holdId: string): Promise<boolean>;
 }

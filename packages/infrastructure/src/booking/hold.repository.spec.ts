@@ -188,4 +188,36 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
 
     expect(error).toBeInstanceOf(SlotUnavailableError);
   });
+
+  // Confirmation is a state transition on the SAME row, never a second
+  // INSERT — there is no window between "release the hold" and "create the
+  // appointment" for a competitor to slip into.
+  it('atomically confirms an active hold, transitioning held -> reservado', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const hold = holdFor(await newBarber(), '13:00', '13:30');
+    await repo.create(hold, workingWindow);
+
+    const confirmed = await repo.confirm(hold.id);
+
+    expect(confirmed).toBe(true);
+    const rows = await client`select status from slot_occupancies where id = ${hold.id}`;
+    expect([...rows]).toEqual([{ status: 'reservado' }]);
+  });
+
+  // Triangulates the test above: the WHERE clause has two conditions
+  // (status='held' AND hold_expires_at > now()); this exercises the second
+  // one specifically, proving confirm() does not blindly flip any row with
+  // a matching id.
+  it('returns false without transitioning a hold that already expired', async () => {
+    const barber = await newBarber();
+    const expiredId = crypto.randomUUID();
+    await client`insert into slot_occupancies (id, barber_id, service_id, channel, status, time_range, hold_expires_at)
+                 values (${expiredId}, ${barber}, ${serviceId}, 'web', 'held', ${range('14:00', '14:30')}::tstzrange, ${PAST_HOLD_EXPIRY.toISOString()})`;
+
+    const confirmed = await new DrizzleHoldRepository(db).confirm(expiredId);
+
+    expect(confirmed).toBe(false);
+    const rows = await client`select status from slot_occupancies where id = ${expiredId}`;
+    expect([...rows]).toEqual([{ status: 'held' }]);
+  });
 });

@@ -70,6 +70,27 @@ export class DrizzleHoldRepository implements HoldRepository {
       );
   }
 
+  /**
+   * Re-validates and confirms in one atomic statement — never a `SELECT`
+   * then an `UPDATE`, and never a second `INSERT`. Zero rows updated means
+   * the hold expired or was already consumed by something else; the caller
+   * (`ConfirmHold`) treats that as a failed re-validation, not an error.
+   */
+  async confirm(holdId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(slotOccupancies)
+      .set({ status: 'reservado' })
+      .where(
+        and(
+          eq(slotOccupancies.id, holdId),
+          eq(slotOccupancies.status, 'held'),
+          sql`${slotOccupancies.holdExpiresAt} > now()`,
+        ),
+      )
+      .returning({ id: slotOccupancies.id });
+    return rows.length > 0;
+  }
+
   /** `searchWindow` minus everything that still occupies the barber inside it. */
   private async freeRanges(barberId: string, searchWindow: TimeWindow): Promise<TimeWindow[]> {
     const lowerBound = sql`lower(${slotOccupancies.timeRange})`;
