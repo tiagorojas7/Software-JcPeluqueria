@@ -36,6 +36,12 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
   // AvailabilityService.workingWindows() would return it. Alternatives are
   // only ever searched inside it.
   const workingWindow = { start: at('09:00'), end: at('18:00') };
+  // Deliberately not "DAY minus a few minutes": DAY itself is a fixed future
+  // date (kept future so the exclusivity tests above never race against a
+  // real clock). A genuinely-expired hold needs an instant in the past
+  // relative to whenever this suite actually runs, so this uses its own,
+  // unrelated calendar date instead.
+  const PAST_HOLD_EXPIRY = clock.localTimeToUtc('2020-01-01', '12:00');
   const holdFor = (barber: string, from: string, to: string): Hold => ({
     id: crypto.randomUUID(),
     barberId: barber,
@@ -149,5 +155,37 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
     const stored = await client`select count(*)::int as total from slot_occupancies
                                   where barber_id = ${barber} and status = 'held'`;
     expect([...stored]).toEqual([{ total: 1 }]);
+  });
+
+  // The EXCLUDE predicate cannot reference now(), so a hold nobody confirmed
+  // or released stays 'held' forever unless something evaluates the
+  // expiry lazily. This proves that evaluation happens right before a new
+  // hold is written, not just eventually via the background job (Phase 6).
+  it('lazily releases an expired hold before creating a new one on the same range', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const barber = await newBarber();
+    const expiredId = crypto.randomUUID();
+    await client`insert into slot_occupancies (id, barber_id, service_id, channel, status, time_range, hold_expires_at)
+                 values (${expiredId}, ${barber}, ${serviceId}, 'web', 'held', ${range('10:00', '10:30')}::tstzrange, ${PAST_HOLD_EXPIRY.toISOString()})`;
+
+    // Must NOT throw SlotUnavailableError: the stale row is released first.
+    await repo.create(holdFor(barber, '10:00', '10:30'), workingWindow);
+
+    const rows = await client`select status from slot_occupancies where id = ${expiredId}`;
+    expect([...rows]).toEqual([{ status: 'liberado' }]);
+  });
+
+  // Triangulates the test above: an ACTIVE hold (future hold_expires_at)
+  // must still block, exactly like the pre-existing exclusivity tests. If
+  // the lazy release were too broad (e.g. missing the hold_expires_at
+  // predicate) this would start passing when it should not.
+  it('still blocks on an active hold that has not expired yet', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const barber = await newBarber();
+    await repo.create(holdFor(barber, '16:00', '16:30'), workingWindow);
+
+    const error = await repo.create(holdFor(barber, '16:00', '16:30'), workingWindow).catch((e) => e);
+
+    expect(error).toBeInstanceOf(SlotUnavailableError);
   });
 });
