@@ -24,8 +24,6 @@ CREATE TABLE "users" (
 	"barber_id" uuid,
 	"client_id" uuid,
 	"active" boolean DEFAULT true NOT NULL,
-	"password_hash" varchar(255),
-	"password_changed_at" timestamp with time zone,
 	CONSTRAINT "users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint

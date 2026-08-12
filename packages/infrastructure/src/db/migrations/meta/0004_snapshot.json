@@ -1,5 +1,5 @@
 {
-  "id": "ce9d0025-5886-40ee-aac4-ea6761899ed9",
+  "id": "f06e620a-e444-4711-8840-a556dfa4cf56",
   "prevId": "3896d8e2-e99a-46ef-9151-e33ce6f00ef8",
   "version": "7",
   "dialect": "postgresql",
@@ -416,18 +416,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
-        },
-        "password_hash": {
-          "name": "password_hash",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "password_changed_at": {
-          "name": "password_changed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
