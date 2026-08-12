@@ -6,3 +6,5 @@ export { PasswordService } from './password-service';
 export type { VerifyStaffPasswordResult } from './password-service';
 export { StaffLoginUseCase } from './staff-login';
 export type { StaffLoginInput, StaffLoginResult } from './staff-login';
+export { ActivateStaffUseCase } from './activate-staff';
+export type { ActivateStaffInput, ActivateStaffResult, InviteStaffInput } from './activate-staff';
