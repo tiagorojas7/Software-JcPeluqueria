@@ -127,4 +127,27 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
 
     expect(error.alternatives).toEqual([{ start: at('17:00'), end: at('18:00') }]);
   });
+
+  // The only real proof of the hold. Twenty clients racing for one slot must
+  // leave exactly one winner and nineteen offers of something else — no
+  // second row, no deadlock, no silent success.
+  it('lets exactly one of 20 concurrent transactions win the same slot', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const barber = await newBarber();
+
+    const outcomes = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        repo.create(holdFor(barber, '15:00', '15:30'), workingWindow).then(
+          () => 'won',
+          (error) => (error instanceof SlotUnavailableError ? 'lost' : `unexpected: ${error}`),
+        ),
+      ),
+    );
+
+    expect(outcomes.filter((outcome) => outcome === 'won')).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome === 'lost')).toHaveLength(19);
+    const stored = await client`select count(*)::int as total from slot_occupancies
+                                  where barber_id = ${barber} and status = 'held'`;
+    expect([...stored]).toEqual([{ total: 1 }]);
+  });
 });
