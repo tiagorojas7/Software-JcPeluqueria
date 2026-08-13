@@ -238,10 +238,15 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
     const began = await repo.beginCheckout(hold.id, paymentExpiresAt);
 
     expect(began).toBe(true);
-    const [row] = await client`select status, payment_pending, hold_expires_at from slot_occupancies where id = ${hold.id}`;
+    // Compares in SQL, not `new Date(...)` in JS — same style as the
+    // `time_range = ...::tstzrange as exact` checks above; the lint rule
+    // forbids constructing `Date` outside `ShopClock`.
+    const [row] = await client`select status, payment_pending,
+        hold_expires_at = ${paymentExpiresAt.toISOString()}::timestamptz as expiry_matches
+      from slot_occupancies where id = ${hold.id}`;
     expect(row!.status).toBe('held');
     expect(row!.payment_pending).toBe(true);
-    expect(new Date(row!.hold_expires_at)).toEqual(paymentExpiresAt);
+    expect(row!.expiry_matches).toBe(true);
   });
 
   it('returns false for beginCheckout on an already-expired hold, without touching it', async () => {
