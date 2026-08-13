@@ -20,3 +20,9 @@ export type { MarkCompletedInput } from './mark-completed';
 export type { AbsenceRecord } from './absence-record';
 export { ConfirmAbsenceUseCase, MissingActorError } from './confirm-absence';
 export type { ConfirmAbsenceInput, ConfirmAbsenceResult } from './confirm-absence';
+export { AppointmentNotFoundError } from './appointment-repository';
+export type {
+  AppointmentRepository,
+  AppointmentScheduleChange,
+} from './appointment-repository';
+export { FakeAppointmentRepository } from './testing/fake-appointment-repository';
