@@ -14,3 +14,6 @@ export {
 } from './deposit-transitions';
 export { FakePaymentPort } from './testing/fake-payment-port';
 export type { RecordedRefundCall } from './testing/fake-payment-port';
+export type { Appointment } from './appointment';
+export { MarkCompletedUseCase } from './mark-completed';
+export type { MarkCompletedInput } from './mark-completed';
