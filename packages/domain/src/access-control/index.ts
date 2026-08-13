@@ -4,3 +4,8 @@ export type { Role } from './role';
 export { ROLES } from './role';
 export type { RolePermissionRepository } from './role-permission-repository';
 export { FakeRolePermissionRepository } from './testing/fake-role-permission-repository';
+export type { ActorContext } from './actor-context';
+export type { ActorContextRepository } from './actor-context-repository';
+export { FakeActorContextRepository } from './testing/fake-actor-context-repository';
+export type { AgendaAccessResult, AgendaRepository } from './agenda-repository';
+export { FakeAgendaRepository } from './testing/fake-agenda-repository';

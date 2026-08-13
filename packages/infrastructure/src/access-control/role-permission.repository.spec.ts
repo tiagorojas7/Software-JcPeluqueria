@@ -118,4 +118,37 @@ describe('role_permissions seed (Testcontainers)', () => {
 
     expect(result).toBe(false);
   });
+
+  // access-control: "Permisos de secretaria ajustables sin cambio de
+  // código" (3b.12/3b.13). Proves the widening happens by adding a row to
+  // `role_permissions` — nothing else — and that the SAME repository
+  // instance, constructed once before the row existed, reflects it on its
+  // very next call. No re-construction, no restart, no code path other than
+  // hasPermission() itself: this is the exact query PermissionsGuard already
+  // runs on every request (see permissions.guard.spec.ts for the guard-level
+  // half of this same proof — that the guard adds no caching of its own on
+  // top of this repository).
+  it('reflects a role_permissions row added after construction, on the very next call', async () => {
+    const repo = new DrizzleRolePermissionRepository(db);
+
+    const before = await repo.hasPermission('secretary', 'finance:read:shop');
+    expect(before).toBe(false);
+
+    const roleRows = await client`select id from roles where name = 'secretary'`;
+    const secretaryRoleId = roleRows[0]?.id as string;
+    try {
+      await client`
+        insert into role_permissions (role_id, permission) values (${secretaryRoleId}, 'finance:read:shop')
+      `;
+
+      const after = await repo.hasPermission('secretary', 'finance:read:shop');
+      expect(after).toBe(true);
+    } finally {
+      // Restore the seed exactly as migration 0006 left it, so the
+      // exact-matrix test above stays correct regardless of run order.
+      await client`
+        delete from role_permissions where role_id = ${secretaryRoleId} and permission = 'finance:read:shop'
+      `;
+    }
+  });
 });
