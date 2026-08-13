@@ -85,4 +85,25 @@ describe('PermissionsGuard — permission-check branch', () => {
       guard.canActivate(buildContext({ userId: 'u1', role: 'barber' }, DummyController.prototype.eitherPermissionHandler)),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  // access-control: "Permisos de secretaria ajustables sin cambio de
+  // código" (3b.12/3b.13) — the guard-level half of this proof.
+  // role-permission.repository.spec.ts proves the REPOSITORY re-reads
+  // role_permissions on every call; this proves the GUARD adds no caching
+  // of its own on top of that repository. Same guard instance, same
+  // repository instance, no re-construction between the two checks — only
+  // `.grant()` (the fake's equivalent of "insert a row") happens in
+  // between.
+  it('reflects a permission granted to the repository after construction, on the guard’s very next check', async () => {
+    const repo = new FakeRolePermissionRepository();
+    const guard = new PermissionsGuard(new Reflector(), repo);
+    const context = buildContext({ userId: 'u1', role: 'secretary' });
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(ForbiddenException);
+
+    repo.grant('secretary', 'finance:read:shop');
+
+    const result = await guard.canActivate(context);
+    expect(result).toBe(true);
+  });
 });

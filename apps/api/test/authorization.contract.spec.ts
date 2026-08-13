@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { Controller, ForbiddenException, Get, Inject, Module, Param } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import {
   FakeActorContextRepository,
@@ -13,8 +14,11 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { CurrentActor } from '../src/access-control/decorators/current-actor.decorator';
-import { Public } from '../src/access-control/decorators/public.decorator';
-import { RequiresPermission } from '../src/access-control/decorators/requires-permission.decorator';
+import { IS_PUBLIC_KEY, Public } from '../src/access-control/decorators/public.decorator';
+import {
+  REQUIRES_PERMISSION_KEY,
+  RequiresPermission,
+} from '../src/access-control/decorators/requires-permission.decorator';
 import { SESSION_COOKIE_NAME } from '../src/access-control/session-cookie';
 import { ACTOR_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from '../src/access-control/tokens';
 import { AppModule } from '../src/app.module';
@@ -127,6 +131,26 @@ class ThreatMatrixController {
 })
 class ThreatMatrixFixtureModule {}
 
+type RouteId = 'undecorated' | 'public' | 'schedule' | 'financeShop';
+
+// The single source of truth tying every handler method that exists on
+// ThreatMatrixController to a row in the matrix below (3b.10). Deliberately
+// hand-maintained rather than derived by reflection: the completeness check
+// just below compares this AGAINST `Object.getOwnPropertyNames` of the
+// controller's own prototype, so a handler added here without a
+// corresponding method (or vice versa) fails immediately — that mismatch is
+// the whole point of 3b.10, not an implementation detail to hide. It caught
+// exactly that gap once already in this same file: `schedule` and
+// `shopBilling` (3b.6/3b.8) were added to the controller before this map
+// knew about them, and the completeness check below failed until both were
+// added here too.
+const ROUTE_ID_TO_HANDLER_NAME: Record<RouteId, string> = {
+  undecorated: 'undecorated',
+  public: 'publicRoute',
+  schedule: 'schedule',
+  financeShop: 'shopBilling',
+};
+
 describe('authorization contract — deny by default (App Nest levantada en memoria)', () => {
   let app: INestApplication;
 
@@ -199,5 +223,89 @@ describe('authorization contract — deny by default (App Nest levantada en memo
     );
 
     expect(response.status).toBe(403);
+  });
+
+  // access-control: "Matriz de permisos por rol" (3b.10/3b.11) — this is
+  // what turns the deny-by-default guard from a claim into a guarantee.
+  // `ROUTE_ID_TO_HANDLER_NAME` is the declared-routes catalog; the
+  // completeness check below fails the moment a handler method exists on
+  // ThreatMatrixController without a matching entry there, regardless of
+  // whether that new handler carries a decorator or not.
+  describe('route × role contract — completeness', () => {
+    it('accounts for every handler method declared on ThreatMatrixController', () => {
+      const declaredMethods = new Set(
+        Object.getOwnPropertyNames(ThreatMatrixController.prototype).filter((name) => name !== 'constructor'),
+      );
+      const coveredMethods = new Set(Object.values(ROUTE_ID_TO_HANDLER_NAME));
+
+      expect(coveredMethods).toEqual(declaredMethods);
+    });
+
+    it('every catalogued route other than "undecorated" declares @Public() or @RequiresPermission(...)', () => {
+      const reflector = new Reflector();
+      const handlersByName = ThreatMatrixController.prototype as unknown as Record<string, () => unknown>;
+
+      for (const [routeId, methodName] of Object.entries(ROUTE_ID_TO_HANDLER_NAME)) {
+        const handler = handlersByName[methodName];
+        if (!handler) {
+          throw new Error(`ThreatMatrixController has no method named "${methodName}" (check ROUTE_ID_TO_HANDLER_NAME).`);
+        }
+        const isPublic = reflector.get<boolean>(IS_PUBLIC_KEY, handler);
+        const requiredPermissions = reflector.get<Permission[]>(REQUIRES_PERMISSION_KEY, handler);
+
+        if (routeId === 'undecorated') {
+          expect(isPublic).toBeUndefined();
+          expect(requiredPermissions).toBeUndefined();
+        } else {
+          expect(isPublic === true || (Array.isArray(requiredPermissions) && requiredPermissions.length > 0)).toBe(
+            true,
+          );
+        }
+      }
+    });
+  });
+
+  interface MatrixCase {
+    readonly routeId: RouteId;
+    readonly description: string;
+    readonly path: string;
+    readonly session: string | undefined;
+    readonly expectedStatus: number;
+  }
+
+  const routeAccessMatrix: readonly MatrixCase[] = [
+    // undecorated — deny-by-default, regardless of role or anonymity
+    { routeId: 'undecorated', description: 'owner', path: '/threat-matrix/undecorated', session: OWNER_SESSION, expectedStatus: 403 },
+    { routeId: 'undecorated', description: 'secretary', path: '/threat-matrix/undecorated', session: SECRETARY_SESSION, expectedStatus: 403 },
+    { routeId: 'undecorated', description: 'barber', path: '/threat-matrix/undecorated', session: BARBER_A_SESSION, expectedStatus: 403 },
+    { routeId: 'undecorated', description: 'anonymous', path: '/threat-matrix/undecorated', session: undefined, expectedStatus: 403 },
+
+    // public — @Public(), always allowed
+    { routeId: 'public', description: 'owner', path: '/threat-matrix/public', session: OWNER_SESSION, expectedStatus: 200 },
+    { routeId: 'public', description: 'secretary', path: '/threat-matrix/public', session: SECRETARY_SESSION, expectedStatus: 200 },
+    { routeId: 'public', description: 'barber', path: '/threat-matrix/public', session: BARBER_A_SESSION, expectedStatus: 200 },
+    { routeId: 'public', description: 'anonymous', path: '/threat-matrix/public', session: undefined, expectedStatus: 200 },
+
+    // schedule — agenda:read:any (owner/secretary, any barber) or
+    // agenda:read:own (barber, own id only — access-control threat matrix 3b.6)
+    { routeId: 'schedule', description: 'owner, any barber', path: `/threat-matrix/barbers/${BARBER_A_ID}/schedule`, session: OWNER_SESSION, expectedStatus: 200 },
+    { routeId: 'schedule', description: 'secretary, any barber', path: `/threat-matrix/barbers/${BARBER_B_ID}/schedule`, session: SECRETARY_SESSION, expectedStatus: 200 },
+    { routeId: 'schedule', description: 'barber, own schedule', path: `/threat-matrix/barbers/${BARBER_A_ID}/schedule`, session: BARBER_A_SESSION, expectedStatus: 200 },
+    { routeId: 'schedule', description: 'barber, colleague’s schedule', path: `/threat-matrix/barbers/${BARBER_B_ID}/schedule`, session: BARBER_A_SESSION, expectedStatus: 403 },
+    { routeId: 'schedule', description: 'anonymous', path: `/threat-matrix/barbers/${BARBER_A_ID}/schedule`, session: undefined, expectedStatus: 403 },
+
+    // financeShop — finance:read:shop, owner only (access-control threat matrix 3b.8)
+    { routeId: 'financeShop', description: 'owner', path: '/threat-matrix/finance/shop', session: OWNER_SESSION, expectedStatus: 200 },
+    { routeId: 'financeShop', description: 'secretary', path: '/threat-matrix/finance/shop', session: SECRETARY_SESSION, expectedStatus: 403 },
+    { routeId: 'financeShop', description: 'barber', path: '/threat-matrix/finance/shop', session: BARBER_A_SESSION, expectedStatus: 403 },
+    { routeId: 'financeShop', description: 'anonymous', path: '/threat-matrix/finance/shop', session: undefined, expectedStatus: 403 },
+  ];
+
+  describe.each(routeAccessMatrix)('route × role matrix — $routeId ($description)', (testCase) => {
+    it(`returns ${testCase.expectedStatus}`, async () => {
+      const response = await withSession(request(app.getHttpServer()).get(testCase.path), testCase.session);
+
+      expect(response.status).toBe(testCase.expectedStatus);
+    });
   });
 });
