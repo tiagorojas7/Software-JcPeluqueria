@@ -17,3 +17,6 @@ export type { RecordedRefundCall } from './testing/fake-payment-port';
 export type { Appointment } from './appointment';
 export { MarkCompletedUseCase } from './mark-completed';
 export type { MarkCompletedInput } from './mark-completed';
+export type { AbsenceRecord } from './absence-record';
+export { ConfirmAbsenceUseCase, MissingActorError } from './confirm-absence';
+export type { ConfirmAbsenceInput, ConfirmAbsenceResult } from './confirm-absence';
