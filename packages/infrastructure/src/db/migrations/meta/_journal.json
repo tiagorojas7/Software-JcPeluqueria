@@ -50,6 +50,13 @@
       "when": 1786623854038,
       "tag": "0006_access_control",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786659267555,
+      "tag": "0007_payments",
+      "breakpoints": true
     }
   ]
 }
