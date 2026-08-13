@@ -428,11 +428,11 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | Especificación | ✅ Completa — 8 dominios, 38 requisitos, 58 escenarios |
 | Diseño técnico | ✅ Completo — stack elegido y arquitectura definida |
 | Desglose en tareas | ✅ Completo — 192 tareas en 14 fases |
-| Implementación | 🔄 **En curso — 64 de 192 tareas (33%)** |
+| Implementación | 🔄 **En curso — 72 de 192 tareas (38%)** |
 
 ### Avance de la implementación
 
-Última actualización: **2026-08-12**. Ninguna rama tiene PR abierto todavía.
+Última actualización: **2026-08-13**. Las diez ramas entregadas tienen PR abierto y esperan revisión.
 
 | Fase | Estado | Rama | Líneas de producción |
 |------|--------|------|:---:|
@@ -444,7 +444,8 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | 3a · Identidad | ✅ 19/19 | `feat/turnero-03a1-identidad-cliente` | 330 |
 | | | `feat/turnero-03a2-credenciales-staff` | 340 |
 | | | `feat/turnero-03a3-reset-sesiones` | 253 |
-| 3b · Autorización | 🔄 5/13 | `feat/turnero-03b1-guard` | 337 |
+| 3b · Autorización | ✅ 13/13 | `feat/turnero-03b1-guard` | 337 |
+| | | `feat/turnero-03b2-actor-context` | 383 |
 | 4 a 12 | ⬜ Pendientes | — | — |
 
 **El núcleo de concurrencia ya está resuelto y probado.** La fase 2 dejó andando el hold de 15 minutos completo: creación, liberación perezosa de los vencidos, confirmación atómica como transición de estado, y la oferta del horario más cercano cuando la re-validación falla. Todo verificado contra un PostgreSQL real, no contra dobles.
@@ -455,7 +456,9 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 
 El guard **niega por ausencia**: un handler al que se le olvidó el decorador devuelve `403`, no queda abierto. Esa es la diferencia entre un guard que sirve y uno decorativo, y hay un test que lo prueba con un handler completamente pelado.
 
-**La suite corre en verde: 138 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
+Y un barbero queda acotado a lo suyo **en la consulta, no en la pantalla**: el `WHERE barber_id` viaja dentro del query, así que los datos de un compañero nunca se leen. Un test de contrato recorre todas las rutas declaradas contra todos los roles y verifica cada celda permitido/denegado.
+
+**La suite corre en verde: 176 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
 
 ### Sobre el tamaño de los PRs
 
@@ -463,7 +466,9 @@ El plan original preveía 14 PRs. **En la práctica las fases grandes se parten 
 
 El criterio de corte que funcionó es **partir por frontera funcional o hexagonal, nunca por cantidad de tareas**: dominio por un lado y persistencia por otro, o identidad del cliente por un lado y del personal por otro. Cada mitad se sostiene sola y se revisa sola.
 
-Las porciones entregadas desde que se aplica el criterio: 248, 188, 253, 330, 340 y 253 líneas. Las dos primeras fases, entregadas antes de adoptarlo, se pasaron: 559 y 609.
+Las porciones entregadas desde que se aplica el criterio: 248, 188, 253, 330, 340, 253, 337 y 383 líneas. Las dos primeras fases, entregadas antes de adoptarlo, se pasaron: 559 y 609.
+
+**Las estimaciones del plan son optimistas y conviene saberlo antes de prometer fechas.** La fase 3b estimó ~350 líneas y salieron 720, un factor de dos. La causa principal no fue mal cálculo sino trabajo no contado: levantar NestJS era parte de esa fase y no figuraba en su título ni en el diseño, solo en la columna de harness de verificación de la tabla de entrega. **Antes de estimar una fase, leer esa columna.**
 
 La segunda mitad de la fase 3a se pasó igual —593 líneas— y **se partió después de escribirla**, apuntando dos ramas a commits que ya existían, sin reescribir historia. Eso fue posible porque cada ciclo de test-implementación se commitea por separado y actualiza este README y `tasks.md` en el mismo commit: cada mitad queda consistente por sí sola. Es una razón más para no acumular cambios sin commitear.
 
