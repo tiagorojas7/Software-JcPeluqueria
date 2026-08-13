@@ -145,18 +145,18 @@ Requisitos que cierra: **access-control** (4/6 restantes, TODOS cerrados: Tres r
 
 ## Phase 4: Ciclo de vida del turno (~350 líneas) — PR 6 (base: PR 5) — depende de 2, 3b
 
-- [ ] 4.1 RED: máquina de estados — cinco transiciones válidas y las inválidas rechazadas. → *appointment-lifecycle: Cinco estados explícitos y no colapsables*
-- [ ] 4.2 GREEN: `AppointmentStateMachine` en `packages/domain/appointments`.
-- [ ] 4.3 RED: `DepositState` exhaustivo (`not_applicable` · `pending` · `settled` · `refunded` · `forfeited`).
-- [ ] 4.4 GREEN: implementar `DepositState` y los switches de cancelación/ausencia/realizado con `FakePaymentPort`.
-- [ ] 4.5 RED: marcar `realizado` sin seña previa no ejecuta cobro ni reembolso. → *appointment-lifecycle: Turno realizado sin seña previa*
-- [ ] 4.6 GREEN: `MarkCompletedUseCase`.
-- [ ] 4.7 RED: el sistema nunca transiciona automáticamente a `ausente`; solo confirmación humana explícita. → *appointment-lifecycle: El sistema nunca marca ausencias por su cuenta*
-- [ ] 4.8 GREEN: `ConfirmAbsenceUseCase` (requiere `ActorContext` humano vía endpoint autenticado).
-- [ ] 4.9 RED: ausencia con seña la pierde sin reembolso; sin seña, no hay movimiento de dinero pero se registra en el historial de ausencias.
-- [ ] 4.10 GREEN: completar `ConfirmAbsenceUseCase` con el registro en historial de ausencias.
+- [x] 4.1 RED: máquina de estados — cinco transiciones válidas y las inválidas rechazadas. → *appointment-lifecycle: Cinco estados explícitos y no colapsables* `appointment-state-machine.spec.ts` escrito primero y confirmado fallando por módulo inexistente antes de implementar.
+- [x] 4.2 GREEN: `AppointmentStateMachine` en `packages/domain/src/appointments`. Tabla de transiciones explícita (`Record<AppointmentStatus, readonly AppointmentStatus[]>`); `ausente` tiene una única arista entrante, desde `sin_registrado` — nunca desde `reservado` — que es la garantía estructural detrás de "el sistema nunca marca ausencias por su cuenta" (4.7/4.8). Métodos estáticos: sin dependencias, no hay razón para instanciar.
+- [x] 4.3 RED: `DepositState` exhaustivo (`not_applicable` · `pending` · `settled` · `refunded` · `forfeited`). `deposit-transitions.spec.ts` escrito primero y confirmado fallando por módulo inexistente antes de implementar.
+- [x] 4.4 GREEN: implementar `DepositState` y los switches de cancelación/ausencia/realizado con `FakePaymentPort`. `resolveDepositForCompletion` no recibe `PaymentPort` — la firma es la prueba de que no puede cobrar ni reembolsar, para ningún kind. `resolveDepositForAbsence` nunca llama al puerto (perder la seña no requiere pasarela). `resolveDepositForCancellation` sí llama `PaymentPort.refund()` para `settled`; no está conectado a ningún `CancelUseCase` todavía (eso es de las Fases 9/10) — esta fase solo prueba la mitad de resolución de dinero en aislamiento. Los tres switches rechazan `pending`/`refunded`/`forfeited` con `UnexpectedDepositStateError`: esos kinds nunca deberían llegar a un turno `reservado`/`sin_registrado`, así que aparecer ahí es un bug corriente arriba, no un caso de negocio.
+- [x] 4.5 RED: marcar `realizado` sin seña previa no ejecuta cobro ni reembolso. → *appointment-lifecycle: Turno realizado sin seña previa* `mark-completed.spec.ts` escrito primero y confirmado fallando por módulo inexistente (`./appointment`, `./mark-completed`) antes de implementar.
+- [x] 4.6 GREEN: `MarkCompletedUseCase`. Entidad `Appointment` agregada (mismo concepto físico que `Hold`, ahora con `status`/`deposit`; `clientId` no-nulable a diferencia de `Hold.clientId` porque todo turno que llega a `reservado` ya identificó al cliente). Válido desde `reservado` o `sin_registrado` (resolución del día siguiente); rechaza estados terminales vía `AppointmentStateMachine.transition`.
+- [x] 4.7 RED: el sistema nunca transiciona automáticamente a `ausente`; solo confirmación humana explícita. → *appointment-lifecycle: El sistema nunca marca ausencias por su cuenta* `confirm-absence.spec.ts` escrito primero (junto con 4.9, mismo archivo de producción) y confirmado fallando por módulo inexistente (`./confirm-absence`) antes de implementar. Cubre: actor ausente/vacío → rechazado; `reservado -> ausente` rechazado aun con actor válido (la máquina de estados ya lo prueba a nivel de tabla — esto prueba que el use case realmente la respeta).
+- [x] 4.8 GREEN: `ConfirmAbsenceUseCase` (requiere `ActorContext` humano; el guardado del actor es un chequeo de runtime además de tipo — un caller que evada TypeScript tampoco puede colarlo). El "endpoint autenticado" que garantiza un actor real es trabajo de fases posteriores (HTTP/sesión→`ActorContext`, ya resuelto en 3b.7 como patrón); esta fase deja el requisito estructuralmente imposible de saltear desde el dominio.
+- [x] 4.9 RED: ausencia con seña la pierde sin reembolso; sin seña, no hay movimiento de dinero pero se registra en el historial de ausencias. Mismo archivo/RED que 4.7.
+- [x] 4.10 GREEN: completar `ConfirmAbsenceUseCase` con el registro en historial de ausencias. `AbsenceRecord` (appointmentId/clientId/confirmedByUserId/confirmedAt vía `Clock`/depositForfeited) se produce siempre, con o sin seña — la prueba de que el evento queda registrado incluso cuando no hay plata de por medio.
 
-Requisitos que cierra: **appointment-lifecycle** (2/4: Cinco estados explícitos y no colapsables · El sistema nunca marca ausencias por su cuenta). Los otros dos (barrido, walk-ins) cierran en Fases 6 y 10.
+Requisitos que cierra: **appointment-lifecycle** (2/4: Cinco estados explícitos y no colapsables · El sistema nunca marca ausencias por su cuenta). Los otros dos (barrido, walk-ins) cierran en Fases 6 y 10. **Fase 4 completa, 10/10.**
 
 ## Phase 5: Pagos (~400 líneas) — PR 7 (base: PR 6) — depende de 4
 
