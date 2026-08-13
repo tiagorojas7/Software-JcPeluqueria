@@ -68,4 +68,8 @@ export class ShopClock implements Clock {
     const millis = Date.UTC(year, month - 1, day, hour, minute, 0, 0) - offsetMinutes * 60_000;
     return new Date(millis);
   }
+
+  addMinutes(date: Date, minutes: number): Date {
+    return new Date(date.getTime() + minutes * 60_000);
+  }
 }

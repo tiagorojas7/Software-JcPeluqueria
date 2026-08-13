@@ -13,12 +13,19 @@ const WALL_CLOCK_TIME_PATTERN = /^(\d{2}):(\d{2})$/;
  * matching `no-restricted-syntax` ESLint override.
  */
 export class FakeClock implements Clock {
-  constructor(private readonly offsetMinutes: number = -180) {}
+  constructor(
+    private readonly offsetMinutes: number = -180,
+    /** Optional fixed instant for `.now()` — unset by default, see below. */
+    private readonly fixedNow: Date | null = null,
+  ) {}
 
   now(): Date {
-    throw new Error(
-      'FakeClock.now() has no fixed instant configured — tests should not depend on it',
-    );
+    if (!this.fixedNow) {
+      throw new Error(
+        'FakeClock.now() has no fixed instant configured — tests should not depend on it',
+      );
+    }
+    return this.fixedNow;
   }
 
   businessDayBounds(calendarDate: string): BusinessDayBounds {
@@ -47,5 +54,9 @@ export class FakeClock implements Clock {
       ) -
       this.offsetMinutes * 60_000;
     return new Date(millis);
+  }
+
+  addMinutes(date: Date, minutes: number): Date {
+    return new Date(date.getTime() + minutes * 60_000);
   }
 }

@@ -30,6 +30,7 @@ export class DrizzleHoldRepository implements HoldRepository {
   constructor(private readonly db: PostgresJsDatabase) {}
 
   async create(hold: Hold, searchWindow: TimeWindow): Promise<void> {
+    await this.releaseExpiredHolds(hold.barberId, searchWindow);
     try {
       await this.db.insert(slotOccupancies).values({
         id: hold.id,
@@ -47,6 +48,47 @@ export class DrizzleHoldRepository implements HoldRepository {
       }
       throw new SlotUnavailableError(await this.freeRanges(hold.barberId, searchWindow));
     }
+  }
+
+  /**
+   * The `EXCLUDE` predicate cannot reference `now()` (not immutable), so an
+   * expired hold nobody confirmed or released would keep occupying forever
+   * otherwise. Evaluated lazily, right before the range is written or read,
+   * scoped to `window` — only what is about to be touched needs releasing.
+   */
+  private async releaseExpiredHolds(barberId: string, window: TimeWindow): Promise<void> {
+    await this.db
+      .update(slotOccupancies)
+      .set({ status: 'liberado' })
+      .where(
+        and(
+          eq(slotOccupancies.barberId, barberId),
+          eq(slotOccupancies.status, 'held'),
+          sql`${slotOccupancies.holdExpiresAt} <= now()`,
+          sql`${slotOccupancies.timeRange} && ${toRangeLiteral(window)}::tstzrange`,
+        ),
+      );
+  }
+
+  /**
+   * Re-validates and confirms in one atomic statement — never a `SELECT`
+   * then an `UPDATE`, and never a second `INSERT`. Zero rows updated means
+   * the hold expired or was already consumed by something else; the caller
+   * (`ConfirmHold`) treats that as a failed re-validation, not an error.
+   */
+  async confirm(holdId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(slotOccupancies)
+      .set({ status: 'reservado' })
+      .where(
+        and(
+          eq(slotOccupancies.id, holdId),
+          eq(slotOccupancies.status, 'held'),
+          sql`${slotOccupancies.holdExpiresAt} > now()`,
+        ),
+      )
+      .returning({ id: slotOccupancies.id });
+    return rows.length > 0;
   }
 
   /** `searchWindow` minus everything that still occupies the barber inside it. */

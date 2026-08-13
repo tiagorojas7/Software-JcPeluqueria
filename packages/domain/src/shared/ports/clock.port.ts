@@ -35,4 +35,12 @@ export interface Clock {
    * @param wallClockTime Local time of day, `HH:mm`.
    */
   localTimeToUtc(calendarDate: string, wallClockTime: string): Date;
+
+  /**
+   * Adds (or, with a negative value, subtracts) whole minutes to an instant.
+   * No offset/timezone math involved — plain instant arithmetic. This is how
+   * a hold's expiry ("now + 15 minutes") is computed without any module
+   * outside `ShopClock` constructing a `Date` itself.
+   */
+  addMinutes(date: Date, minutes: number): Date;
 }
