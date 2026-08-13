@@ -12,17 +12,7 @@ import { eq } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import { barberSchedules, barberTimeOff, shopHours } from '../db/schema/availability';
-
-/**
- * Postgres' `time` column returns `HH:MM:SS[.ffffff]` as text. The domain
- * only ever speaks `HH:mm` (see entities.ts), so every row read here is
- * normalized before it's handed to the domain's own validating factories —
- * this also means a row so malformed the domain wouldn't accept it fails
- * loudly on read, not silently.
- */
-function toWallClockTime(value: string): string {
-  return value.slice(0, 5);
-}
+import { toWallClockTime } from '../shared/db/wall-clock-time';
 
 export class DrizzleScheduleRepository implements ScheduleRepository {
   constructor(private readonly db: PostgresJsDatabase) {}
