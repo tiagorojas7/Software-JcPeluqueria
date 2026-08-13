@@ -1,4 +1,5 @@
 import {
+  FakeClock,
   FakeDayBoardRepository,
   FakeRolePermissionRepository,
   type ActorContext,
@@ -7,6 +8,9 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import { GetDayBoardUseCase } from './get-day-board';
+
+/** Builds fixed instants from shop wall-clock time — `Date` may not be constructed directly. */
+const clock = new FakeClock();
 
 const OWNER: ActorContext = { userId: 'owner-1', role: 'owner' };
 const BARBER_A: ActorContext = { userId: 'barber-a-user', role: 'barber', barberId: 'barber-a' };
@@ -35,8 +39,8 @@ function seedOneSlot(repository: FakeDayBoardRepository): void {
         serviceId: 'service-1',
         clientId: null,
         status: 'reservado',
-        startsAt: new Date('2026-08-20T12:00:00.000Z'),
-        endsAt: new Date('2026-08-20T12:30:00.000Z'),
+        startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
+        endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
       },
     ],
   });

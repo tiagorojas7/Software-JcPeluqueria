@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
   FakeActorContextRepository,
+  FakeClock,
   FakeDayBoardRepository,
   FakeRolePermissionRepository,
   type Permission,
@@ -13,6 +14,9 @@ import { ACTOR_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from '../src/acc
 import { SESSION_COOKIE_NAME } from '../src/access-control/session-cookie';
 import { AppModule } from '../src/app.module';
 import { DAY_BOARD_REPOSITORY } from '../src/agenda/tokens';
+
+/** Builds fixed instants from shop wall-clock time — `Date` may not be constructed directly. */
+const clock = new FakeClock();
 
 const OWNER_SESSION = 'session-owner';
 const BARBER_A_SESSION = 'session-barber-a';
@@ -46,8 +50,8 @@ dayBoardRepository.seed('2026-08-20', {
       serviceId: 'service-1',
       clientId: null,
       status: 'reservado',
-      startsAt: new Date('2026-08-20T12:00:00.000Z'),
-      endsAt: new Date('2026-08-20T12:30:00.000Z'),
+      startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
+      endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
     },
     {
       id: 'slot-b1',
@@ -55,8 +59,8 @@ dayBoardRepository.seed('2026-08-20', {
       serviceId: 'service-1',
       clientId: null,
       status: 'reservado',
-      startsAt: new Date('2026-08-20T13:00:00.000Z'),
-      endsAt: new Date('2026-08-20T13:30:00.000Z'),
+      startsAt: clock.localTimeToUtc('2026-08-20', '10:00'),
+      endsAt: clock.localTimeToUtc('2026-08-20', '10:30'),
     },
   ],
 });
