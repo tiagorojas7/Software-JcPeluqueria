@@ -16,6 +16,10 @@ import { ACTOR_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from './tokens';
  * controller the application will ever gain — a handler added in a later
  * phase is denied from the moment it exists, not from the moment someone
  * remembers to decorate it.
+ *
+ * Both tokens are exported so a feature module (e.g. `AgendaModule`, Phase
+ * 8) can import this module and reuse the same bound instances — never a
+ * second `new Drizzle...Repository(db)` registered under the same token.
  */
 @Module({
   providers: [
@@ -29,6 +33,7 @@ import { ACTOR_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from './tokens';
     },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
+  exports: [ROLE_PERMISSION_REPOSITORY, ACTOR_CONTEXT_REPOSITORY],
 })
 export class AccessControlModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

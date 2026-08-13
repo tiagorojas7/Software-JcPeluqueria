@@ -38,6 +38,12 @@ importers:
 
   apps/api:
     dependencies:
+      '@jc-barberia/application':
+        specifier: workspace:*
+        version: link:../../packages/application
+      '@jc-barberia/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@jc-barberia/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -117,6 +123,9 @@ importers:
 
   packages/application:
     dependencies:
+      '@jc-barberia/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@jc-barberia/domain':
         specifier: workspace:*
         version: link:../domain
