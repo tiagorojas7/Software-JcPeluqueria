@@ -17,9 +17,16 @@ export interface RecordedCreateCall {
 export class FakeHoldRepository implements HoldRepository {
   readonly createCalls: RecordedCreateCall[] = [];
   readonly confirmCalls: string[] = [];
+  readonly beginCheckoutCalls: { holdId: string; paymentExpiresAt: Date }[] = [];
 
-  /** @param confirmResult What every `confirm()` call resolves to. */
-  constructor(private readonly confirmResult: boolean = true) {}
+  /**
+   * @param confirmResult What every `confirm()` call resolves to.
+   * @param beginCheckoutResult What every `beginCheckout()` call resolves to.
+   */
+  constructor(
+    private readonly confirmResult: boolean = true,
+    private readonly beginCheckoutResult: boolean = true,
+  ) {}
 
   async create(hold: Hold, searchWindow: TimeWindow): Promise<void> {
     this.createCalls.push({ hold, searchWindow });
@@ -28,5 +35,10 @@ export class FakeHoldRepository implements HoldRepository {
   async confirm(holdId: string): Promise<boolean> {
     this.confirmCalls.push(holdId);
     return this.confirmResult;
+  }
+
+  async beginCheckout(holdId: string, paymentExpiresAt: Date): Promise<boolean> {
+    this.beginCheckoutCalls.push({ holdId, paymentExpiresAt });
+    return this.beginCheckoutResult;
   }
 }

@@ -3,3 +3,8 @@ export { db } from './db/connection';
 export { DrizzleRolePermissionRepository } from './access-control/role-permission.repository';
 export { DrizzleActorContextRepository } from './access-control/actor-context.repository';
 export { DrizzleAgendaRepository } from './access-control/agenda.repository';
+export { DrizzleDepositRepository } from './payments/deposit.repository';
+export { DrizzlePaymentEventRepository } from './payments/payment-event.repository';
+export { MercadoPagoApiError, MercadoPagoPaymentAdapter } from './payments/mercadopago-payment.adapter';
+export { verifyMercadoPagoSignature } from './payments/mercadopago-signature';
+export type { WebhookSignatureInput } from './payments/mercadopago-signature';
