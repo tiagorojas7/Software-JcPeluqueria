@@ -145,8 +145,8 @@ Requisitos que cierra: **access-control** (4/6 restantes, TODOS cerrados: Tres r
 
 ## Phase 4: Ciclo de vida del turno (~350 líneas) — PR 6 (base: PR 5) — depende de 2, 3b
 
-- [ ] 4.1 RED: máquina de estados — cinco transiciones válidas y las inválidas rechazadas. → *appointment-lifecycle: Cinco estados explícitos y no colapsables*
-- [ ] 4.2 GREEN: `AppointmentStateMachine` en `packages/domain/appointments`.
+- [x] 4.1 RED: máquina de estados — cinco transiciones válidas y las inválidas rechazadas. → *appointment-lifecycle: Cinco estados explícitos y no colapsables* `appointment-state-machine.spec.ts` escrito primero y confirmado fallando por módulo inexistente antes de implementar.
+- [x] 4.2 GREEN: `AppointmentStateMachine` en `packages/domain/src/appointments`. Tabla de transiciones explícita (`Record<AppointmentStatus, readonly AppointmentStatus[]>`); `ausente` tiene una única arista entrante, desde `sin_registrado` — nunca desde `reservado` — que es la garantía estructural detrás de "el sistema nunca marca ausencias por su cuenta" (4.7/4.8). Métodos estáticos: sin dependencias, no hay razón para instanciar.
 - [ ] 4.3 RED: `DepositState` exhaustivo (`not_applicable` · `pending` · `settled` · `refunded` · `forfeited`).
 - [ ] 4.4 GREEN: implementar `DepositState` y los switches de cancelación/ausencia/realizado con `FakePaymentPort`.
 - [ ] 4.5 RED: marcar `realizado` sin seña previa no ejecuta cobro ni reembolso. → *appointment-lifecycle: Turno realizado sin seña previa*
