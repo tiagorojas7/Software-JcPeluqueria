@@ -103,15 +103,15 @@ Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad ·
 
 ## Phase 3a: Identidad (~400 líneas) — PR 4 (base: PR 2, puede desarrollarse en paralelo a Fase 1) — depende de 0
 
-- [ ] 3a.1 Migración: tablas `users`, `auth_challenges`, `sessions`.
-- [ ] 3a.2 RED: código de 6 dígitos y magic link derivan de la misma fila `auth_challenges`; solo se guarda el hash SHA-256.
-- [ ] 3a.3 GREEN: `ChallengeService.issue()`.
-- [ ] 3a.4 RED: consumo de challenge atómico y de un solo uso bajo concurrencia (dos consumos simultáneos → uno gana).
-- [ ] 3a.5 GREEN: `ChallengeService.consume()`.
-- [ ] 3a.6 RED: 5 intentos fallidos invalidan el challenge; expira a los 10 minutos.
-- [ ] 3a.7 GREEN: implementar límites de intentos y expiración.
-- [ ] 3a.8 RED: login de cliente sin contraseña autentica y no persiste ninguna contraseña. → *access-control: Autenticación diferenciada según tipo de usuario*
-- [ ] 3a.9 GREEN: `ClientLoginUseCase`.
+- [x] 3a.1 Migración: tablas `users`, `auth_challenges`, `sessions`. Migración `0004`, generada con `drizzle-kit` y aplicada/verificada contra Postgres real (Testcontainers). `role_id`/`client_id` quedan sin FK todavía (`roles`/`clients` no existen aún), mismo patrón que `slot_occupancies.client_id`/`deposit_id`. `created_by_user_id`/`marked_by_user_id` de `slot_occupancies` (deferidos desde la Fase 2) se agregan en este mismo shot con su FK a `users`.
+- [x] 3a.2 RED: código de 6 dígitos y magic link derivan de la misma fila `auth_challenges`; solo se guarda el hash SHA-256.
+- [x] 3a.3 GREEN: `ChallengeService.issue()`. `packages/application/src/identity/challenge-service.ts`: genera código (6 dígitos, `crypto.randomInt`) y token (32 bytes, `crypto.randomBytes`), hashea ambos con SHA-256 antes de llamar a `AuthChallengeRepository.create()` — el repositorio nunca ve el texto plano. `expiresAt` vía `Clock.addMinutes`, nunca `new Date()`.
+- [x] 3a.4 RED: consumo de challenge atómico y de un solo uso bajo concurrencia (dos consumos simultáneos → uno gana). Testcontainers, mismo patrón que el test de 20 transacciones de la Fase 2.
+- [x] 3a.5 GREEN: `ChallengeService.consume()`. `DrizzleAuthChallengeRepository.consume()` replica la forma de `HoldRepository.confirm()`: `UPDATE ... WHERE id AND purpose AND consumed_at IS NULL AND (code_hash=:h OR token_hash=:h) RETURNING user_id` — una sola sentencia condicional, nunca lectura seguida de escritura. El `purpose` en el WHERE evita que un challenge de otro propósito (activación/reset de staff) se pueda canjear por este camino.
+- [x] 3a.6 RED: 5 intentos fallidos invalidan el challenge; expira a los 10 minutos.
+- [x] 3a.7 GREEN: implementar límites de intentos y expiración. El WHERE gana `expires_at > now()` y `attempts < 5`; el SET pasa a un `CASE` que marca `consumed_at` si el hash coincide o incrementa `attempts` si no — la fila se toca en ambos casos, nunca se ignora silenciosamente un intento fallido.
+- [x] 3a.8 RED: login de cliente sin contraseña autentica y no persiste ninguna contraseña. → *access-control: Autenticación diferenciada según tipo de usuario*
+- [x] 3a.9 GREEN: `ClientLoginUseCase`. Canjea un challenge de `purpose='client_login'` vía `ChallengeService.consume()`; `{outcome:'authenticated', userId}` o `{outcome:'rejected'}`. Ningún campo de entrada/salida ni de lo que se persiste representa una contraseña.
 - [ ] 3a.10 RED: hash argon2id (parámetros OWASP), verificación en tiempo constante, usuario inexistente paga costo de hash falso. → *access-control: Autenticación diferenciada · Contraseñas del personal almacenadas de forma segura*
 - [ ] 3a.11 GREEN: `PasswordService` (argon2) + `StaffLoginUseCase`.
 - [ ] 3a.12 RED: alta de staff genera link de activación de un solo uso; nunca contraseña en texto plano.
@@ -123,7 +123,9 @@ Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad ·
 - [ ] 3a.18 RED: TTL de sesión — cliente 30 días, staff 12h, dueño 8h.
 - [ ] 3a.19 GREEN: `SessionService` con TTLs diferenciados por rol.
 
-Requisitos que cierra: **access-control** (2/6: Autenticación diferenciada · Contraseñas del personal almacenadas de forma segura). Mecanismo base que **client-booking** (Cuenta sin contraseña) consume en Fase 9.
+**9/19 tareas completas (3a.1-3a.9, slice "identidad-cliente").** Requisitos que cierra hasta acá: **access-control: Autenticación diferenciada según tipo de usuario** — solo el escenario "Cliente se autentica sin contraseña"; el escenario "Personal se autentica con usuario y contraseña" queda abierto hasta 3a.10-3a.11. **Contraseñas del personal almacenadas de forma segura** sigue abierto (3a.10-3a.15): la tabla `users` de este slice deliberadamente NO tiene columna `password_hash` — no existe ninguna contraseña en texto plano en ningún punto de este slice, ni la hay que almacenar hasheada aún, y la migración no la declara hasta que 3a.10+ la necesite. Mecanismo base que **client-booking** (Cuenta sin contraseña) consume en Fase 9.
+
+Tareas 3a.10-3a.19 (contraseña de staff, activación, reset, revocación de sesiones, TTLs) quedan para una fase/rama posterior — no forman parte de este slice.
 
 ## Phase 3b: Autorización (~350 líneas) — PR 5 (base: PR 4) — depende de 3a
 

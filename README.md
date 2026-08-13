@@ -26,6 +26,8 @@ Este documento es la fuente de verdad de la **lógica de negocio** del proyecto.
 - [7. Trabajo futuro](#7-trabajo-futuro)
 - [8. Decisiones abiertas](#8-decisiones-abiertas)
 - [9. Estado del proyecto](#9-estado-del-proyecto)
+  - [Avance de la implementación](#avance-de-la-implementación)
+  - [Sobre el tamaño de los PRs](#sobre-el-tamaño-de-los-prs)
 - [10. Plan de construcción](#10-plan-de-construcción)
 - [11. Cómo trabajamos](#11-cómo-trabajamos)
 
@@ -328,7 +330,8 @@ Inventario de productos · **Modelo de comisiones y liquidación de sueldos** ·
 | Identidad del cliente | **Cuenta obligatoria sin contraseña**, creada al final del flujo | Habilita historial y seguimiento de ausencias sin la fricción del password, que es lo que realmente frena al público mayor |
 | Canal de notificación (objetivo) | **WhatsApp Business API** | Mejor adopción en Argentina y más barato por mensaje |
 | Canal de notificación (MVP) | **Email vía Gmail** — provisorio | WhatsApp requiere verificación de Meta Business + proveedor pago (BSP) con tiempo de alta real, que bloquearía la demo |
-| Stack | **Sin definir** | Se decide en la fase de diseño |
+| Stack | **NestJS + React/Vite + PostgreSQL + Drizzle + pg-boss** | Elegido en la fase de diseño. Monorepo pnpm con arquitectura hexagonal. El fundamento está en `design.md` |
+| Exclusividad del horario | **Constraint `EXCLUDE USING gist` de PostgreSQL** | La base de datos garantiza que dos turnos no se solapen. Probado con 20 transacciones simultáneas: gana exactamente una, sin reintentos ni aislamiento `SERIALIZABLE` |
 
 ### El puerto de notificaciones
 
@@ -384,13 +387,13 @@ Documentado para que no se pierda:
 - **Resolución definitiva del turno telefónico** (cómo se cobra la seña de un cliente que llama)
 - **Corregir un turno mal marcado** como ausente o realizado después de resuelto
 - **Registrar el 50% restante** cobrado en el mostrador, para que el sistema tenga la foto completa del ingreso
-- **Activar TDD estricto** una vez que haya stack y test runner
+- **Búsqueda de huecos en varios días** dentro de `ConfirmHold`. Hoy recibe los candidatos ya calculados; el motor de búsqueda se construye en la fase 9, cuando exista el endpoint que lo consuma
 
 ---
 
 ## 8. Decisiones abiertas
 
-**No queda ninguna decisión bloqueante.** El proyecto está listo para avanzar a la fase de especificación.
+**No queda ninguna decisión bloqueante.** La planificación está cerrada y la implementación está en curso.
 
 Resueltas:
 
@@ -418,23 +421,45 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | Propuesta | ✅ Completa |
 | Especificación | ✅ Completa — 8 dominios, 38 requisitos, 58 escenarios |
 | Diseño técnico | ✅ Completo — stack elegido y arquitectura definida |
-| Desglose en tareas | ✅ Completo — 191 tareas en 14 fases |
-| Implementación | ⬜ Sin empezar — arranca por la fase 0 |
+| Desglose en tareas | ✅ Completo — 192 tareas en 14 fases |
+| Implementación | 🔄 **En curso — 49 de 192 tareas (25%)** |
 
-**Stack elegido:** NestJS + React/Vite + PostgreSQL + Drizzle + pg-boss, en monorepo hexagonal. Entrega prevista en **14 PRs encadenados** (~5.050 líneas). El detalle y el fundamento están en `openspec/changes/turnero-digital-jc-barberia/design.md`.
+### Avance de la implementación
 
-**Todavía no hay código.** El stack se elige en la fase de diseño.
+Última actualización: **2026-08-12**. Ninguna rama tiene PR abierto todavía.
+
+| Fase | Estado | Rama | Líneas de producción |
+|------|--------|------|:---:|
+| 0 · Fundación | ✅ 13/13 | `feat/turnero-00-fundacion` | 559 |
+| 1 · Modelo de disponibilidad | ✅ 9/9 | `feat/turnero-01a-dominio` | 361 |
+| | | `feat/turnero-01b-persistencia` | 248 |
+| 2 · Ocupación y hold | ✅ 17/17 | `feat/turnero-02a-ocupacion` | 188 |
+| | | `feat/turnero-02b-hold` | 253 |
+| 3a · Identidad | 🔄 9/19 | `feat/turnero-03a1-identidad-cliente` | 330 |
+| 3b a 12 | ⬜ Pendientes | — | — |
+
+**El núcleo de concurrencia ya está resuelto y probado.** La fase 2 dejó andando el hold de 15 minutos completo: creación, liberación perezosa de los vencidos, confirmación atómica como transición de estado, y la oferta del horario más cercano cuando la re-validación falla. Todo verificado contra un PostgreSQL real, no contra dobles.
+
+**La suite corre en verde: 78 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
+
+### Sobre el tamaño de los PRs
+
+El plan original preveía 14 PRs. **En la práctica las fases grandes se parten en dos**, porque el presupuesto de 400 líneas de producción por PR existe para proteger la atención de quien revisa, y una fase de 17 o 19 tareas no entra.
+
+El criterio de corte que funcionó es **partir por frontera funcional o hexagonal, nunca por cantidad de tareas**: dominio por un lado y persistencia por otro, o identidad del cliente por un lado y del personal por otro. Cada mitad se sostiene sola y se revisa sola.
+
+Las cuatro porciones entregadas desde que se aplica el criterio entraron holgadas: 248, 188, 253 y 330 líneas. Las dos primeras fases, entregadas antes de adoptarlo, se pasaron: 559 y 609.
 
 ---
 
 ## 10. Plan de construcción
 
-**191 tareas en 14 fases, entregadas como 14 PRs encadenados.** El detalle tarea por tarea está en `openspec/changes/turnero-digital-jc-barberia/tasks.md`.
+**192 tareas en 14 fases**, entregadas como PRs encadenados. El detalle tarea por tarea está en `openspec/changes/turnero-digital-jc-barberia/tasks.md`.
 
 | # | Fase | Qué deja andando | Tareas |
 |---|------|------------------|:------:|
 | 0 | Fundación | Monorepo, Vitest, Docker Compose, Drizzle, CI. **Activa el TDD estricto** | 13 |
-| 1 | Modelo de disponibilidad | Barberos, servicios, horarios, días libres, generación de huecos | 9 |
+| 1 | Modelo de disponibilidad | Barberos, servicios, horarios, días libres, generación de huecos | 10 |
 | 2 | **Ocupación y hold** | El núcleo de concurrencia. Sin interfaz todavía | 17 |
 | 3a | Identidad | Acceso sin contraseña del cliente, contraseña del personal, sesiones | 19 |
 | 3b | Autorización | Guard deny-by-default y contrato ruta × rol | 13 |
@@ -470,6 +495,8 @@ Tres cosas se prueban contra infraestructura real, no contra dobles:
 
 **Cinco de las catorce fases rozan el techo de 400 líneas** — las de ocupación, pagos, vista del día, web pública y panel. Las estimaciones no se comprimieron para que entraran. Cuando lleguemos a cada una hay que decidir si se parte en dos o se acepta la excepción.
 
+En la práctica, **la decisión fue partirlas**, y funcionó: ver *Sobre el tamaño de los PRs* en la sección 9. Las estimaciones también resultaron optimistas — la fase 0 estimó 350 y salieron 559, la 1 estimó 400 y salieron 609. La desviación se achicó a medida que el proyecto acumuló patrones: la fase 2 estimó 400 y salió 441.
+
 **La fase 5 tiene un bloqueo duro:** su primera tarea es verificar la documentación oficial de MercadoPago. El diseño escribió los detalles de la API de memoria, sin acceso a documentación, así que el formato de la firma, la ventana de reembolso y el comportamiento de los reembolsos parciales hay que confirmarlos antes de escribir código de pagos.
 
 ---
@@ -501,8 +528,22 @@ fix: corregir zona horaria del barrido diario
 ```
 .
 ├── README.md              ← este documento: la lógica de negocio
+├── apps/
+│   ├── api/               ← NestJS: la API HTTP
+│   ├── worker/            ← pg-boss: los tres procesos de fondo
+│   └── web/               ← React + Vite: web pública y panel
+├── packages/
+│   ├── domain/            ← reglas de negocio y puertos. No importa nada de afuera
+│   ├── application/       ← casos de uso que orquestan el dominio
+│   ├── infrastructure/    ← adaptadores: Drizzle, reloj, notificaciones
+│   └── contracts/         ← tipos compartidos entre back y front
 ├── openspec/
 │   ├── config.yaml        ← configuración del flujo SDD
 │   └── changes/           ← artefactos por cambio (propuesta, specs, diseño, tareas)
+├── docker-compose.yml     ← PostgreSQL 16 para desarrollo
 └── .atl/                  ← registro de skills de la herramienta
 ```
+
+**La dirección de las dependencias es una regla, no una sugerencia.** `domain` no puede importar `application`, `infrastructure` ni librerías de terceros que no sean tipos. No es disciplina personal: `dependency-cruiser` corre en cada PR y rompe el build si alguien la viola.
+
+Lo mismo con el tiempo: `Date.now()`, `new Date()` y `toLocaleString` están **prohibidos por regla de lint** fuera de `ShopClock`. Todo el manejo de fechas pasa por el puerto `Clock`, porque el local vive en UTC-3 sin horario de verano y el barrido de las 23:59 tiene que marcar ausencias en el momento correcto.
