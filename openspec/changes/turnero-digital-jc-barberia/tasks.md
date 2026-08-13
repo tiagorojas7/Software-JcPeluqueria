@@ -112,10 +112,10 @@ Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad ·
 - [x] 3a.7 GREEN: implementar límites de intentos y expiración. El WHERE gana `expires_at > now()` y `attempts < 5`; el SET pasa a un `CASE` que marca `consumed_at` si el hash coincide o incrementa `attempts` si no — la fila se toca en ambos casos, nunca se ignora silenciosamente un intento fallido.
 - [x] 3a.8 RED: login de cliente sin contraseña autentica y no persiste ninguna contraseña. → *access-control: Autenticación diferenciada según tipo de usuario*
 - [x] 3a.9 GREEN: `ClientLoginUseCase`. Canjea un challenge de `purpose='client_login'` vía `ChallengeService.consume()`; `{outcome:'authenticated', userId}` o `{outcome:'rejected'}`. Ningún campo de entrada/salida ni de lo que se persiste representa una contraseña.
-- [ ] 3a.10 RED: hash argon2id (parámetros OWASP), verificación en tiempo constante, usuario inexistente paga costo de hash falso. → *access-control: Autenticación diferenciada · Contraseñas del personal almacenadas de forma segura*
-- [ ] 3a.11 GREEN: `PasswordService` (argon2) + `StaffLoginUseCase`.
-- [ ] 3a.12 RED: alta de staff genera link de activación de un solo uso; nunca contraseña en texto plano.
-- [ ] 3a.13 GREEN: `ActivateStaffUseCase`.
+- [x] 3a.10 RED: hash argon2id (parámetros OWASP), verificación en tiempo constante, usuario inexistente paga costo de hash falso. → *access-control: Autenticación diferenciada · Contraseñas del personal almacenadas de forma segura*
+- [x] 3a.11 GREEN: `PasswordService` (argon2) + `StaffLoginUseCase`. Migración `0005`: `users.password_hash`/`password_changed_at`. `Argon2PasswordHasher` (`@node-rs/argon2`, prebuilt — sin paso de build) a los parámetros OWASP (19 MiB, t=2, p=1). `verifyDummy()` paga el mismo costo que `verify()` real contra un hash fijo precomputado, para email inexistente o cuenta desactivada.
+- [x] 3a.12 RED: alta de staff genera link de activación de un solo uso; nunca contraseña en texto plano.
+- [x] 3a.13 GREEN: `ActivateStaffUseCase`. `.invite()` reusa `ChallengeService.issue({purpose:'staff_activation'})`; `.activate()` valida la fortaleza de la contraseña ANTES de consumir el challenge (para no quemar el link de un solo uso con una contraseña débil) y luego consume + `PasswordService.setPassword`.
 - [ ] 3a.14 RED: reset con token de 32 bytes, hash en base, 30 min, un solo uso; no revela la contraseña anterior. → *access-control: Contraseñas del personal almacenadas de forma segura*
 - [ ] 3a.15 GREEN: `ResetPasswordUseCase` (usa `NotificationPort`, fake hasta Fase 7).
 - [ ] 3a.16 RED: cambiar/resetear contraseña revoca todas las sesiones activas del usuario.
