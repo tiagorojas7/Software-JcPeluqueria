@@ -219,8 +219,8 @@ Requisitos que cierra: **notification-port** (5/5: Puerto desacoplado · Adaptad
 
 ## Phase 8: Vista del día (~400 líneas) — PR 10 (base: PR 9) — depende de 1, 3b
 
-- [ ] 8.1 RED: `DayBoard` organism recibe `columns`, `slots`, `onSlotAction` y renderiza sin conocer el rol.
-- [ ] 8.2 GREEN: implementar `DayBoard` (`apps/web/src/agenda`) puramente presentacional.
+- [x] 8.1 RED: `DayBoard` organism recibe `columns`, `slots`, `onSlotAction` y renderiza sin conocer el rol. Toolchain de `apps/web` (Vite + React 19 + Vitest jsdom + Testing Library) levantado como prerrequisito — el paquete solo tenía `package.json`. `DayBoard.spec.tsx` escrito primero y confirmado fallando por módulo inexistente (`./DayBoard`).
+- [x] 8.2 GREEN: implementar `DayBoard` (`apps/web/src/agenda`) puramente presentacional. Recibe `columns`/`slots`/`onSlotAction` de `@jc-barberia/contracts` (nuevo `packages/contracts/src/agenda.ts`: `DayBoardColumn`, `DayBoardSlot`, `SlotAction`, `DayBoardResponse`) y solo dibuja `allowedActions` por slot — 3/3 tests en verde, incluyendo que un slot sin una acción no renderiza su botón.
 - [ ] 8.3 RED: endpoint del día devuelve `allowedActions` por slot, calculado en el servidor según `ActorContext`.
 - [ ] 8.4 GREEN: `GetDayBoardUseCase` con cálculo de `allowedActions`.
 - [ ] 8.5 RED: vista admin muestra una columna por barbero, con turnos, nombre y edad del cliente si está cargada. → *admin-operations: Vista del día por columnas de barbero*
