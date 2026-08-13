@@ -43,6 +43,13 @@
       "when": 1786576279900,
       "tag": "0005_staff_password",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786623854038,
+      "tag": "0006_access_control",
+      "breakpoints": true
     }
   ]
 }

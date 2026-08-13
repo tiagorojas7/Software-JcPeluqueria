@@ -127,9 +127,9 @@ Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad ·
 
 ## Phase 3b: Autorización (~350 líneas) — PR 5 (base: PR 4) — depende de 3a
 
-- [ ] 3b.1 Migración: `roles`, `role_permissions`; seed con la matriz de permisos del README. → *access-control: Matriz de permisos por rol*
-- [ ] 3b.2 RED: `role_permissions` sembrado refleja exactamente la matriz especificada.
-- [ ] 3b.3 GREEN: seed script + verificación.
+- [x] 3b.1 Migración: `roles`, `role_permissions`; seed con la matriz de permisos del README. → *access-control: Matriz de permisos por rol* Migración `0006_access_control.sql`: DDL generada con `drizzle-kit` + seed hand-escrito al final (Drizzle no genera datos, mismo patrón que la 0003). `users.role_id` (nullable desde la 0004) gana su FK a `roles` en este mismo shot. Catálogo completo de 15 permisos en `packages/domain/src/access-control/permission.ts` (design.md es la fuente de los códigos exactos; README 3.8 es la fuente de qué rol tiene qué). `agenda:read:any` no tiene fila propia en la tabla de 8 filas del README pero se siembra para dueño/secretaria como prerrequisito operativo de las filas 1/3/4 (ver comentario en la migración) — decisión interpretativa, marcada explícitamente ahí y en apply-progress.
+- [x] 3b.2 RED: `role_permissions` sembrado refleja exactamente la matriz especificada. `role-permission.repository.spec.ts` (Testcontainers) escrito primero y confirmado fallando por módulo inexistente (`DrizzleRolePermissionRepository`) antes de implementar el adaptador.
+- [x] 3b.3 GREEN: seed script + verificación. `DrizzleRolePermissionRepository.hasPermission()` en `packages/infrastructure/src/access-control`; el test verifica la matriz sembrada fila por fila (23 filas, 3 roles, ninguna de más) más `hasPermission()` concedido/denegado — 5/5 contra Postgres real.
 - [ ] 3b.4 RED **(matriz de amenazas — endpoints autenticados)**: handler sin `@RequiresPermission` ni `@Public()` → `403`. → *access-control: Tres roles con aplicación en el backend*
 - [ ] 3b.5 GREEN: `PermissionsGuard` global + decoradores `@RequiresPermission`/`@Public`.
 - [ ] 3b.6 RED **(matriz de amenazas)**: barbero pidiendo la agenda de un compañero por id → `403`. → *access-control: El barbero queda acotado a sus propios datos*
