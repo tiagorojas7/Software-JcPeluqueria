@@ -428,7 +428,7 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | Especificación | ✅ Completa — 8 dominios, 38 requisitos, 58 escenarios |
 | Diseño técnico | ✅ Completo — stack elegido y arquitectura definida |
 | Desglose en tareas | ✅ Completo — 192 tareas en 14 fases |
-| Implementación | 🔄 **En curso — 72 de 192 tareas (38%)** |
+| Implementación | 🔄 **En curso — 90 de 192 tareas (47%)** |
 
 ### Avance de la implementación
 
@@ -446,7 +446,12 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | | | `feat/turnero-03a3-reset-sesiones` | 253 |
 | 3b · Autorización | ✅ 13/13 | `feat/turnero-03b1-guard` | 337 |
 | | | `feat/turnero-03b2-actor-context` | 383 |
-| 4 a 12 | ⬜ Pendientes | — | — |
+| 4 · Ciclo de vida del turno | ✅ 10/10 | `feat/turnero-04-ciclo-turno` | 339 |
+| 8 · Vista del día | ✅ 8/8 | `feat/turnero-08a-dayboard-ui` | 198 |
+| | | `feat/turnero-08b-dayboard-endpoint` | 306 |
+| 5, 6, 7, 9 a 12 | ⬜ Pendientes | — | — |
+
+**Las fases 4 y 8 se construyeron en paralelo.** Son las únicas dos de todo el plan que se destraban a la vez sin depender entre sí: la 4 necesita la 2 y la 3b, la 8 necesita la 1 y la 3b. Por eso la cadena se bifurca acá — las dos salen de `feat/turnero-03b2-actor-context` — y vuelve a juntarse en la fase 9, que depende de la 5 y de la 8.
 
 **El núcleo de concurrencia ya está resuelto y probado.** La fase 2 dejó andando el hold de 15 minutos completo: creación, liberación perezosa de los vencidos, confirmación atómica como transición de estado, y la oferta del horario más cercano cuando la re-validación falla. Todo verificado contra un PostgreSQL real, no contra dobles.
 
@@ -458,7 +463,11 @@ El guard **niega por ausencia**: un handler al que se le olvidó el decorador de
 
 Y un barbero queda acotado a lo suyo **en la consulta, no en la pantalla**: el `WHERE barber_id` viaja dentro del query, así que los datos de un compañero nunca se leen. Un test de contrato recorre todas las rutas declaradas contra todos los roles y verifica cada celda permitido/denegado.
 
-**La suite corre en verde: 176 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
+**El turno ya tiene sus cinco estados.** Y el que más importa es *sin registrar*: si nadie marcó qué pasó, el turno queda ahí y **no** pasa a *ausente*. El sistema nunca infiere una ausencia, porque marcar a alguien como ausente le afecta el historial y que el personal se haya olvidado de tocar un botón no es evidencia de que el cliente no vino.
+
+**Arrancó el frontend.** `DayBoard` muestra el día por columnas de barbero y recibe del servidor qué acciones tiene permitidas cada slot. El componente no evalúa permisos: esconder un botón no es autorización, así que la decisión se toma en el backend y la pantalla la refleja.
+
+**La suite corre en verde: 191 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
 
 ### Sobre el tamaño de los PRs
 
