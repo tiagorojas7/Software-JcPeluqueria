@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@jc-barberia/application": "workspace:*",
+    "@jc-barberia/contracts": "workspace:*",
     "@jc-barberia/domain": "workspace:*",
     "@jc-barberia/infrastructure": "workspace:*",
     "@nestjs/common": "^11.1.29",
