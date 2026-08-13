@@ -36,7 +36,14 @@ export default [
     },
   },
   {
-    files: ['packages/infrastructure/src/shared/clock/shop-clock.ts'],
+    // ShopClock is the real adapter; FakeClock is its deterministic test
+    // double for domain-level unit tests (domain must never import
+    // packages/infrastructure). Both are the only places allowed to
+    // construct Date directly.
+    files: [
+      'packages/infrastructure/src/shared/clock/shop-clock.ts',
+      'packages/domain/src/shared/ports/testing/fake-clock.ts',
+    ],
     rules: {
       'no-restricted-syntax': 'off',
     },

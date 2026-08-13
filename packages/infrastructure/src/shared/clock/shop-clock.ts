@@ -2,6 +2,8 @@ import type { BusinessDayBounds, Clock } from '@jc-barberia/domain';
 
 const DEFAULT_OFFSET = '-03:00';
 const OFFSET_PATTERN = /^([+-])(\d{2}):(\d{2})$/;
+const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const WALL_CLOCK_TIME_PATTERN = /^(\d{2}):(\d{2})$/;
 
 function parseOffsetMinutes(offset: string): number {
   const match = OFFSET_PATTERN.exec(offset);
@@ -11,6 +13,24 @@ function parseOffsetMinutes(offset: string): number {
   const [, sign, hours, minutes] = match;
   const magnitude = Number(hours) * 60 + Number(minutes);
   return sign === '-' ? -magnitude : magnitude;
+}
+
+function parseCalendarDate(calendarDate: string): { year: number; month: number; day: number } {
+  const match = CALENDAR_DATE_PATTERN.exec(calendarDate);
+  if (!match) {
+    throw new Error(`Invalid calendar date "${calendarDate}" — expected format YYYY-MM-DD`);
+  }
+  const [, year, month, day] = match;
+  return { year: Number(year), month: Number(month), day: Number(day) };
+}
+
+function parseWallClockTime(wallClockTime: string): { hour: number; minute: number } {
+  const match = WALL_CLOCK_TIME_PATTERN.exec(wallClockTime);
+  if (!match) {
+    throw new Error(`Invalid wall-clock time "${wallClockTime}" — expected format HH:mm`);
+  }
+  const [, hour, minute] = match;
+  return { hour: Number(hour), minute: Number(minute) };
 }
 
 /**
@@ -26,11 +46,7 @@ export class ShopClock implements Clock {
 
   businessDayBounds(calendarDate: string): BusinessDayBounds {
     const offsetMinutes = parseOffsetMinutes(process.env.SHOP_UTC_OFFSET ?? DEFAULT_OFFSET);
-    const parts = calendarDate.split('-').map(Number);
-    const [year, month, day] = [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
-    if (!year || !month || !day) {
-      throw new Error(`Invalid calendar date "${calendarDate}" — expected format YYYY-MM-DD`);
-    }
+    const { year, month, day } = parseCalendarDate(calendarDate);
 
     // Local midnight, expressed as UTC millis, then shifted by the offset:
     // UTC = localWallClock - offsetMinutes.
@@ -41,5 +57,15 @@ export class ShopClock implements Clock {
     const end = new Date(startMillis + 24 * 60 * 60 * 1000 - 1);
 
     return { start, end };
+  }
+
+  localTimeToUtc(calendarDate: string, wallClockTime: string): Date {
+    const offsetMinutes = parseOffsetMinutes(process.env.SHOP_UTC_OFFSET ?? DEFAULT_OFFSET);
+    const { year, month, day } = parseCalendarDate(calendarDate);
+    const { hour, minute } = parseWallClockTime(wallClockTime);
+
+    // Same shift as businessDayBounds: UTC = localWallClock - offsetMinutes.
+    const millis = Date.UTC(year, month - 1, day, hour, minute, 0, 0) - offsetMinutes * 60_000;
+    return new Date(millis);
   }
 }

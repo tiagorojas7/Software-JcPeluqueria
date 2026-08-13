@@ -201,10 +201,12 @@ Al día siguiente, el local resuelve esos turnos desde el panel: **realizado** o
 | Barberos | Varios, **cada uno con su propio horario y días libres** |
 | Servicios | **Todos los barberos hacen todos los servicios** (sin especialidades) |
 | Walk-ins | **Conviven** con los turnos digitales. Se cargan con **servicio y barbero**, sin seña, y quedan directamente como *realizados*. Ocupan el hueco para que no se pise con una reserva online |
-| Horario del local | Fijo en general, pero **modificable** desde el panel admin |
+| Horario del local | **Corrido**: abre y cierra una sola vez por día, sin cierre al mediodía. Fijo en general, pero **modificable** desde el panel admin |
 | Configurable desde el panel | Horarios del local, horarios de cada barbero, precios de los servicios, alta y baja de barberos, gestión de clientes |
 
 **Por qué el walk-in registra servicio y barbero.** Si fuera solo un bloque de "ocupado", los cortes sin turno no contarían para las estadísticas de nadie y los números de cada barbero quedarían siempre por debajo de la realidad. Un barbero que desconfía de sus propios números deja de mirarlos.
+
+> **Horario corrido, decidido a propósito.** El modelo admite **un solo tramo por día** para el local y para cada barbero. No es una limitación que se coló: JC no cierra al mediodía y ningún barbero trabaja en turnos partidos. Si eso cambiara, hay que rehacer el modelo de disponibilidad — no alcanza con cargar dos filas para el mismo día.
 
 ### 3.7 Cuenta del cliente
 
