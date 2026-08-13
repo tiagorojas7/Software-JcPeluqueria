@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { FakeClock } from '../shared/ports/testing/fake-clock';
 import type { Appointment } from './appointment';
 import { InvalidAppointmentTransitionError } from './appointment-state-machine';
 import { MarkCompletedUseCase } from './mark-completed';
+
+/** Builds fixed instants from shop wall-clock time — the domain may not construct `Date` directly. */
+const clock = new FakeClock();
 
 function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
   return {
@@ -11,7 +15,10 @@ function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
     serviceId: 'service-1',
     clientId: 'client-1',
     channel: 'telefonico',
-    timeRange: { start: new Date('2026-08-13T13:00:00Z'), end: new Date('2026-08-13T13:30:00Z') },
+    timeRange: {
+      start: clock.localTimeToUtc('2026-08-13', '10:00'),
+      end: clock.localTimeToUtc('2026-08-13', '10:30'),
+    },
     status: 'reservado',
     deposit: { kind: 'not_applicable' },
     ...overrides,

@@ -6,6 +6,9 @@ import type { Appointment } from './appointment';
 import { InvalidAppointmentTransitionError } from './appointment-state-machine';
 import { ConfirmAbsenceUseCase, MissingActorError } from './confirm-absence';
 
+/** Builds fixed instants from shop wall-clock time — the domain may not construct `Date` directly. */
+const clock = new FakeClock();
+
 function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
   return {
     id: 'appointment-1',
@@ -13,7 +16,10 @@ function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
     serviceId: 'service-1',
     clientId: 'client-1',
     channel: 'web',
-    timeRange: { start: new Date('2026-08-12T13:00:00Z'), end: new Date('2026-08-12T13:30:00Z') },
+    timeRange: {
+      start: clock.localTimeToUtc('2026-08-12', '10:00'),
+      end: clock.localTimeToUtc('2026-08-12', '10:30'),
+    },
     status: 'sin_registrado',
     deposit: { kind: 'settled', paymentId: 'payment-1', amountCents: 250_000 },
     ...overrides,
@@ -21,7 +27,8 @@ function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
 }
 
 const STAFF_ACTOR: ActorContext = { userId: 'staff-1', role: 'secretary' };
-const NOW = new Date('2026-08-13T02:00:00Z');
+/** 23:00 shop time — after closing, when the daily sweep runs. */
+const NOW = clock.localTimeToUtc('2026-08-12', '23:00');
 
 function buildUseCase(): ConfirmAbsenceUseCase {
   return new ConfirmAbsenceUseCase(new FakeClock(-180, NOW));
