@@ -1,4 +1,5 @@
 export { dayOfWeekOf } from './calendar';
+export type { BarberRepository, ScheduleRepository, ServiceRepository } from './ports';
 export type { TimeWindow, WorkingWindowsInput } from './availability-service';
 export { AvailabilityService } from './availability-service';
 export type {

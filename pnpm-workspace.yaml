@@ -8,3 +8,11 @@ packages:
 allowBuilds:
   esbuild: true # bundler used by Vite and Vitest
   "@swc/core": true # TypeScript compiler used by the NestJS build
+  # Transitive deps of testcontainers (via dockerode), pulled in for its
+  # ssh:// Docker host support. We only ever talk to the local Docker
+  # Desktop npipe/socket, never an SSH-remote daemon, so these native
+  # build steps are denied rather than approved — least privilege, and
+  # Testcontainers works fine without them for our use case.
+  cpu-features: false
+  protobufjs: false
+  ssh2: false

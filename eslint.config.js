@@ -25,6 +25,7 @@ export default [
       globals: {
         process: 'readonly',
         console: 'readonly',
+        crypto: 'readonly',
       },
     },
     plugins: {

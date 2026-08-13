@@ -1,0 +1,2 @@
+ALTER TABLE "barber_schedules" ADD CONSTRAINT "barber_schedules_barber_id_day_of_week_unique" UNIQUE("barber_id","day_of_week");--> statement-breakpoint
+ALTER TABLE "shop_hours" ADD CONSTRAINT "shop_hours_day_of_week_unique" UNIQUE("day_of_week");
