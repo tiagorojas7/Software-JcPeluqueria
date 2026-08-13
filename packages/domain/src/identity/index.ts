@@ -4,7 +4,12 @@ export type {
   AuthChallengeRepository,
   ConsumeChallengeResult,
 } from './auth-challenge';
-export { CHALLENGE_EXPIRY_MINUTES, MAX_CHALLENGE_ATTEMPTS } from './auth-challenge';
+export {
+  CHALLENGE_EXPIRY_MINUTES,
+  EXPIRY_MINUTES_BY_PURPOSE,
+  MAX_CHALLENGE_ATTEMPTS,
+  PASSWORD_RESET_EXPIRY_MINUTES,
+} from './auth-challenge';
 export { FakeAuthChallengeRepository } from './testing/fake-auth-challenge-repository';
 export type { RecordedConsumeCall } from './testing/fake-auth-challenge-repository';
 export type { PasswordHasher } from './password-hasher';
@@ -13,3 +18,6 @@ export type { UserCredentials, UserCredentialsRepository } from './user-credenti
 export { FakePasswordHasher } from './testing/fake-password-hasher';
 export { FakeUserCredentialsRepository } from './testing/fake-user-credentials-repository';
 export type { FakeUser } from './testing/fake-user-credentials-repository';
+export type { Session, SessionRepository, SessionSubjectKind } from './session';
+export { SESSION_TTL_MINUTES_BY_SUBJECT } from './session';
+export { FakeSessionRepository } from './testing/fake-session-repository';

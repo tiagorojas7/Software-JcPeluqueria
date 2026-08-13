@@ -116,16 +116,14 @@ Requisitos que cierra: **slot-hold** (4/4: Creación del hold · Exclusividad ·
 - [x] 3a.11 GREEN: `PasswordService` (argon2) + `StaffLoginUseCase`. Migración `0005`: `users.password_hash`/`password_changed_at`. `Argon2PasswordHasher` (`@node-rs/argon2`, prebuilt — sin paso de build) a los parámetros OWASP (19 MiB, t=2, p=1). `verifyDummy()` paga el mismo costo que `verify()` real contra un hash fijo precomputado, para email inexistente o cuenta desactivada.
 - [x] 3a.12 RED: alta de staff genera link de activación de un solo uso; nunca contraseña en texto plano.
 - [x] 3a.13 GREEN: `ActivateStaffUseCase`. `.invite()` reusa `ChallengeService.issue({purpose:'staff_activation'})`; `.activate()` valida la fortaleza de la contraseña ANTES de consumir el challenge (para no quemar el link de un solo uso con una contraseña débil) y luego consume + `PasswordService.setPassword`.
-- [ ] 3a.14 RED: reset con token de 32 bytes, hash en base, 30 min, un solo uso; no revela la contraseña anterior. → *access-control: Contraseñas del personal almacenadas de forma segura*
-- [ ] 3a.15 GREEN: `ResetPasswordUseCase` (usa `NotificationPort`, fake hasta Fase 7).
-- [ ] 3a.16 RED: cambiar/resetear contraseña revoca todas las sesiones activas del usuario.
-- [ ] 3a.17 GREEN: revocación de sesiones en `sessions`.
-- [ ] 3a.18 RED: TTL de sesión — cliente 30 días, staff 12h, dueño 8h.
-- [ ] 3a.19 GREEN: `SessionService` con TTLs diferenciados por rol.
+- [x] 3a.14 RED: reset con token de 32 bytes, hash en base, 30 min, un solo uso; no revela la contraseña anterior. → *access-control: Contraseñas del personal almacenadas de forma segura*
+- [x] 3a.15 GREEN: `ResetPasswordUseCase` (usa `NotificationPort`, fake hasta Fase 7). `EXPIRY_MINUTES_BY_PURPOSE` en el dominio: `staff_password_reset` vive 30 min (los otros dos propósitos, 10). `.request(email)` responde exactamente igual exista o no la cuenta (nunca filtra qué emails tienen alta); `.complete()` valida la contraseña antes de consumir, mismo motivo que `ActivateStaffUseCase`. Puerto `NotificationPort` nuevo en `packages/domain/src/notifications` — Fase 7 construye el adaptador real, acá solo `FakeNotificationPort`.
+- [x] 3a.16 RED: cambiar/resetear contraseña revoca todas las sesiones activas del usuario.
+- [x] 3a.17 GREEN: revocación de sesiones en `sessions`. Puerto `SessionRepository` (dominio) + `DrizzleSessionRepository.revokeAllForUser()` — un solo `UPDATE ... WHERE user_id AND revoked_at IS NULL`, nunca un loop por sesión. `ResetPasswordUseCase.complete()` la invoca después de `PasswordService.setPassword`. Probado con Testcontainers: revoca todas las sesiones del usuario y ninguna de otro usuario.
+- [x] 3a.18 RED: TTL de sesión — cliente 30 días, staff 12h, dueño 8h.
+- [x] 3a.19 GREEN: `SessionService` con TTLs diferenciados por rol. `SessionSubjectKind` (`'client' | 'staff' | 'owner'`) es un tipo del dominio deliberadamente independiente de `roles`/`role_permissions` (Fase 3b) — 3b depende de 3a, nunca al revés, así que quien ya sabe qué tipo de login acaba de suceder (cliente/staff/dueño específicamente) se lo pasa directo a `SessionService.create()`, sin resolución por tabla de roles. `expiresAt` se computa una sola vez, al crear, vía el puerto `Clock`.
 
-**9/19 tareas completas (3a.1-3a.9, slice "identidad-cliente").** Requisitos que cierra hasta acá: **access-control: Autenticación diferenciada según tipo de usuario** — solo el escenario "Cliente se autentica sin contraseña"; el escenario "Personal se autentica con usuario y contraseña" queda abierto hasta 3a.10-3a.11. **Contraseñas del personal almacenadas de forma segura** sigue abierto (3a.10-3a.15): la tabla `users` de este slice deliberadamente NO tiene columna `password_hash` — no existe ninguna contraseña en texto plano en ningún punto de este slice, ni la hay que almacenar hasheada aún, y la migración no la declara hasta que 3a.10+ la necesite. Mecanismo base que **client-booking** (Cuenta sin contraseña) consume en Fase 9.
-
-Tareas 3a.10-3a.19 (contraseña de staff, activación, reset, revocación de sesiones, TTLs) quedan para una fase/rama posterior — no forman parte de este slice.
+**19/19 tareas completas.** Requisitos que cierra: **access-control: Autenticación diferenciada según tipo de usuario** (2/2 escenarios — cliente y personal) y **Contraseñas del personal almacenadas de forma segura** (ambos escenarios: hash seguro + restablecimiento vía `notification-port`). Migración `0005`: `users.password_hash`/`password_changed_at`.
 
 ## Phase 3b: Autorización (~350 líneas) — PR 5 (base: PR 4) — depende de 3a
 

@@ -373,7 +373,8 @@ Esto es un **requisito de arquitectura** que el stack elegido tiene que soportar
 | **Turno telefónico vs cuenta obligatoria + seña online** | Un cliente que llama no tiene cuenta ni puede pagar online en medio de la llamada | Propuesta: la secretaria crea o busca un registro mínimo del cliente y marca la seña como cobrada en persona. **Requiere confirmación del dueño** |
 | **Límites de Gmail** | ~500 envíos/día en cuentas gratuitas, requiere App Password, mala entregabilidad desde casilla personal | Aceptado conscientemente para la demo. El puerto hace que migrar sea barato |
 | **Email tiene la peor tasa de apertura** para cambios del mismo día | Un cliente puede no enterarse a tiempo de que su barbero faltó | Aceptado como tradeoff temporal hasta migrar a WhatsApp |
-| **Zona horaria del barrido de las 23:59** | Si corre en hora del servidor o UTC, marca ausencias en el momento equivocado | Debe usar offset fijo de Argentina (UTC-3, sin horario de verano). Restricción para la fase de diseño |
+| **Zona horaria del barrido de las 23:59** | Si corre en hora del servidor o UTC, marca ausencias en el momento equivocado | ✅ Resuelto: todo el manejo de tiempo pasa por el puerto `Clock`, con offset fijo UTC-3. Una regla de lint prohíbe `new Date()` fuera de `ShopClock` |
+| **Enumeración de emails del personal por tiempo de respuesta** | Pedir un restablecimiento de contraseña con un email real hace más trabajo que con uno inexistente: genera un token, lo guarda y envía la notificación. Midiendo cuánto tarda la respuesta se puede descubrir qué emails tienen cuenta. **Hoy la diferencia es de milisegundos porque el envío es un doble de test; cuando se conecte el email real en la fase 7 pasa a ser de cientos de milisegundos** | ⚠️ Abierto. Se resuelve **junto con la cola de trabajos de la fase 6**: el envío sale del camino de la petición y se encola. Eso elimina la señal de tiempo y además evita que una petición HTTP quede esperando al servidor de correo. **Tiene que estar hecho antes de que la fase 7 conecte Gmail** |
 
 ---
 
@@ -422,7 +423,7 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | Especificación | ✅ Completa — 8 dominios, 38 requisitos, 58 escenarios |
 | Diseño técnico | ✅ Completo — stack elegido y arquitectura definida |
 | Desglose en tareas | ✅ Completo — 192 tareas en 14 fases |
-| Implementación | 🔄 **En curso — 49 de 192 tareas (25%)** |
+| Implementación | 🔄 **En curso — 59 de 192 tareas (31%)** |
 
 ### Avance de la implementación
 
@@ -435,12 +436,16 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | | | `feat/turnero-01b-persistencia` | 248 |
 | 2 · Ocupación y hold | ✅ 17/17 | `feat/turnero-02a-ocupacion` | 188 |
 | | | `feat/turnero-02b-hold` | 253 |
-| 3a · Identidad | 🔄 9/19 | `feat/turnero-03a1-identidad-cliente` | 330 |
+| 3a · Identidad | ✅ 19/19 | `feat/turnero-03a1-identidad-cliente` | 330 |
+| | | `feat/turnero-03a2-credenciales-staff` | 340 |
+| | | `feat/turnero-03a3-reset-sesiones` | 253 |
 | 3b a 12 | ⬜ Pendientes | — | — |
 
 **El núcleo de concurrencia ya está resuelto y probado.** La fase 2 dejó andando el hold de 15 minutos completo: creación, liberación perezosa de los vencidos, confirmación atómica como transición de estado, y la oferta del horario más cercano cuando la re-validación falla. Todo verificado contra un PostgreSQL real, no contra dobles.
 
-**La suite corre en verde: 78 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
+**La identidad también está cerrada.** El cliente entra sin contraseña, con un código de 6 dígitos o un enlace mágico que salen de la misma fila y se guardan solo hasheados. El personal usa contraseña con argon2id en parámetros OWASP, se da de alta por un enlace de un solo uso —nunca con una contraseña generada y enviada— y al resetearla se le revocan todas las sesiones activas. Las sesiones duran distinto según quién sea: 30 días el cliente, 12 horas el personal, 8 horas el dueño.
+
+**La suite corre en verde: 126 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
 
 ### Sobre el tamaño de los PRs
 
@@ -448,7 +453,9 @@ El plan original preveía 14 PRs. **En la práctica las fases grandes se parten 
 
 El criterio de corte que funcionó es **partir por frontera funcional o hexagonal, nunca por cantidad de tareas**: dominio por un lado y persistencia por otro, o identidad del cliente por un lado y del personal por otro. Cada mitad se sostiene sola y se revisa sola.
 
-Las cuatro porciones entregadas desde que se aplica el criterio entraron holgadas: 248, 188, 253 y 330 líneas. Las dos primeras fases, entregadas antes de adoptarlo, se pasaron: 559 y 609.
+Las porciones entregadas desde que se aplica el criterio: 248, 188, 253, 330, 340 y 253 líneas. Las dos primeras fases, entregadas antes de adoptarlo, se pasaron: 559 y 609.
+
+La segunda mitad de la fase 3a se pasó igual —593 líneas— y **se partió después de escribirla**, apuntando dos ramas a commits que ya existían, sin reescribir historia. Eso fue posible porque cada ciclo de test-implementación se commitea por separado y actualiza este README y `tasks.md` en el mismo commit: cada mitad queda consistente por sí sola. Es una razón más para no acumular cambios sin commitear.
 
 ---
 
