@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+# pnpm blocks dependency build scripts by default: a postinstall script is a
+# classic supply-chain attack vector. Each package listed here is an explicit,
+# reviewed decision — not a blanket opt-out. Both compile or download native
+# binaries and genuinely cannot work without their build step.
+allowBuilds:
+  esbuild: true # bundler used by Vite and Vitest
+  "@swc/core": true # TypeScript compiler used by the NestJS build

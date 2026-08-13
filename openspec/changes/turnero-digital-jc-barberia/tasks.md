@@ -44,19 +44,19 @@ Chain strategy: feature-branch-chain
 
 ## Phase 0: Fundación (~350 líneas) — PR 1 (base: tracker)
 
-- [ ] 0.1 Inicializar monorepo pnpm workspaces: `apps/api`, `apps/worker`, `apps/web`, `packages/domain`, `packages/application`, `packages/infrastructure`, `packages/contracts`.
-- [ ] 0.2 Configurar TypeScript base + paths compartidos, ESLint y Prettier en la raíz.
-- [ ] 0.3 Instalar Vitest + `unplugin-swc`; crear `vitest.config.ts` por paquete.
-- [ ] 0.4 RED: `sanity.spec.ts` en `packages/domain` con aserción falsa, para probar que el runner corre.
-- [ ] 0.5 GREEN: corregir el test trivial; confirmar `pnpm test` en verde.
-- [ ] 0.6 Actualizar `openspec/config.yaml`: `strict_tdd: true`, `apply.tdd: true`, `apply.test_command: "pnpm test"`, `verify.test_command`/`build_command`.
-- [ ] 0.7 `docker-compose.yml` con PostgreSQL 16 + `SHOP_UTC_OFFSET=-03:00`.
-- [ ] 0.8 Instalar Drizzle ORM + drizzle-kit en `packages/infrastructure`; configurar conexión y carpeta de migraciones.
-- [ ] 0.9 Configurar `dependency-cruiser`: falla el build si `domain` importa `infrastructure`/`application`/terceros no-tipos; agregar a CI.
-- [ ] 0.10 Workflow CI (GitHub Actions): lint + dependency-cruiser + `pnpm test` en cada PR.
-- [ ] 0.11 Puerto `Clock` en `packages/domain`; adaptador `ShopClock` en `packages/infrastructure` leyendo `SHOP_UTC_OFFSET`; regla lint que prohíbe `Date.now()`/`new Date()`/`toLocaleString` fuera de `ShopClock`.
-- [ ] 0.12 RED: test de `ShopClock.businessDayBounds` en bordes de día/mes.
-- [ ] 0.13 GREEN: implementar `businessDayBounds`.
+- [x] 0.1 Inicializar monorepo pnpm workspaces: `apps/api`, `apps/worker`, `apps/web`, `packages/domain`, `packages/application`, `packages/infrastructure`, `packages/contracts`.
+- [x] 0.2 Configurar TypeScript base + paths compartidos, ESLint y Prettier en la raíz.
+- [x] 0.3 Instalar Vitest + `unplugin-swc`; crear `vitest.config.ts` por paquete.
+- [x] 0.4 RED: `sanity.spec.ts` en `packages/domain` con aserción falsa, para probar que el runner corre.
+- [x] 0.5 GREEN: corregir el test trivial; confirmar `pnpm test` en verde.
+- [x] 0.6 Actualizar `openspec/config.yaml`: `strict_tdd: true`, `apply.tdd: true`, `apply.test_command: "pnpm test"`, `verify.test_command`/`build_command`.
+- [x] 0.7 `docker-compose.yml` con PostgreSQL 16 + `SHOP_UTC_OFFSET=-03:00`.
+- [x] 0.8 Instalar Drizzle ORM + drizzle-kit en `packages/infrastructure`; configurar conexión y carpeta de migraciones.
+- [x] 0.9 Configurar `dependency-cruiser`: falla el build si `domain` importa `infrastructure`/`application`/terceros no-tipos; agregar a CI.
+- [x] 0.10 Workflow CI (GitHub Actions): lint + dependency-cruiser + `pnpm test` en cada PR.
+- [x] 0.11 Puerto `Clock` en `packages/domain`; adaptador `ShopClock` en `packages/infrastructure` leyendo `SHOP_UTC_OFFSET`; regla lint que prohíbe `Date.now()`/`new Date()`/`toLocaleString` fuera de `ShopClock`.
+- [x] 0.12 RED: test de `ShopClock.businessDayBounds` en bordes de día/mes.
+- [x] 0.13 GREEN: implementar `businessDayBounds`.
 
 Requisitos que cierra: ninguno (fundación pura).
 

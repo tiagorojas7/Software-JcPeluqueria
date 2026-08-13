@@ -1,0 +1,7 @@
+{
+  "name": "@jc-barberia/worker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "pg-boss worker + cron entrypoint. Implementation starts Phase 6."
+}

@@ -21,8 +21,12 @@ desktop.ini
 *.log
 logs/
 
-# Nota: las entradas específicas del stack (node_modules/, __pycache__/, target/,
-# etc.) se agregan cuando se elija el stack en la fase de diseño.
+# Node / TypeScript (stack elegido en el diseño: NestJS + React/Vite)
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.pnpm-store/
 
 # Configuración local de herramientas (rutas absolutas por máquina)
 .atl/
