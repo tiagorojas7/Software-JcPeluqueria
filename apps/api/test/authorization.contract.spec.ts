@@ -107,6 +107,18 @@ class ThreatMatrixController {
     }
     return result.schedule;
   }
+
+  // access-control: shop-wide billing has no row-level narrowing to apply —
+  // unlike the schedule route above, `finance:read:shop` is not
+  // id-parameterized, so the coarse guard check alone is the whole
+  // authorization decision (design.md: "Facturación del local y del
+  // barbero son dos read models distintos, no el mismo filtrado"). No real
+  // financial data exists yet (Phase 5) — this stays a thin seam.
+  @RequiresPermission('finance:read:shop')
+  @Get('finance/shop')
+  shopBilling(): { scope: 'shop' } {
+    return { scope: 'shop' };
+  }
 }
 
 @Module({
@@ -168,6 +180,21 @@ describe('authorization contract — deny by default (App Nest levantada en memo
   it('rejects a barber requesting a colleague’s schedule by id with 403 — access-control threat matrix (3b.6)', async () => {
     const response = await withSession(
       request(app.getHttpServer()).get(`/threat-matrix/barbers/${BARBER_B_ID}/schedule`),
+      BARBER_A_SESSION,
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it('lets the owner read the shop’s billing', async () => {
+    const response = await withSession(request(app.getHttpServer()).get('/threat-matrix/finance/shop'), OWNER_SESSION);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects a barber requesting the shop’s billing with 403 — access-control threat matrix (3b.8)', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).get('/threat-matrix/finance/shop'),
       BARBER_A_SESSION,
     );
 
