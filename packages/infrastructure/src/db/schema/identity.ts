@@ -1,12 +1,14 @@
 import { boolean, integer, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 
+import { roles } from './access-control';
 import { barbers } from './availability';
 
 /**
- * Identity model. `role_id` and `client_id` carry no foreign key yet —
- * `roles` (Phase 3b) and `clients` (Phase 9/10) don't exist yet, the same
- * deferred-FK pattern `slot_occupancies.client_id`/`deposit_id` used in
- * Phase 2. `barber_id` DOES get its FK now: `barbers` already exists.
+ * Identity model. `client_id` carries no foreign key yet — `clients`
+ * (Phase 9/10) doesn't exist yet, the same deferred-FK pattern
+ * `slot_occupancies.client_id`/`deposit_id` used in Phase 2. `barber_id`
+ * and (as of migration 0006, Phase 3b) `role_id` DO get their FK now that
+ * `barbers`/`roles` exist.
  *
  * `password_hash`/`password_changed_at` (added in migration 0005, Phase 3a
  * staff sub-slice) are `NULL` for clients — clients never have a password,
@@ -17,7 +19,7 @@ import { barbers } from './availability';
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: varchar('email', { length: 255 }).notNull().unique(),
-  roleId: uuid('role_id'),
+  roleId: uuid('role_id').references(() => roles.id),
   barberId: uuid('barber_id').references(() => barbers.id),
   clientId: uuid('client_id'),
   active: boolean('active').notNull().default(true),
