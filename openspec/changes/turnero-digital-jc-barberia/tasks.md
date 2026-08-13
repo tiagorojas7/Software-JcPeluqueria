@@ -160,7 +160,7 @@ Requisitos que cierra: **appointment-lifecycle** (2/4: Cinco estados explícitos
 
 ## Phase 5: Pagos (~400 líneas) — PR 7 (base: PR 6) — depende de 4
 
-- [ ] 5.1 **Primero**: verificar contra documentación oficial de MercadoPago — formato exacto de `x-signature`, ventana de reembolso, comportamiento de reembolso parcial. Registrar hallazgos antes de escribir código de esta fase.
+- [x] 5.1 **Primero**: verificar contra documentación oficial de MercadoPago — formato exacto de `x-signature`, ventana de reembolso, comportamiento de reembolso parcial. Registrar hallazgos antes de escribir código de esta fase. Hallazgos en `research/mercadopago-api.md`. Resultado: manifiesto exacto `id:{data.id};request-id:{x-request-id};ts:{ts};` con `data.id` en minúsculas y comparación de tiempo constante · ventana de reembolso **irrelevante** para este negocio (nuestros plazos son de horas, el límite es de 180 a 360 días) · reembolso parcial **probablemente innecesario** porque la seña es indivisible · **dos hallazgos nuevos**: `X-Idempotency-Key` es obligatorio y falta en el diseño, y `428 insufficient_money_for_refund` es un escenario de negocio real sin contemplar. Queda **una decisión bloqueante**: si Checkout Pro usa `/v1/payments/{id}/refunds` o `/v1/orders/{order_id}/refund`, a verificar contra cuenta de prueba.
 - [ ] 5.2 Migración: tablas `deposits`, `payment_events`; `CHECK` de invariante del canal (`channel <> 'web' OR status IN ('held','liberado') OR deposit_id IS NOT NULL`; `channel = 'web' OR deposit_id IS NULL`).
 - [ ] 5.3 RED: INSERT que viola cualquiera de los dos `CHECK` falla en base.
 - [ ] 5.4 GREEN: confirmar migración aplicada.
