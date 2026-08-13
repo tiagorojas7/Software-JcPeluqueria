@@ -249,6 +249,11 @@ Con los barberos entrando al sistema, aparecen **tres roles con límites reales 
 | Alta/baja de barberos, horarios base, precios | ✅ | — | — |
 | Plata del local (facturación, señas) | ✅ | — | — |
 | Su propio perfil y agenda | ✅ | — | ✅ |
+| Ver la agenda del día de todos los barberos | ✅ | ✅ | Solo la suya |
+
+**La última fila es una consecuencia, no una decisión nueva.** No se puede crear un turno, cargar un walk-in ni marcar la ausencia de alguien sin ver antes la agenda del día. Negarle esa lectura a la secretaria dejaría inutilizables los tres permisos que sí tiene. Se hizo explícita al implementar la fase 3b, donde la matriz pasó de ser una tabla en este documento a filas en la base de datos.
+
+**Pendiente de confirmar con el dueño el día de la entrega:** si la secretaria debe ver la agenda del día completa —que es lo implementado— o si tiene que ver los horarios pero no las estadísticas ni los números individuales de cada barbero. Es una fila más en `role_permissions`, sin tocar código.
 
 **Un barbero solo ve lo suyo.** No accede a la facturación del local ni a los números de sus compañeros. Esa frontera es de autorización, no de pantalla: se sostiene en el backend, no escondiendo botones.
 
@@ -423,7 +428,7 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | Especificación | ✅ Completa — 8 dominios, 38 requisitos, 58 escenarios |
 | Diseño técnico | ✅ Completo — stack elegido y arquitectura definida |
 | Desglose en tareas | ✅ Completo — 192 tareas en 14 fases |
-| Implementación | 🔄 **En curso — 59 de 192 tareas (31%)** |
+| Implementación | 🔄 **En curso — 64 de 192 tareas (33%)** |
 
 ### Avance de la implementación
 
@@ -439,13 +444,18 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | 3a · Identidad | ✅ 19/19 | `feat/turnero-03a1-identidad-cliente` | 330 |
 | | | `feat/turnero-03a2-credenciales-staff` | 340 |
 | | | `feat/turnero-03a3-reset-sesiones` | 253 |
-| 3b a 12 | ⬜ Pendientes | — | — |
+| 3b · Autorización | 🔄 5/13 | `feat/turnero-03b1-guard` | 337 |
+| 4 a 12 | ⬜ Pendientes | — | — |
 
 **El núcleo de concurrencia ya está resuelto y probado.** La fase 2 dejó andando el hold de 15 minutos completo: creación, liberación perezosa de los vencidos, confirmación atómica como transición de estado, y la oferta del horario más cercano cuando la re-validación falla. Todo verificado contra un PostgreSQL real, no contra dobles.
 
 **La identidad también está cerrada.** El cliente entra sin contraseña, con un código de 6 dígitos o un enlace mágico que salen de la misma fila y se guardan solo hasheados. El personal usa contraseña con argon2id en parámetros OWASP, se da de alta por un enlace de un solo uso —nunca con una contraseña generada y enviada— y al resetearla se le revocan todas las sesiones activas. Las sesiones duran distinto según quién sea: 30 días el cliente, 12 horas el personal, 8 horas el dueño.
 
-**La suite corre en verde: 126 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
+**La autorización arrancó.** La matriz de permisos dejó de ser una tabla en este documento y pasó a ser filas en la base de datos, que el guard consulta **en cada petición**. Por eso ampliar los permisos de la secretaria es agregar una fila, no tocar código ni desplegar.
+
+El guard **niega por ausencia**: un handler al que se le olvidó el decorador devuelve `403`, no queda abierto. Esa es la diferencia entre un guard que sirve y uno decorativo, y hay un test que lo prueba con un handler completamente pelado.
+
+**La suite corre en verde: 138 tests**, más typecheck, lint y verificación de dependencias hexagonales en cada corrida.
 
 ### Sobre el tamaño de los PRs
 
