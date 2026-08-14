@@ -1,4 +1,8 @@
-import type { DepositRepository, RecordSettledPaymentResult } from '@jc-barberia/domain';
+import type {
+  DepositRepository,
+  RecordSettledPaymentResult,
+  ReleaseRejectedPaymentResult,
+} from '@jc-barberia/domain';
 import { and, eq } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
@@ -38,5 +42,14 @@ export class DrizzleDepositRepository implements DepositRepository {
       .returning({ id: slotOccupancies.id });
 
     return updated.length > 0 ? 'confirmed' : 'hold-not-found';
+  }
+
+  // RED stub for task 5.16 — real atomic `UPDATE ... WHERE status='held'
+  // AND payment_pending = true RETURNING id` lands in 5.16 GREEN. Throwing
+  // (not silently returning) keeps the unimplemented state loud so the
+  // Testcontainers RED fails for the right reason while the package still
+  // compiles.
+  async releaseHoldOnRejectedPayment(_holdId: string): Promise<ReleaseRejectedPaymentResult> {
+    throw new Error('DrizzleDepositRepository.releaseHoldOnRejectedPayment not implemented yet — task 5.16');
   }
 }
