@@ -5,5 +5,7 @@ export { DrizzleActorContextRepository } from './access-control/actor-context.re
 export { DrizzleAgendaRepository } from './access-control/agenda.repository';
 export { DrizzleDayBoardRepository } from './agenda/day-board.repository';
 export { DrizzleHoldRepository } from './booking/hold.repository';
+export { DrizzleWalkInRepository } from './booking/walk-in.repository';
 export { DrizzleClientRepository } from './clients/client.repository';
 export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
+export { DrizzleAbsenceRecordRepository } from './appointments/absence-record.repository';
