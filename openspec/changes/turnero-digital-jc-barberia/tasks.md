@@ -178,8 +178,8 @@ Requisitos que cierra: **appointment-lifecycle** (2/4: Cinco estados explícitos
 - [x] 5.16 GREEN: implementar la rama de rechazo/pago no completado.
 - [x] 5.17 RED: hold con pago en curso (`payment_pending=true`) nunca lo libera el temporizador; solo al llegar a estado terminal.
 - [x] 5.18 GREEN: excepción de `payment_pending` en la liberación perezosa (ajusta 2.9).
-- [ ] 5.19 RED: reembolso automático al cancelar dentro de la ventana y al vencer un hold con cobro asociado. → *client-booking: Cancelación del cliente con reembolso automático · slot-hold: Hold vencido con cobro asociado*
-- [ ] 5.20 GREEN: `RefundUseCase` sobre `MercadoPagoPaymentAdapter.refund()`.
+- [x] 5.19 RED: reembolso automático al cancelar dentro de la ventana y al vencer un hold con cobro asociado. → *client-booking: Cancelación del cliente con reembolso automático · slot-hold: Hold vencido con cobro asociado*
+- [x] 5.20 GREEN: `RefundUseCase` sobre `MercadoPagoPaymentAdapter.refund()`.
 
 Requisitos que cierra: mecanismo de pago para **client-booking** (Reserva web con seña · Falla del cobro · Cancelación con reembolso — se completan en Fase 9) y **slot-hold** (Hold vencido con cobro asociado). Cubre ambas filas aplicables de la matriz de amenazas del webhook.
 

@@ -1,4 +1,9 @@
-import type { DepositRepository, PaymentPort } from '@jc-barberia/domain';
+import {
+  InsufficientMoneyForRefundError,
+  UnexpectedDepositStateError,
+  type DepositRepository,
+  type PaymentPort,
+} from '@jc-barberia/domain';
 
 /** The two trigger sources the slot-hold / client-booking specs name for an
  *  automatic seña refund. Reason itself never changes the money path — the
@@ -56,7 +61,56 @@ export class RefundUseCase {
     private readonly paymentPort: PaymentPort,
   ) {}
 
-  async execute(_input: RefundInput): Promise<RefundOutcome> {
-    throw new Error('RefundUseCase.execute not implemented yet — task 5.20');
+  async execute(input: RefundInput): Promise<RefundOutcome> {
+    const loaded = await this.deposits.findDepositForAppointment(input.appointmentId);
+    if (!loaded) {
+      // A refund requested against an appointment that does not exist is a
+      // caller bug, not a silent no-op — hiding it would let a misconfigured
+      // caller "successfully" refund appointments that never existed.
+      throw new Error(
+        `RefundUseCase: appointment "${input.appointmentId}" does not exist — refusing to refund a ghost appointment`,
+      );
+    }
+
+    switch (loaded.state.kind) {
+      case 'not_applicable':
+        return { outcome: 'no-deposit' };
+
+      case 'refunded':
+        return { outcome: 'already-refunded' };
+
+      case 'settled': {
+        const { paymentId, amountCents } = loaded.state;
+        let refund;
+        try {
+          refund = await this.paymentPort.refund({ paymentId, amountCents });
+        } catch (error) {
+          if (error instanceof InsufficientMoneyForRefundError) {
+            // 428 — business state, NOT lost, NOT crash, NOT retry-forever:
+            // stays settled, Phase 6 picks it back up with backoff.
+            return { outcome: 'pending-insufficient-funds' };
+          }
+          throw error; // louder failures propagate — Phase 6 retry/alert policy
+        }
+        await this.deposits.markRefunded({ depositId: loaded.depositId!, refundId: refund.refundId });
+        return { outcome: 'refunded', refundId: refund.refundId, amountCents };
+      }
+
+      // `pending` / `forfeited` should never reach a refund — a `pending`
+      // deposit has no money taken yet, and a `forfeited` one was already
+      // resolved as the shop keeping it (ausencia confirmada). Surfacing
+      // loudly beats silently no-op'ing, exactly like the pure
+      // `resolveDepositForCancellation` does.
+      case 'pending':
+      case 'forfeited':
+        throw new UnexpectedDepositStateError('refund', loaded.state.kind);
+
+      default: {
+        // TS exhaustiveness guard: any future DepositState kind forces a
+        // real decision here instead of falling through silently.
+        const _exhaustive: never = loaded.state;
+        throw new Error(`RefundUseCase: unhandled DepositState kind ${JSON.stringify(_exhaustive)}`);
+      }
+    }
   }
 }

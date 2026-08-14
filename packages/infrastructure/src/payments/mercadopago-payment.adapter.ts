@@ -5,6 +5,7 @@ import type {
   PaymentStatusResult,
   RefundResult,
 } from '@jc-barberia/domain';
+import { InsufficientMoneyForRefundError } from '@jc-barberia/domain';
 
 const DEFAULT_BASE_URL = 'https://api.mercadopago.com';
 
@@ -16,6 +17,31 @@ const DEFAULT_BASE_URL = 'https://api.mercadopago.com';
  * "un solo adaptador con la ruta base en un solo lugar".
  */
 const REFUND_PATH = (paymentId: string): string => `/v1/payments/${paymentId}/refunds`;
+
+/**
+ * Best-effort retrieval of a refund id from a `409 order_already_refunded`
+ * body, for the idempotent-success branch of `refund()`. MercadoPago's
+ * refund response shape varies (single object with `id`, an array of
+ * refunds, just an error wrapper), so this parses defensively and signals
+ * "not found" with `null` — the caller then falls back to the stable
+ * `'already-refunded'` marker. Never throws on a malformed body: a refund
+ * that already succeeded must not crash because the audit body wasn't
+ * what we expected.
+ */
+const extractRefundId = (body: string): string | null => {
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed === 'object' && parsed !== null) {
+      if (typeof parsed.id === 'number') return String(parsed.id);
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0]?.id === 'number') {
+        return String(parsed[0].id);
+      }
+    }
+  } catch {
+    // Malformed body — fall back to the marker, don't crash on a refund.
+  }
+  return null;
+};
 
 export class MercadoPagoApiError extends Error {
   constructor(
@@ -77,8 +103,48 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
   }
 
   async refund(input: { paymentId: string; amountCents: number }): Promise<RefundResult> {
-    const response = await this.request<{ id: number }>(REFUND_PATH(input.paymentId), { method: 'POST' });
-    return { refundId: String(response.id) };
+    // research/mercadopago-api.md sec.4: `X-Idempotency-Key` is REQUIRED by
+    // MercadoPago (`400 empty_required_header` without it) and MUST be stable
+    // across retries of the same logical refund. The seña refund is total
+    // and indivisible (research sec.3 — no partial refunds for this system),
+    // so the `paymentId` alone uniquely and stably identifies the refund;
+    // Phase 6 will refine the derivation to `deposit_id + motive`.
+    // eslint-disable-next-line no-undef
+    const response = await fetch(`${this.baseUrl}${REFUND_PATH(input.paymentId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.accessToken}`,
+        'X-Idempotency-Key': input.paymentId,
+      },
+    });
+
+    if (response.ok) {
+      const body = (await response.json()) as { id?: number };
+      return { refundId: String(body.id) };
+    }
+
+    const text = await response.text();
+
+    // research sec.5 — "No es error: es el resultado esperado de un
+    // reintento". Treat 409 `order_already_refunded` as idempotent success so
+    // a retried refund surfaces as a RefundResult, never a double-refundal.
+    if (response.status === 409 && text.includes('order_already_refunded')) {
+      return { refundId: extractRefundId(text) ?? 'already-refunded' };
+    }
+
+    // research sec.5 — `428 insufficient_money_for_refund` is a BUSINESS
+    // STATE, not a program error. Distinct typed throw so the caller
+    // (RefundUseCase) returns `pending-insufficient-funds` and lets Phase 6
+    // retry with backoff — never lost, never retried in a tight loop.
+    if (response.status === 428 && text.includes('insufficient_money_for_refund')) {
+      throw new InsufficientMoneyForRefundError(text);
+    }
+
+    // All other non-ok responses (401, 422 max_refunds_exceeded, 425 not yet
+    // enabled, generic 5xx) surface as the loud MercadoPagoApiError — the
+    // caller's retry/alert policy owns them, never silent.
+    throw new MercadoPagoApiError(response.status, text);
   }
 
   // `fetch`/`RequestInit` are Node 18+ runtime globals, not yet in the
