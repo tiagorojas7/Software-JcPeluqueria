@@ -15,7 +15,8 @@ describe('CreateHold', () => {
   it('claims the slot with a hold expiring exactly 15 minutes from now', async () => {
     const clock = new FakeClock(-180, at('09:45'));
     const holds = new FakeHoldRepository();
-    const useCase = new CreateHold(holds, clock);
+    const holdExpire = new FakeHoldExpireScheduler();
+    const useCase = new CreateHold(holds, clock, holdExpire);
 
     const hold = await useCase.execute({
       id: 'hold-1',
@@ -34,7 +35,8 @@ describe('CreateHold', () => {
   it('computes expiry relative to whatever "now" is — not a hardcoded instant', async () => {
     const clock = new FakeClock(-180, at('14:20'));
     const holds = new FakeHoldRepository();
-    const useCase = new CreateHold(holds, clock);
+    const holdExpire = new FakeHoldExpireScheduler();
+    const useCase = new CreateHold(holds, clock, holdExpire);
 
     const hold = await useCase.execute({
       id: 'hold-2',

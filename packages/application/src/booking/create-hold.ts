@@ -2,6 +2,7 @@ import {
   HOLD_DURATION_MINUTES,
   type Clock,
   type Hold,
+  type HoldExpireScheduler,
   type HoldRepository,
   type OccupancyChannel,
   type TimeWindow,
@@ -23,11 +24,20 @@ export interface CreateHoldInput {
  * business rule this use case enforces via the injected `Clock` — callers
  * never supply `holdExpiresAt` themselves, and `HoldRepository.create` only
  * knows how to persist an already-formed `Hold`.
+ *
+ * Per design.md "Encolado transaccional", the `hold.expire` job is enqueued
+ * in the SAME transaction that persists the hold, so a rollback discards
+ * both — no orphan expiry jobs that would refund + notify for a hold that
+ * never committed. The transactional binding is the pg-boss adapter's
+ * responsibility; here the contract is "after the hold commits, ask the
+ * scheduler to fire its expiry no earlier than the hold's own `holdExpiresAt`",
+ * which the same `Clock` computed — never a fresh wall-clock read.
  */
 export class CreateHold {
   constructor(
     private readonly holds: HoldRepository,
     private readonly clock: Clock,
+    private readonly holdExpire: HoldExpireScheduler,
   ) {}
 
   async execute(input: CreateHoldInput): Promise<Hold> {
@@ -41,6 +51,7 @@ export class CreateHold {
       holdExpiresAt: this.clock.addMinutes(this.clock.now(), HOLD_DURATION_MINUTES),
     };
     await this.holds.create(hold, input.searchWindow);
+    await this.holdExpire.scheduleExpire({ holdId: hold.id, startAfter: hold.holdExpiresAt });
     return hold;
   }
 }
