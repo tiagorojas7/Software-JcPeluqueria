@@ -1,5 +1,6 @@
 import type {
   DepositRepository,
+  LoadedDeposit,
   RecordSettledPaymentResult,
   ReleaseRejectedPaymentResult,
 } from '@jc-barberia/domain';
@@ -65,5 +66,19 @@ export class DrizzleDepositRepository implements DepositRepository {
       )
       .returning({ id: slotOccupancies.id });
     return released.length > 0 ? 'released' : 'no-op';
+  }
+
+  // RED stubs for task 5.20 — real `findDepositForAppointment` (a join of
+  // `slot_occupancies.deposit_id` → `deposits`) and `markRefunded` (atomic
+  // `UPDATE deposits SET state='refunded' WHERE id AND state='settled'`)
+  // land in 5.20 GREEN. Throwing keeps the unimplemented state loud so the
+  // Testcontainers RED fails on "not implemented" while the package
+  // continues to compile.
+  async findDepositForAppointment(_appointmentId: string): Promise<LoadedDeposit | null> {
+    throw new Error('DrizzleDepositRepository.findDepositForAppointment not implemented yet — task 5.20');
+  }
+
+  async markRefunded(_input: { depositId: string; refundId: string }): Promise<void> {
+    throw new Error('DrizzleDepositRepository.markRefunded not implemented yet — task 5.20');
   }
 }

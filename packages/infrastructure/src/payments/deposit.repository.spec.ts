@@ -157,4 +157,100 @@ describe('DrizzleDepositRepository (Testcontainers)', () => {
     expect(row!.status).toBe('held');
     expect(row!.payment_pending).toBe(false);
   });
+
+  // Task 5.20 — `findDepositForAppointment` joins `slot_occupancies.deposit_id`
+  // → `deposits` so `RefundUseCase` can decide (settled → refund |
+  // refunded → idempotent no-op | not_applicable → no-deposit). The Testcontainers
+  // proof matters because the join's "no deposit attached" case (phone /
+  // walk-in) must surface as `{kind:'not_applicable'}` — never as null, which
+  // would collide with "appointment row does not exist" (a caller bug).
+  const reservadoWithDeposit = async (
+    depositState: 'settled' | 'refunded',
+  ): Promise<{ appointmentId: string; depositId: string; paymentId: string }> => {
+    const barber = createBarber({ id: crypto.randomUUID(), name: 'Barbero', active: true });
+    await new DrizzleBarberRepository(db).create(barber);
+    const paymentId = `mp-${crypto.randomUUID()}`;
+    const [deposit] = await client`
+      insert into deposits (amount_cents, payment_id, state) values (250000, ${paymentId}, ${depositState})
+      returning id
+    `;
+    const [occ] = await client`
+      insert into slot_occupancies (barber_id, service_id, channel, status, time_range, deposit_id)
+      values (${barber.id}, ${serviceId}, 'web', 'reservado', ${range}::tstzrange, ${deposit!.id})
+      returning id
+    `;
+    return { appointmentId: occ!.id, depositId: deposit!.id, paymentId };
+  };
+
+  it('findDepositForAppointment loads a settled deposit attached to a reservado appointment', async () => {
+    const { appointmentId, depositId, paymentId } = await reservadoWithDeposit('settled');
+    const repo = new DrizzleDepositRepository(db);
+
+    const loaded = await repo.findDepositForAppointment(appointmentId);
+
+    expect(loaded).toEqual({
+      depositId,
+      state: { kind: 'settled', paymentId, amountCents: 250000 },
+    });
+  });
+
+  it('findDepositForAppointment loads a refunded deposit (loaded refundId is empty by design)', async () => {
+    const { appointmentId, depositId } = await reservadoWithDeposit('refunded');
+    const repo = new DrizzleDepositRepository(db);
+
+    const loaded = await repo.findDepositForAppointment(appointmentId);
+
+    // `deposits` does not persist the gateway refund id (design.md row 457:
+    // state/amount_cents/payment_id only), so the loaded `refunded` state
+    // carries `refundId: ''` — the use case only needs `.kind` to short-
+    // circuit its idempotent retry branch anyway.
+    expect(loaded).toEqual({
+      depositId,
+      state: { kind: 'refunded', refundId: '', amountCents: 250000 },
+    });
+  });
+
+  it('findDepositForAppointment returns not_applicable for a phone appointment with no deposit attached', async () => {
+    const barber = createBarber({ id: crypto.randomUUID(), name: 'Barbero', active: true });
+    await new DrizzleBarberRepository(db).create(barber);
+    const [occ] = await client`
+      insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
+      values (${barber.id}, ${serviceId}, 'telefono', 'reservado', ${range}::tstzrange)
+      returning id
+    `;
+    const repo = new DrizzleDepositRepository(db);
+
+    const loaded = await repo.findDepositForAppointment(occ!.id);
+
+    expect(loaded).toEqual({ depositId: null, state: { kind: 'not_applicable' } });
+  });
+
+  it('findDepositForAppointment returns null when the appointment id does not exist (caller bug, not no-op)', async () => {
+    const repo = new DrizzleDepositRepository(db);
+
+    const loaded = await repo.findDepositForAppointment(crypto.randomUUID());
+
+    expect(loaded).toBeNull();
+  });
+
+  it('markRefunded flips a settled deposit to refunded', async () => {
+    const { depositId } = await reservadoWithDeposit('settled');
+    const repo = new DrizzleDepositRepository(db);
+
+    await repo.markRefunded({ depositId, refundId: 'mp-refund-1' });
+
+    const [row] = await client`select state from deposits where id = ${depositId}`;
+    expect(row!.state).toBe('refunded');
+  });
+
+  it('markRefunded is idempotent at the SQL level — re-marking an already-refunded deposit is a no-op', async () => {
+    const { depositId } = await reservadoWithDeposit('settled');
+    const repo = new DrizzleDepositRepository(db);
+    await repo.markRefunded({ depositId, refundId: 'mp-refund-1' });
+
+    await expect(repo.markRefunded({ depositId, refundId: 'mp-refund-2' })).resolves.toBeUndefined();
+
+    const rows = await client`select state, count(*)::int as total from deposits where id = ${depositId} group by state`;
+    expect([...rows]).toEqual([{ state: 'refunded', total: 1 }]);
+  });
 });

@@ -21,6 +21,24 @@ export interface PaymentStatusResult {
 }
 
 /**
+ * `428 insufficient_money_for_refund` is a BUSINESS STATE, not a bug
+ * (research/mercadopago-api.md sec.5): the shop's MercadoPago account has
+ * no funds to refund right now. The refund MUST NOT disappear and MUST NOT
+ * crash the worker — it stays pending for the Phase 6 retry queue (with
+ * backoff, not a tight loop, so it does not retry forever). Distinct from a
+ * generic gateway error precisely so callers treat it as "loud, retriable,
+ * not lost" instead of failing the booking.
+ */
+export class InsufficientMoneyForRefundError extends Error {
+  constructor(readonly body: string) {
+    super(
+      `MercadoPago returned 428 insufficient_money_for_refund — shop account has no funds; refund stays pending and must be retried with backoff. Body: ${body}`,
+    );
+    this.name = 'InsufficientMoneyForRefundError';
+  }
+}
+
+/**
  * The only way money moves between the shop and MercadoPago. Phase 4 needed
  * only `refund()` to prove `resolveDepositForCancellation` correct against
  * `FakePaymentPort` (design.md's phase table: "Ciclo de vida del turno +

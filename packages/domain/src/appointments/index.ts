@@ -12,6 +12,7 @@ export type {
   PaymentStatusResult,
   RefundResult,
 } from './payment-port';
+export { InsufficientMoneyForRefundError } from './payment-port';
 export {
   UnexpectedDepositStateError,
   resolveDepositForAbsence,
