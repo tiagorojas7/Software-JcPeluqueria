@@ -64,4 +64,58 @@ describe('MercadoPagoPaymentAdapter', () => {
 
     await expect(adapter.getPayment('1')).rejects.toBeInstanceOf(MercadoPagoApiError);
   });
+
+  // Task 5.20 — research/mercadopago-api.md sec.4: `X-Idempotency-Key` is
+  // REQUIRED (`400 empty_required_header` without it) and must be STABLE
+  // between retries of the same logical refund — the gateway's authority on
+  // "the same refund, don't issue it twice". For Phase 5b the seña refund is
+  // indivisible and uniquely identified by the paymentId (same key ⇒ same
+  // refund), so paymentId alone is the stable identity here; Phase 6 will
+  // refine the derivation to `deposit_id + motive` per research sec.4.
+  it('refund() issues POST /v1/payments/{id}/refunds with a stable X-Idempotency-Key = paymentId', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: 4242 }), { status: 201 }));
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL);
+
+    const result = await adapter.refund({ paymentId: 'pay-9', amountCents: 250000 });
+
+    expect(result).toEqual({ refundId: '4242' });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${BASE_URL}/v1/payments/pay-9/refunds`);
+    expect(init.method).toBe('POST');
+    expect(init.headers['X-Idempotency-Key']).toBe('pay-9');
+  });
+
+  // Research sec.5 — the BLOCKING edge case this task explicitly names: 428
+  // `insufficient_money_for_refund` is a BUSINESS STATE (owner withdrew,
+  // client cancels). It MUST NOT crash as a generic gateway error — the
+  // caller (RefundUseCase) needs to recognize it as the loud, retriable,
+  // not-lost signal `InsufficientMoneyForRefundError`.
+  it('refund() throws InsufficientMoneyForRefundError on 428, not MercadoPagoApiError', async () => {
+    const { InsufficientMoneyForRefundError } = await import('@jc-barberia/domain');
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'insufficient_money_for_refund' }), { status: 428 }),
+    );
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL);
+
+    await expect(adapter.refund({ paymentId: 'pay-10', amountCents: 250000 })).rejects.toBeInstanceOf(
+      InsufficientMoneyForRefundError,
+    );
+  });
+
+  // Research sec.5 — `409 order_already_refunded` "No es error: es el
+  // resultado esperado de un reintento." Treat it as idempotent SUCCESS so
+  // a retried refund surfaces as a RefundResult instead of an error throw —
+  // and never double-refunds at the caller's level.
+  it('refund() treats 409 order_already_refunded as idempotent success, returning a RefundResult', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ message: 'already refunded', error: 'order_already_refunded', id: 4242 }), {
+        status: 409,
+      }),
+    );
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL);
+
+    const result = await adapter.refund({ paymentId: 'pay-11', amountCents: 250000 });
+
+    expect(result.refundId).toBeDefined();
+  });
 });

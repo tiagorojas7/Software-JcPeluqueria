@@ -33,6 +33,13 @@ export class FakePaymentPort implements PaymentPort {
   /** @param paymentStatus What every `getPayment()` call resolves to. */
   constructor(private readonly paymentStatus: PaymentStatusResult | null = null) {}
 
+  /**
+   * Set this to make the next `refund()` call throw instead of succeeding —
+   * used to simulate `InsufficientMoneyForRefundError` (the 428 edge case)
+   * for `RefundUseCase`. Set to `null` to restore success.
+   */
+  refundError: Error | null = null;
+
   async createPreference(input: {
     externalReference: string;
     amountCents: number;
@@ -53,6 +60,9 @@ export class FakePaymentPort implements PaymentPort {
 
   async refund(input: { paymentId: string; amountCents: number }): Promise<RefundResult> {
     this.refundCalls.push({ paymentId: input.paymentId, amountCents: input.amountCents });
+    if (this.refundError) {
+      throw this.refundError;
+    }
     return { refundId: `fake-refund-${this.nextRefundId++}` };
   }
 }

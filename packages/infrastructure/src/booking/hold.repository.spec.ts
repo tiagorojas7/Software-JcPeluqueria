@@ -175,6 +175,32 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
     expect([...rows]).toEqual([{ status: 'liberado' }]);
   });
 
+  // Task 5.17 — design.md line 150: "Un hold con un pago en curso nunca lo
+  // libera el temporizador. Solo se libera cuando el pago alcanza un estado
+  // terminal." The lazy release inside `create()` MUST skip a
+  // `payment_pending=true` row even when its expiry already passed — that is
+  // the exact race the rule exists to prevent (cliente paga a las 14:50,
+  // el hold vence wall-clock-wise y queda un pago aprobado sin horario). Such
+  // a hold stays `held` and keeps occupying the range until ProcessPaymentUseCase
+  // itself confirms it (approved) or releases it (rejected/cancelled).
+  it('does NOT lazily release an expired hold that has payment_pending=true — the slot stays occupied', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const barber = await newBarber();
+    const pendingHoldId = crypto.randomUUID();
+    await client`insert into slot_occupancies (id, barber_id, service_id, channel, status, time_range, hold_expires_at, payment_pending)
+                 values (${pendingHoldId}, ${barber}, ${serviceId}, 'web', 'held', ${range('10:00', '10:30')}::tstzrange, ${PAST_HOLD_EXPIRY.toISOString()}, true)`;
+
+    // The lazy release fires inside create() before the INSERT. If it
+    // respected payment_pending it would skip this row, so the INSERT would
+    // hit the EXCLUDE and surface as the domain rejection — NOT a silent
+    // takeover of an in-flight payment's slot.
+    const error = await repo.create(holdFor(barber, '10:00', '10:30'), workingWindow).catch((e) => e);
+
+    expect(error).toBeInstanceOf(SlotUnavailableError);
+    const rows = await client`select status, payment_pending from slot_occupancies where id = ${pendingHoldId}`;
+    expect([...rows]).toEqual([{ status: 'held', payment_pending: true }]);
+  });
+
   // Triangulates the test above: an ACTIVE hold (future hold_expires_at)
   // must still block, exactly like the pre-existing exclusivity tests. If
   // the lazy release were too broad (e.g. missing the hold_expires_at
