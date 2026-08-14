@@ -44,12 +44,26 @@ export class DrizzleDepositRepository implements DepositRepository {
     return updated.length > 0 ? 'confirmed' : 'hold-not-found';
   }
 
-  // RED stub for task 5.16 — real atomic `UPDATE ... WHERE status='held'
-  // AND payment_pending = true RETURNING id` lands in 5.16 GREEN. Throwing
-  // (not silently returning) keeps the unimplemented state loud so the
-  // Testcontainers RED fails for the right reason while the package still
-  // compiles.
-  async releaseHoldOnRejectedPayment(_holdId: string): Promise<ReleaseRejectedPaymentResult> {
-    throw new Error('DrizzleDepositRepository.releaseHoldOnRejectedPayment not implemented yet — task 5.16');
+  // Terminal-failure release for the webhook worker
+  // (design.md line 152): "Si MercadoPago responde `rejected` o
+  // `cancelled`, se libera de inmediato sin esperar los 15 minutos."
+  // Same atomic `UPDATE ... WHERE status='held' AND payment_pending =
+  // true RETURNING` shape as `recordSettledPayment`'s confirmation —
+  // zero rows means a retried webhook already released this hold (or the
+  // row was never a `payment_pending` hold in the first place), both of
+  // which are no-ops the caller treats as success, never an error.
+  async releaseHoldOnRejectedPayment(holdId: string): Promise<ReleaseRejectedPaymentResult> {
+    const released = await this.db
+      .update(slotOccupancies)
+      .set({ status: 'liberado', paymentPending: false })
+      .where(
+        and(
+          eq(slotOccupancies.id, holdId),
+          eq(slotOccupancies.status, 'held'),
+          eq(slotOccupancies.paymentPending, true),
+        ),
+      )
+      .returning({ id: slotOccupancies.id });
+    return released.length > 0 ? 'released' : 'no-op';
   }
 }

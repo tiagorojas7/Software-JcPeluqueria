@@ -174,8 +174,8 @@ Requisitos que cierra: **appointment-lifecycle** (2/4: Cinco estados explícitos
 - [x] 5.12 GREEN: confirmar idempotencia en `ConfirmHoldOnPayment`. `DrizzleDepositRepository.recordSettledPayment()`: `INSERT ... ON CONFLICT (payment_id) DO NOTHING RETURNING id` — mismo patrón "cero filas afectadas" que `HoldRepository.confirm()` (Fase 2); solo quien gana el INSERT pasa a actualizar `slot_occupancies`. Probado con Testcontainers: un `payment_id` reintentado no duplica el depósito ni re-toca el turno.
 - [x] 5.13 RED **(matriz de amenazas)**: payload `approved` falsificado sin firma válida es rechazado. Caso dedicado en `mercadopago-webhook.spec.ts`: payload realista con `status: 'approved'` y firma inválida → `401`, cola vacía.
 - [x] 5.14 GREEN: endurecer verificación de firma hasta que 5.13 pase. Ya cubierto por 5.8 — la verificación de firma ocurre antes de que el handler interprete el body, así que un payload falsificado nunca llega a importar su contenido.
-- [ ] 5.15 RED: pago rechazado/no completado no crea el turno en `reservado`. → *client-booking: Falla el cobro de la seña*
-- [ ] 5.16 GREEN: implementar la rama de rechazo/pago no completado.
+- [x] 5.15 RED: pago rechazado/no completado no crea el turno en `reservado`. → *client-booking: Falla el cobro de la seña*
+- [x] 5.16 GREEN: implementar la rama de rechazo/pago no completado.
 - [ ] 5.17 RED: hold con pago en curso (`payment_pending=true`) nunca lo libera el temporizador; solo al llegar a estado terminal.
 - [ ] 5.18 GREEN: excepción de `payment_pending` en la liberación perezosa (ajusta 2.9).
 - [ ] 5.19 RED: reembolso automático al cancelar dentro de la ventana y al vencer un hold con cobro asociado. → *client-booking: Cancelación del cliente con reembolso automático · slot-hold: Hold vencido con cobro asociado*

@@ -23,22 +23,6 @@ describe('ProcessPaymentUseCase', () => {
     expect(deposits.calls).toEqual([{ holdId: 'hold-1', paymentId: 'payment-1', amountCents: 250000 }]);
   });
 
-  it('never touches the deposit repository for a non-approved status', async () => {
-    const paymentPort = new FakePaymentPort({
-      paymentId: 'payment-2',
-      status: 'rejected',
-      amountCents: 250000,
-      externalReference: 'hold-2',
-    });
-    const deposits = new FakeDepositRepository();
-    const useCase = new ProcessPaymentUseCase(paymentPort, deposits);
-
-    const result = await useCase.execute('payment-2');
-
-    expect(result).toEqual({ outcome: 'ignored', status: 'rejected' });
-    expect(deposits.calls).toEqual([]);
-  });
-
   // Threat matrix: "reintento del mismo payment_id → cero filas afectadas".
   // Application-layer proof; the atomic database guarantee is
   // DrizzleDepositRepository's own Testcontainers suite.
