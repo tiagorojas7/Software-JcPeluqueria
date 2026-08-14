@@ -186,7 +186,7 @@ Requisitos que cierra: mecanismo de pago para **client-booking** (Reserva web co
 ## Phase 6: Procesos de fondo (~300 líneas) — PR 8 (base: PR 7) — depende de 5
 
 - [x] 6.1 Instalar pg-boss; entrypoint de worker en `apps/worker`.
-- [ ] 6.2 RED: `hold.expire` se encola con `startAfter` 15 min en la misma transacción que crea el hold.
+- [x] 6.2 RED: `hold.expire` se encola con `startAfter` 15 min en la misma transacción que crea el hold.
 - [ ] 6.3 GREEN: implementar el encolado en `CreateHold` (ajusta 2.8).
 - [ ] 6.4 RED: `hold.expire` dispara reembolso y notificación cuando corresponde, idempotente ante reintento.
 - [ ] 6.5 GREEN: handler `hold.expire`.
