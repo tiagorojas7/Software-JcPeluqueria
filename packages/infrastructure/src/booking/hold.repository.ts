@@ -91,6 +91,27 @@ export class DrizzleHoldRepository implements HoldRepository {
     return rows.length > 0;
   }
 
+  /**
+   * Same re-validate-and-transition shape as `confirm()`, but stays `held`:
+   * it only flips `payment_pending` and pushes `hold_expires_at` out to
+   * `paymentExpiresAt` (design.md's checkout sequence). `false` means the
+   * hold already expired or was consumed — never a second write is issued.
+   */
+  async beginCheckout(holdId: string, paymentExpiresAt: Date): Promise<boolean> {
+    const rows = await this.db
+      .update(slotOccupancies)
+      .set({ paymentPending: true, holdExpiresAt: paymentExpiresAt })
+      .where(
+        and(
+          eq(slotOccupancies.id, holdId),
+          eq(slotOccupancies.status, 'held'),
+          sql`${slotOccupancies.holdExpiresAt} > now()`,
+        ),
+      )
+      .returning({ id: slotOccupancies.id });
+    return rows.length > 0;
+  }
+
   /** `searchWindow` minus everything that still occupies the barber inside it. */
   private async freeRanges(barberId: string, searchWindow: TimeWindow): Promise<TimeWindow[]> {
     const lowerBound = sql`lower(${slotOccupancies.timeRange})`;

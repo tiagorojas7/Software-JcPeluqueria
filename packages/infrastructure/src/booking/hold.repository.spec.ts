@@ -42,12 +42,12 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
   // relative to whenever this suite actually runs, so this uses its own,
   // unrelated calendar date instead.
   const PAST_HOLD_EXPIRY = clock.localTimeToUtc('2020-01-01', '12:00');
-  const holdFor = (barber: string, from: string, to: string): Hold => ({
+  const holdFor = (barber: string, from: string, to: string, channel: Hold['channel'] = 'web'): Hold => ({
     id: crypto.randomUUID(),
     barberId: barber,
     serviceId,
     clientId: null,
-    channel: 'web',
+    channel,
     timeRange: { start: at(from), end: at(to) },
     holdExpiresAt: at('23:00'),
   });
@@ -194,7 +194,13 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
   // appointment" for a competitor to slip into.
   it('atomically confirms an active hold, transitioning held -> reservado', async () => {
     const repo = new DrizzleHoldRepository(db);
-    const hold = holdFor(await newBarber(), '13:00', '13:30');
+    // 'telefono', not the 'web' default: migration 0007's CHECK constraint
+    // requires a deposit_id for any web-channel row past 'held'/'liberado'
+    // (design.md — "no existe ningún endpoint que transicione held ->
+    // reservado en el canal web fuera del handler de pago aprobado"). This
+    // test proves confirm()'s atomic UPDATE...RETURNING shape generically,
+    // which telefono exercises just as well without needing a deposit.
+    const hold = holdFor(await newBarber(), '13:00', '13:30', 'telefonico');
     await repo.create(hold, workingWindow);
 
     const confirmed = await repo.confirm(hold.id);
@@ -219,5 +225,40 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
     expect(confirmed).toBe(false);
     const rows = await client`select status from slot_occupancies where id = ${expiredId}`;
     expect([...rows]).toEqual([{ status: 'held' }]);
+  });
+
+  // Phase 5 checkout: same re-validation shape as confirm(), but the row
+  // stays 'held' and only payment_pending/hold_expires_at move.
+  it('re-validates and marks payment_pending, extending hold_expires_at', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const hold = holdFor(await newBarber(), '17:00', '17:30');
+    await repo.create(hold, workingWindow);
+    const paymentExpiresAt = at('17:20');
+
+    const began = await repo.beginCheckout(hold.id, paymentExpiresAt);
+
+    expect(began).toBe(true);
+    // Compares in SQL, not `new Date(...)` in JS — same style as the
+    // `time_range = ...::tstzrange as exact` checks above; the lint rule
+    // forbids constructing `Date` outside `ShopClock`.
+    const [row] = await client`select status, payment_pending,
+        hold_expires_at = ${paymentExpiresAt.toISOString()}::timestamptz as expiry_matches
+      from slot_occupancies where id = ${hold.id}`;
+    expect(row!.status).toBe('held');
+    expect(row!.payment_pending).toBe(true);
+    expect(row!.expiry_matches).toBe(true);
+  });
+
+  it('returns false for beginCheckout on an already-expired hold, without touching it', async () => {
+    const barber = await newBarber();
+    const expiredId = crypto.randomUUID();
+    await client`insert into slot_occupancies (id, barber_id, service_id, channel, status, time_range, hold_expires_at)
+                 values (${expiredId}, ${barber}, ${serviceId}, 'web', 'held', ${range('18:00', '18:30')}::tstzrange, ${PAST_HOLD_EXPIRY.toISOString()})`;
+
+    const began = await new DrizzleHoldRepository(db).beginCheckout(expiredId, at('18:20'));
+
+    expect(began).toBe(false);
+    const rows = await client`select payment_pending from slot_occupancies where id = ${expiredId}`;
+    expect([...rows]).toEqual([{ payment_pending: false }]);
   });
 });

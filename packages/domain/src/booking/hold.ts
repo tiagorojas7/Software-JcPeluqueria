@@ -49,4 +49,14 @@ export interface HoldRepository {
    * caller must treat that as a failed re-validation, not throw.
    */
   confirm(holdId: string): Promise<boolean>;
+
+  /**
+   * Re-validates and marks the hold as having a payment in flight, extending
+   * its expiry to `paymentExpiresAt` in the same statement — design.md's
+   * checkout sequence: `UPDATE ... SET payment_pending=true, hold_expires_at
+   * = now()+15min WHERE id AND status='held' AND hold_expires_at > now()
+   * RETURNING`. `false` means the hold already expired or was consumed,
+   * exactly like `confirm()`.
+   */
+  beginCheckout(holdId: string, paymentExpiresAt: Date): Promise<boolean>;
 }

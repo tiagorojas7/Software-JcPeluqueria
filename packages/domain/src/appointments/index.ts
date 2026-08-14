@@ -5,7 +5,13 @@ export {
 export { APPOINTMENT_STATUSES } from './appointment-status';
 export type { AppointmentStatus } from './appointment-status';
 export type { DepositState } from './deposit-state';
-export type { PaymentPort, RefundResult } from './payment-port';
+export type {
+  CreatePreferenceResult,
+  PaymentPort,
+  PaymentStatus,
+  PaymentStatusResult,
+  RefundResult,
+} from './payment-port';
 export {
   UnexpectedDepositStateError,
   resolveDepositForAbsence,
@@ -13,7 +19,7 @@ export {
   resolveDepositForCompletion,
 } from './deposit-transitions';
 export { FakePaymentPort } from './testing/fake-payment-port';
-export type { RecordedRefundCall } from './testing/fake-payment-port';
+export type { RecordedCreatePreferenceCall, RecordedRefundCall } from './testing/fake-payment-port';
 export type { Appointment } from './appointment';
 export { MarkCompletedUseCase } from './mark-completed';
 export type { MarkCompletedInput } from './mark-completed';
