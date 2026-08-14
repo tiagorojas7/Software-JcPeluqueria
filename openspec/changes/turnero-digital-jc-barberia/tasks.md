@@ -265,8 +265,8 @@ Requisitos que cierra: **client-booking** (5/5: Exploración sin cuenta · Cuent
 - [x] 10.9 RED: marcar `realizado` cualquier turno, independientemente del barbero asignado. → *admin-operations: Marcado de realizados y resolución de pendientes*
 - [x] 10.10 RED: resolver `sin registrar` a `realizado`/`ausente`, con y sin seña, registrando el historial de ausencias.
 - [x] 10.11 GREEN: conectar el panel a `MarkCompletedUseCase`/`ConfirmAbsenceUseCase` (4.6/4.8) sin restricción de barbero.
-- [ ] 10.12 RED: walk-in se crea directamente en `realizado`, sin seña, y el horario deja de figurar disponible. → *admin-operations: Carga de walk-ins · appointment-lifecycle: Los walk-ins ingresan directamente como realizado*
-- [ ] 10.13 GREEN: `CreateWalkInUseCase` ocupa el hueco vía `slot_occupancies` con `status='realizado'`.
+- [x] 10.12 RED: walk-in se crea directamente en `realizado`, sin seña, y el horario deja de figurar disponible. → *admin-operations: Carga de walk-ins · appointment-lifecycle: Los walk-ins ingresan directamente como realizado*
+- [x] 10.13 GREEN: `CreateWalkInUseCase` ocupa el hueco vía `slot_occupancies` con `status='realizado'`.
 - [ ] 10.14 RED: alta de un barbero con horario base lo deja disponible para asignación. → *admin-operations: Gestión de clientes y de barberos*
 - [ ] 10.15 GREEN: `ManageClientsAndBarbersUseCase` (CRUD clientes, alta/baja barberos, configuración de horarios/precios), acotado por permisos de 3b.
 

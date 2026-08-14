@@ -5,3 +5,5 @@ export type { EditAppointmentInput } from './edit-appointment';
 export { AdminCancelAppointmentUseCase } from './admin-cancel-appointment';
 export { AdminMarkCompletedUseCase } from './admin-mark-completed';
 export { AdminConfirmAbsenceUseCase } from './admin-confirm-absence';
+export { CreateWalkInUseCase } from './create-walk-in';
+export type { CreateWalkInInput, WalkIn } from './create-walk-in';
