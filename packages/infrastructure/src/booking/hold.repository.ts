@@ -55,6 +55,14 @@ export class DrizzleHoldRepository implements HoldRepository {
    * expired hold nobody confirmed or released would keep occupying forever
    * otherwise. Evaluated lazily, right before the range is written or read,
    * scoped to `window` — only what is about to be touched needs releasing.
+   *
+   * Task 5.18 — design.md line 150: a hold with `payment_pending = true` is
+   * NEVER released by the timer, even past its wall-clock expiry. It keeps
+   * occupying the range until `ProcessPaymentUseCase` itself reaches a
+   * terminal payment state (approved → confirm to `reservado`; rejected/
+   * cancelled → `releaseHoldOnRejectedPayment`). This is what prevents the
+   * "paid at 14:50, hold expired, approved payment with no slot" race —
+   * the row stays held and the EXCLUDE keeps blocking competitors.
    */
   private async releaseExpiredHolds(barberId: string, window: TimeWindow): Promise<void> {
     await this.db
@@ -64,6 +72,7 @@ export class DrizzleHoldRepository implements HoldRepository {
         and(
           eq(slotOccupancies.barberId, barberId),
           eq(slotOccupancies.status, 'held'),
+          eq(slotOccupancies.paymentPending, false),
           sql`${slotOccupancies.holdExpiresAt} <= now()`,
           sql`${slotOccupancies.timeRange} && ${toRangeLiteral(window)}::tstzrange`,
         ),
