@@ -4,3 +4,6 @@ export { DrizzleRolePermissionRepository } from './access-control/role-permissio
 export { DrizzleActorContextRepository } from './access-control/actor-context.repository';
 export { DrizzleAgendaRepository } from './access-control/agenda.repository';
 export { DrizzleDayBoardRepository } from './agenda/day-board.repository';
+export { DrizzleHoldRepository } from './booking/hold.repository';
+export { DrizzleClientRepository } from './clients/client.repository';
+export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
