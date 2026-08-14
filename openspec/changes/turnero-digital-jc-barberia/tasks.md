@@ -262,9 +262,9 @@ Requisitos que cierra: **client-booking** (5/5: Exploración sin cuenta · Cuent
 - [x] 10.6 RED: edición de servicio/barbero/horario de cualquier turno por personal autorizado. → *admin-operations: Edición y cancelación administrativa* `edit-appointment.spec.ts` escrito primero y confirmado fallando por módulo inexistente antes de implementar.
 - [x] 10.7 RED: cancelación administrativa reembolsa si hay seña, no hace nada si no la hay. `admin-cancel-appointment.spec.ts` escrito primero y confirmado fallando por módulo inexistente antes de implementar. Primer consumidor real de `resolveDepositForCancellation` (Fase 4: "no está conectado a ningún CancelUseCase todavía").
 - [x] 10.8 GREEN: `EditAppointmentUseCase` + `AdminCancelUseCase`. `AppointmentRepository` (puerto nuevo, `packages/domain/src/appointments`) + `DrizzleAppointmentRepository` (Testcontainers, reutiliza `freeRanges`/`toRangeLiteral`/`isExclusionViolation` extraídos de `DrizzleHoldRepository` a `db/occupancy-sql.ts` — Fase 2 sigue en verde tras la extracción). Sin wiring HTTP/UI todavía: ni la tarea 10.6 ni la 10.8 piden "endpoint"/"formulario" (a diferencia de la 10.2), y el presupuesto de esta fase ya está por encima del techo — decisión de alcance explícita, no un olvido.
-- [ ] 10.9 RED: marcar `realizado` cualquier turno, independientemente del barbero asignado. → *admin-operations: Marcado de realizados y resolución de pendientes*
-- [ ] 10.10 RED: resolver `sin registrar` a `realizado`/`ausente`, con y sin seña, registrando el historial de ausencias.
-- [ ] 10.11 GREEN: conectar el panel a `MarkCompletedUseCase`/`ConfirmAbsenceUseCase` (4.6/4.8) sin restricción de barbero.
+- [x] 10.9 RED: marcar `realizado` cualquier turno, independientemente del barbero asignado. → *admin-operations: Marcado de realizados y resolución de pendientes*
+- [x] 10.10 RED: resolver `sin registrar` a `realizado`/`ausente`, con y sin seña, registrando el historial de ausencias.
+- [x] 10.11 GREEN: conectar el panel a `MarkCompletedUseCase`/`ConfirmAbsenceUseCase` (4.6/4.8) sin restricción de barbero.
 - [ ] 10.12 RED: walk-in se crea directamente en `realizado`, sin seña, y el horario deja de figurar disponible. → *admin-operations: Carga de walk-ins · appointment-lifecycle: Los walk-ins ingresan directamente como realizado*
 - [ ] 10.13 GREEN: `CreateWalkInUseCase` ocupa el hueco vía `slot_occupancies` con `status='realizado'`.
 - [ ] 10.14 RED: alta de un barbero con horario base lo deja disponible para asignación. → *admin-operations: Gestión de clientes y de barberos*

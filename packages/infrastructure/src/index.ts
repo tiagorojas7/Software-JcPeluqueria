@@ -7,3 +7,4 @@ export { DrizzleDayBoardRepository } from './agenda/day-board.repository';
 export { DrizzleHoldRepository } from './booking/hold.repository';
 export { DrizzleClientRepository } from './clients/client.repository';
 export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
+export { DrizzleAbsenceRecordRepository } from './appointments/absence-record.repository';
