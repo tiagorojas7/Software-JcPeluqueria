@@ -9,6 +9,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { barbers, services } from './availability';
+import { clients } from './clients';
 import { users } from './identity';
 
 /**
@@ -31,8 +32,8 @@ export const OCCUPYING_STATUSES = ['held', 'reservado', 'realizado'] as const;
  * Exclusivity lives in the `no_overlap_per_barber` EXCLUDE constraint
  * (migration 0003), not here — Drizzle cannot express it.
  *
- * `client_id` and `deposit_id` carry no foreign key yet: `clients` and
- * `deposits` arrive in later phases and will add the constraint then.
+ * `client_id` gained its FK in Phase 10, now that `clients` exists.
+ * `deposit_id` still carries none: `deposits` arrives in Phase 5.
  * `created_by_user_id`/`marked_by_user_id` were deliberately deferred from
  * Phase 2 to Phase 3a (see tasks.md 2.1) so their FK to `users` could be
  * added in one shot instead of landing without a constraint first.
@@ -45,7 +46,7 @@ export const slotOccupancies = pgTable('slot_occupancies', {
   serviceId: uuid('service_id')
     .notNull()
     .references(() => services.id),
-  clientId: uuid('client_id'),
+  clientId: uuid('client_id').references(() => clients.id),
   channel: varchar('channel', { length: 20 }).notNull(),
   status: varchar('status', { length: 20 }).notNull(),
   timeRange: tstzrange('time_range').notNull(),
