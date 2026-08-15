@@ -196,8 +196,8 @@ Requisitos que cierra: mecanismo de pago para **client-booking** (Reserva web co
 - [x] 6.9 GREEN: confirmar el filtro de rango en la query del barrido.
 - [x] 6.10 RED: recordatorio se dispara 2h antes, web y telefónico, solo si hay email. → *notification-port: Eventos mínimos que deben notificarse*
 - [x] 6.11 GREEN: job `appointment.reminder` (schedule dinámico por turno).
-- [ ] 6.12 RED: consumidor de `notification_outbox` entrega con reintentos y backoff; entrega exitosa marca la fila.
-- [ ] 6.13 GREEN: consumidor del outbox (usa `FakeNotificationPort` hasta Fase 7).
+- [x] 6.12 RED: consumidor de `notification_outbox` entrega con reintentos y backoff; entrega exitosa marca la fila.
+- [x] 6.13 GREEN: consumidor del outbox (usa `FakeNotificationPort` hasta Fase 7).
 
 Requisitos que cierra: **appointment-lifecycle** (2/4 restantes: Barrido diario de las 23:59 · Turnos futuros no son afectados). Dispara el recordatorio de **notification-port** (contenido en Fase 7).
 

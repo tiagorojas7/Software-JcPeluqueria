@@ -6,6 +6,10 @@ export interface NotificationOutboxRunSummary {
   readonly failed: number;
 }
 
+/** Best-effort human-readable reason to store as `last_error`. */
+const reason = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 /**
  * The `notification_outbox` consumer, as an application-layer use case — the
  * half the outbox port does NOT cover (design.md "Outbox transaccional"):
@@ -32,14 +36,27 @@ export class NotificationOutboxConsumer {
   ) {}
 
   async execute(): Promise<NotificationOutboxRunSummary> {
-    const row = await this.outbox.pickPendingForDelivery();
-    if (row) {
-      await this.notifications.send({
-        to: row.recipientEmail,
-        template: row.notificationType,
-        data: row.payload,
-      });
+    let delivered = 0;
+    let failed = 0;
+    let row = await this.outbox.pickPendingForDelivery();
+    while (row !== null) {
+      try {
+        await this.notifications.send({
+          to: row.recipientEmail,
+          template: row.notificationType,
+          data: row.payload,
+        });
+        await this.outbox.markDelivered(row.id);
+        delivered++;
+      } catch (error) {
+        // Not a tight loop: the next `pickPending` surfaces the row again only
+        // after the port's backoff elapses, or never once it caps to `dead` —
+        // so this pass counts the failure and advances to the next row.
+        await this.outbox.markFailed(row.id, reason(error));
+        failed++;
+      }
+      row = await this.outbox.pickPendingForDelivery();
     }
-    throw new Error('NotificationOutboxConsumer: not implemented (6.12 RED)');
+    return { delivered, failed };
   }
 }
