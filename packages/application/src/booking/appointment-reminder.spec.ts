@@ -1,7 +1,12 @@
-import { FakeNotificationOutboxRepository } from '@jc-barberia/domain';
+import {
+  FakeAppointmentReminderScheduler,
+  FakeClock,
+  FakeNotificationOutboxRepository,
+  REMINDER_LEAD_MINUTES,
+} from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
-import { AppointmentReminder } from './appointment-reminder';
+import { AppointmentReminder, ScheduleAppointmentReminder } from './appointment-reminder';
 
 // 6.10 RED — the reminder's decision contract. The handler is invoked at
 // `appointmentStart - REMINDER_LEAD_MINUTES` by a per-appointment job (6.11);
@@ -78,4 +83,43 @@ describe('AppointmentReminder', () => {
 
     expect(outbox.enqueued).toEqual([]);
   });
+});
+
+// 6.11 GREEN — "schedule dinámico por turno": each appointment owns a job
+// at `appointmentStart - REMINDER_LEAD_MINUTES`, not a fixed cron. The clock
+// that booked the appointment computes both the start and the reminder time
+// — never a wall-clock read inside the scheduler — so the test feeds a
+// frozen clock and asserts the job is enqueued at exactly start − 2h.
+describe('ScheduleAppointmentReminder', () => {
+  const clock = new FakeClock();
+  const at = (wall: string): Date => clock.localTimeToUtc('2026-09-01', wall);
+
+  it('schedules appointment.reminder at appointmentStart - 2h (120 min)', async () => {
+    const scheduler = new FakeAppointmentReminderScheduler();
+    await new ScheduleAppointmentReminder(clock, scheduler).execute({
+      appointmentId: 'apt-1',
+      appointmentStart: at('13:00'),
+    });
+
+    expect(scheduler.scheduleCalls).toEqual([
+      { appointmentId: 'apt-1', startAfter: at('11:00') },
+    ]);
+  });
+
+  it('computes the lead relative to whatever the appointment start is — not a hardcoded wall time', async () => {
+    const scheduler = new FakeAppointmentReminderScheduler();
+    await new ScheduleAppointmentReminder(clock, scheduler).execute({
+      appointmentId: 'apt-2',
+      appointmentStart: at('18:00'),
+    });
+
+    // 18:00 minus REMINDER_LEAD_MINUTES → the reminder fires at 16:00.
+    expect(scheduler.scheduleCalls[0]?.startAfter).toEqual(at('16:00'));
+  });
+});
+
+// Mirror the constant the scheduler computes against, so a future edit to
+// REMINDER_LEAD_MINUTES in the domain trips this file's expectation too.
+it('reminder lead is 120 minutes (2h)', () => {
+  expect(REMINDER_LEAD_MINUTES).toBe(120);
 });

@@ -194,8 +194,8 @@ Requisitos que cierra: mecanismo de pago para **client-booking** (Reserva web co
 - [x] 6.7 GREEN: job de barrido usando `ShopClock.businessDayBounds`.
 - [x] 6.8 RED: turnos de un día futuro no son tocados por el barrido. → *appointment-lifecycle: Turnos futuros no son afectados por el barrido*
 - [x] 6.9 GREEN: confirmar el filtro de rango en la query del barrido.
-- [ ] 6.10 RED: recordatorio se dispara 2h antes, web y telefónico, solo si hay email. → *notification-port: Eventos mínimos que deben notificarse*
-- [ ] 6.11 GREEN: job `appointment.reminder` (schedule dinámico por turno).
+- [x] 6.10 RED: recordatorio se dispara 2h antes, web y telefónico, solo si hay email. → *notification-port: Eventos mínimos que deben notificarse*
+- [x] 6.11 GREEN: job `appointment.reminder` (schedule dinámico por turno).
 - [ ] 6.12 RED: consumidor de `notification_outbox` entrega con reintentos y backoff; entrega exitosa marca la fila.
 - [ ] 6.13 GREEN: consumidor del outbox (usa `FakeNotificationPort` hasta Fase 7).
 
