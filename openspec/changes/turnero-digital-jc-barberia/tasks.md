@@ -192,7 +192,7 @@ Requisitos que cierra: mecanismo de pago para **client-booking** (Reserva web co
 - [x] 6.5 GREEN: handler `hold.expire`.
 - [x] 6.6 RED: cron `59 2 * * *` (UTC) transiciona a `sin registrar` los `reservado` del día no marcados, con y sin seña. → *appointment-lifecycle: Barrido diario de las 23:59*
 - [x] 6.7 GREEN: job de barrido usando `ShopClock.businessDayBounds`.
-- [ ] 6.8 RED: turnos de un día futuro no son tocados por el barrido. → *appointment-lifecycle: Turnos futuros no son afectados por el barrido*
+- [x] 6.8 RED: turnos de un día futuro no son tocados por el barrido. → *appointment-lifecycle: Turnos futuros no son afectados por el barrido*
 - [ ] 6.9 GREEN: confirmar el filtro de rango en la query del barrido.
 - [ ] 6.10 RED: recordatorio se dispara 2h antes, web y telefónico, solo si hay email. → *notification-port: Eventos mínimos que deben notificarse*
 - [ ] 6.11 GREEN: job `appointment.reminder` (schedule dinámico por turno).
