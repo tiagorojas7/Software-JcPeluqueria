@@ -11,11 +11,21 @@
  * seña was refunded ("Hold vencido con cobro asociado"). Phase 7 owns the
  * rendered content (template) and the outbox-backed delivery; here only the
  * intent is expressed so the port is transport-agnostic.
+ *
+ * `reminder_with_deposit` / `reminder_without_deposit` land in Phase 6 too:
+ * the `appointment.reminder` handler fires one of them 2 hours before the
+ * turno (notification-port spec, "Eventos mínimos que deben notificarse"),
+ * picking the variant by whether the turno carries a settled seña. The seña
+ * branch exists so Phase 7's template can render the "última oportunidad"
+ * deadline for the con-seña row and omit it for the sin-seña one; here the
+ * handler only records the event in `notification_outbox`.
  */
 export type NotificationTemplate =
   | 'staff_activation'
   | 'staff_password_reset'
-  | 'cancellation_with_refund';
+  | 'cancellation_with_refund'
+  | 'reminder_with_deposit'
+  | 'reminder_without_deposit';
 
 /**
  * A dispatch intention — deliberately transport-agnostic. `data` carries
