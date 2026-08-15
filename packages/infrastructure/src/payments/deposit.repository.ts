@@ -98,16 +98,19 @@ export class DrizzleDepositRepository implements DepositRepository {
     if (row.depositId === null) {
       return { depositId: null, state: { kind: 'not_applicable' } };
     }
+    // After the depositId check above, the LEFT JOIN matched a deposits row,
+    // so paymentId/amountCents are guaranteed non-null by the SQL contract.
+    // TypeScript can't see through the LEFT JOIN narrow, so assert it.
     if (row.state === 'settled') {
       return {
         depositId: row.depositId,
-        state: { kind: 'settled', paymentId: row.paymentId, amountCents: row.amountCents },
+        state: { kind: 'settled', paymentId: row.paymentId!, amountCents: row.amountCents! },
       };
     }
     if (row.state === 'refunded') {
       return {
         depositId: row.depositId,
-        state: { kind: 'refunded', refundId: '', amountCents: row.amountCents },
+        state: { kind: 'refunded', refundId: '', amountCents: row.amountCents! },
       };
     }
     // Defensive: deposits.state should only ever be 'settled' or 'refunded'
@@ -119,7 +122,7 @@ export class DrizzleDepositRepository implements DepositRepository {
     if (row.state === 'forfeited') {
       return {
         depositId: row.depositId,
-        state: { kind: 'forfeited', amountCents: row.amountCents },
+        state: { kind: 'forfeited', amountCents: row.amountCents! },
       };
     }
     throw new Error(
