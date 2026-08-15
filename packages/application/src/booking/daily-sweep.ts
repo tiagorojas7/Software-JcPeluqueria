@@ -19,10 +19,14 @@ export class DailySweepUseCase {
     private readonly sweep: AppointmentSweepRepository,
   ) {}
 
-  // RED (6.6) — behaviour lands in GREEN 6.7. This stub proves the suite runs
-  // and fails first; committing it red-first keeps the TDD order auditable.
+  // `59 2 * * *` UTC fires at the END of the shop business day (02:59 UTC
+  // == 23:59 UTC-3). The job resolves THAT day from now(), turns it into
+  // bounds and delegates the transition+count to the repository — the
+  // only place that knows about reservado rows, seña presence or range
+  // filtering, so this use case never branches on any of them.
   async execute(): Promise<number> {
-    this.clock.businessDayBounds(this.clock.calendarDateOf(this.clock.now()));
-    throw new Error('DailySweepUseCase.execute not implemented — fill in 6.7');
+    const day = this.clock.calendarDateOf(this.clock.now());
+    const bounds = this.clock.businessDayBounds(day);
+    return this.sweep.transitionUnmarked(bounds);
   }
 }

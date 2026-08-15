@@ -59,9 +59,20 @@ export class ShopClock implements Clock {
     return { start, end };
   }
 
-  // RED (6.6) — lands in GREEN 6.7. Throws so the spec fails first.
-  calendarDateOf(_instant: Date): string {
-    throw new Error('ShopClock.calendarDateOf not implemented — fill in 6.7');
+  // The inverse of `businessDayBounds`' date input: turns the instant the
+  // day-end cron fired at into the shop business day it is about to sweep.
+  calendarDateOf(instant: Date): string {
+    const offsetMinutes = parseOffsetMinutes(process.env.SHOP_UTC_OFFSET ?? DEFAULT_OFFSET);
+    // The shop's local wall-clock = UTC + offset (the offset is negative west
+    // of UTC: -180 min turns 17:30 UTC into 14:30 Argentina). Reading the UTC
+    // components of that shifted instant yields the local calendar date — the
+    // inverse of `businessDayBounds`' date input and what the day-end sweep
+    // needs to know WHICH business day it is about to close out.
+    const local = new Date(instant.getTime() + offsetMinutes * 60_000);
+    const yyyy = local.getUTCFullYear();
+    const mm = String(local.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(local.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }
 
   localTimeToUtc(calendarDate: string, wallClockTime: string): Date {
