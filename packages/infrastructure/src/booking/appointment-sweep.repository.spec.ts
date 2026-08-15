@@ -104,8 +104,10 @@ describe('daily sweep (Testcontainers)', () => {
     const count = await repo.transitionUnmarked(bounds);
 
     expect(count).toBe(2);
-    const [web, phone] = await client`select status, deposit_id from slot_occupancies
-                                        where id in (${webId}, ${phoneId}) order by created_at`;
+    // `slot_occupancies` has no created_at column, so fetch each row by its
+    // own id — the order is then intrinsic, no ORDER BY needed.
+    const [web] = await client`select status, deposit_id from slot_occupancies where id = ${webId}`;
+    const [phone] = await client`select status, deposit_id from slot_occupancies where id = ${phoneId}`;
     expect(web!.status).toBe('sin_registrado');
     expect(web!.deposit_id).toBe(depositId); // seña retained, untouched
     expect(phone!.status).toBe('sin_registrado');
