@@ -34,6 +34,12 @@ export class FakeClock implements Clock {
     return { start, end };
   }
 
+  // RED (6.6) — lands in GREEN 6.7. Throws so the daily-sweep spec fails
+  // while the method is still absent, keeping the TDD order auditable.
+  calendarDateOf(_instant: Date): string {
+    throw new Error('FakeClock.calendarDateOf not implemented — fill in 6.7');
+  }
+
   localTimeToUtc(calendarDate: string, wallClockTime: string): Date {
     const dateMatch = CALENDAR_DATE_PATTERN.exec(calendarDate);
     const timeMatch = WALL_CLOCK_TIME_PATTERN.exec(wallClockTime);

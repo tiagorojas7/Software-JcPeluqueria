@@ -59,6 +59,11 @@ export class ShopClock implements Clock {
     return { start, end };
   }
 
+  // RED (6.6) — lands in GREEN 6.7. Throws so the spec fails first.
+  calendarDateOf(_instant: Date): string {
+    throw new Error('ShopClock.calendarDateOf not implemented — fill in 6.7');
+  }
+
   localTimeToUtc(calendarDate: string, wallClockTime: string): Date {
     const offsetMinutes = parseOffsetMinutes(process.env.SHOP_UTC_OFFSET ?? DEFAULT_OFFSET);
     const { year, month, day } = parseCalendarDate(calendarDate);
