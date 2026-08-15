@@ -205,8 +205,8 @@ Requisitos que cierra: **appointment-lifecycle** (2/4 restantes: Barrido diario 
 
 - [x] 7.1 RED: el dominio invoca `NotificationPort` sin ningún detalle de transporte. → *notification-port: Puerto de notificación desacoplado del canal*
 - [x] 7.2 GREEN: interfaz `NotificationPort` en `packages/domain/notifications`.
-- [ ] 7.3 RED: `GmailNotificationAdapter` envía por SMTP con App Password, único adaptador del MVP. → *notification-port: Adaptador de Gmail como único canal implementado en el MVP*
-- [ ] 7.4 GREEN: `GmailNotificationAdapter` en `packages/infrastructure`.
+- [x] 7.3 RED: `GmailNotificationAdapter` envía por SMTP con App Password, único adaptador del MVP. → *notification-port: Adaptador de Gmail como único canal implementado en el MVP*
+- [x] 7.4 GREEN: `GmailNotificationAdapter` en `packages/infrastructure`.
 - [ ] 7.5 RED: sustituir el adaptador por uno alternativo no requiere cambios en el dominio. → *notification-port: Intercambiar el canal no toca el dominio*
 - [ ] 7.6 GREEN: confirmar vía inyección de dependencias (token de puerto, no import directo).
 - [ ] 7.7 RED: plantillas — código/enlace de acceso, cancelación con reembolso, oferta de reasignación, recordatorio. → *notification-port: Eventos mínimos que deben notificarse*
