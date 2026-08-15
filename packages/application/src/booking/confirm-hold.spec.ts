@@ -1,4 +1,10 @@
-import { FakeClock, FakeHoldRepository, type AvailableCandidate, type Hold } from '@jc-barberia/domain';
+import {
+  FakeClock,
+  FakeHoldExpireScheduler,
+  FakeHoldRepository,
+  type AvailableCandidate,
+  type Hold,
+} from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
 import { ConfirmHold } from './confirm-hold';
@@ -25,14 +31,14 @@ const reofferedSearchWindow = { start: at('2026-09-01', '00:00'), end: at('2026-
 /** `confirm()` always fails — every test here is about the re-validation-failed branch. */
 const buildUseCase = () => {
   const holds = new FakeHoldRepository(false);
-  const createHold = new CreateHold(holds, new FakeClock(-180, at('2026-09-01', '12:00')));
+  const createHold = new CreateHold(holds, new FakeClock(-180, at('2026-09-01', '12:00')), new FakeHoldExpireScheduler());
   return { holds, useCase: new ConfirmHold(holds, createHold) };
 };
 
 describe('ConfirmHold', () => {
   it('confirms when the repository transitions the hold from held to reservado', async () => {
     const holds = new FakeHoldRepository(true);
-    const createHold = new CreateHold(holds, new FakeClock(-180, at('2026-09-01', '12:00')));
+    const createHold = new CreateHold(holds, new FakeClock(-180, at('2026-09-01', '12:00')), new FakeHoldExpireScheduler());
     const useCase = new ConfirmHold(holds, createHold);
 
     const result = await useCase.execute({

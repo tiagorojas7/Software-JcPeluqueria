@@ -185,19 +185,19 @@ Requisitos que cierra: mecanismo de pago para **client-booking** (Reserva web co
 
 ## Phase 6: Procesos de fondo (~300 líneas) — PR 8 (base: PR 7) — depende de 5
 
-- [ ] 6.1 Instalar pg-boss; entrypoint de worker en `apps/worker`.
-- [ ] 6.2 RED: `hold.expire` se encola con `startAfter` 15 min en la misma transacción que crea el hold.
-- [ ] 6.3 GREEN: implementar el encolado en `CreateHold` (ajusta 2.8).
-- [ ] 6.4 RED: `hold.expire` dispara reembolso y notificación cuando corresponde, idempotente ante reintento.
-- [ ] 6.5 GREEN: handler `hold.expire`.
-- [ ] 6.6 RED: cron `59 2 * * *` (UTC) transiciona a `sin registrar` los `reservado` del día no marcados, con y sin seña. → *appointment-lifecycle: Barrido diario de las 23:59*
-- [ ] 6.7 GREEN: job de barrido usando `ShopClock.businessDayBounds`.
-- [ ] 6.8 RED: turnos de un día futuro no son tocados por el barrido. → *appointment-lifecycle: Turnos futuros no son afectados por el barrido*
-- [ ] 6.9 GREEN: confirmar el filtro de rango en la query del barrido.
-- [ ] 6.10 RED: recordatorio se dispara 2h antes, web y telefónico, solo si hay email. → *notification-port: Eventos mínimos que deben notificarse*
-- [ ] 6.11 GREEN: job `appointment.reminder` (schedule dinámico por turno).
-- [ ] 6.12 RED: consumidor de `notification_outbox` entrega con reintentos y backoff; entrega exitosa marca la fila.
-- [ ] 6.13 GREEN: consumidor del outbox (usa `FakeNotificationPort` hasta Fase 7).
+- [x] 6.1 Instalar pg-boss; entrypoint de worker en `apps/worker`.
+- [x] 6.2 RED: `hold.expire` se encola con `startAfter` 15 min en la misma transacción que crea el hold.
+- [x] 6.3 GREEN: implementar el encolado en `CreateHold` (ajusta 2.8).
+- [x] 6.4 RED: `hold.expire` dispara reembolso y notificación cuando corresponde, idempotente ante reintento.
+- [x] 6.5 GREEN: handler `hold.expire`.
+- [x] 6.6 RED: cron `59 2 * * *` (UTC) transiciona a `sin registrar` los `reservado` del día no marcados, con y sin seña. → *appointment-lifecycle: Barrido diario de las 23:59*
+- [x] 6.7 GREEN: job de barrido usando `ShopClock.businessDayBounds`.
+- [x] 6.8 RED: turnos de un día futuro no son tocados por el barrido. → *appointment-lifecycle: Turnos futuros no son afectados por el barrido*
+- [x] 6.9 GREEN: confirmar el filtro de rango en la query del barrido.
+- [x] 6.10 RED: recordatorio se dispara 2h antes, web y telefónico, solo si hay email. → *notification-port: Eventos mínimos que deben notificarse*
+- [x] 6.11 GREEN: job `appointment.reminder` (schedule dinámico por turno).
+- [x] 6.12 RED: consumidor de `notification_outbox` entrega con reintentos y backoff; entrega exitosa marca la fila.
+- [x] 6.13 GREEN: consumidor del outbox (usa `FakeNotificationPort` hasta Fase 7).
 
 Requisitos que cierra: **appointment-lifecycle** (2/4 restantes: Barrido diario de las 23:59 · Turnos futuros no son afectados). Dispara el recordatorio de **notification-port** (contenido en Fase 7).
 

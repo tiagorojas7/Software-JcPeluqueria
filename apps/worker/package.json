@@ -1,7 +1,1 @@
-{
-  "name": "@jc-barberia/worker",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "description": "pg-boss worker + cron entrypoint. Implementation starts Phase 6."
-}
+{"name": "@jc-barberia/worker", "private": true, "version": "0.0.0", "type": "module", "description": "pg-boss worker + cron entrypoint. Phase 6 wires hold.expire, the 23:59 sweep, reminders and the outbox consumer.", "scripts": {"test": "vitest run", "typecheck": "tsc --noEmit"}, "dependencies": {"@jc-barberia/application": "workspace:*", "@jc-barberia/domain": "workspace:*", "@jc-barberia/infrastructure": "workspace:*", "pg-boss": "^12.27.0"}, "devDependencies": {"unplugin-swc": "^1.5.1", "vitest": "^3.0.4"}}

@@ -34,6 +34,21 @@ export class FakeClock implements Clock {
     return { start, end };
   }
 
+  // Inverse of `businessDayBounds`' date input: the shop calendar date a
+  // given instant falls on, so the day-end sweep can resolve its target day
+  // from `now()` without any caller doing offset math itself.
+  calendarDateOf(instant: Date): string {
+    // The shop's local wall-clock = UTC + offset (the offset is negative west
+    // of UTC, so -180 min turns 17:30 UTC into 14:30 Argentina). Reading the
+    // UTC components of that shifted instant yields the local calendar date —
+    // the inverse of the `localTimeToUtc` date half, no IANA tzdb involved.
+    const local = new Date(instant.getTime() + this.offsetMinutes * 60_000);
+    const yyyy = local.getUTCFullYear();
+    const mm = String(local.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(local.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   localTimeToUtc(calendarDate: string, wallClockTime: string): Date {
     const dateMatch = CALENDAR_DATE_PATTERN.exec(calendarDate);
     const timeMatch = WALL_CLOCK_TIME_PATTERN.exec(wallClockTime);

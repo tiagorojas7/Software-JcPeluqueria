@@ -27,6 +27,16 @@ export interface Clock {
   businessDayBounds(calendarDate: string): BusinessDayBounds;
 
   /**
+   * The shop calendar date (`YYYY-MM-DD`) that an instant falls on,
+   * interpreted in the shop's fixed offset — never the server's local time
+   * zone. This is the inverse of `localTimeToUtc`'s date half and the way a
+   * cron that fires at a fixed wall-clock instant ("end of the business day")
+   * learns WHICH business day it is about to sweep, without any module outside
+   * `ShopClock` doing offset math.
+   */
+  calendarDateOf(instant: Date): string;
+
+  /**
    * Converts a wall-clock time on a given calendar date to the concrete UTC
    * instant it represents in the shop's fixed offset. This is how
    * availability (shop hours, barber schedules) — stored as local wall-clock

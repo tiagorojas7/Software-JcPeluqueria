@@ -91,6 +91,52 @@ describe('ShopClock.localTimeToUtc', () => {
 // instant arithmetic — no offset/timezone involved, unlike the two suites
 // above. The starting instants still go through `localTimeToUtc` rather than
 // `new Date(...)`, which only `ShopClock`/`FakeClock` may call directly.
+// The day-end sweep (Phase 6 `59 2 * * *` cron) fires at a fixed wall-clock
+// instant and must learn WHICH business day it is about to sweep from that
+// instant — the inverse of `businessDayBounds`' date input. A real `Date` is
+// fed in on purpose (the same `Date` `now()` returned), never one built here.
+describe('ShopClock.calendarDateOf', () => {
+  const originalOffset = process.env.SHOP_UTC_OFFSET;
+
+  beforeEach(() => {
+    process.env.SHOP_UTC_OFFSET = '-03:00';
+  });
+
+  afterEach(() => {
+    if (originalOffset === undefined) {
+      delete process.env.SHOP_UTC_OFFSET;
+    } else {
+      process.env.SHOP_UTC_OFFSET = originalOffset;
+    }
+  });
+
+  it('returns the shop calendar date for an instant in the middle of a business day', () => {
+    const clock = new ShopClock();
+    // 14:30 Argentina on 2026-08-15 === 17:30 UTC.
+    const instant = clock.localTimeToUtc('2026-08-15', '14:30');
+
+    expect(clock.calendarDateOf(instant)).toBe('2026-08-15');
+  });
+
+  it('resolves the swept day when the cron fires at 23:55 local (02:55 UTC next UTC day)', () => {
+    const clock = new ShopClock();
+    // 23:55 Argentina on 2026-08-15 === 02:55 UTC on 2026-08-16. The UTC date
+    // has rolled but the business day is still 2026-08-15 — that is the whole
+    // reason the sweep needs this method instead of trusting the UTC date.
+    const instant = clock.localTimeToUtc('2026-08-15', '23:55');
+
+    expect(clock.calendarDateOf(instant)).toBe('2026-08-15');
+  });
+
+  it('rolls into the next business day across local midnight', () => {
+    const clock = new ShopClock();
+    // 00:01 Argentina on 2026-08-16 === 03:01 UTC — now inside the NEXT day.
+    const instant = clock.localTimeToUtc('2026-08-16', '00:01');
+
+    expect(clock.calendarDateOf(instant)).toBe('2026-08-16');
+  });
+});
+
 describe('ShopClock.addMinutes', () => {
   const originalOffset = process.env.SHOP_UTC_OFFSET;
 
