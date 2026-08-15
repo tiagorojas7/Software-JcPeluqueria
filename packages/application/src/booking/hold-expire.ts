@@ -29,10 +29,53 @@ export class ExpireHold {
     private readonly notifications: NotificationPort,
   ) {}
 
-  // RED (6.4) — behaviour lands in GREEN 6.5. This stub proves the suite runs
-  // and fails first; committing it green-red keeps the TDD order auditable.
   async execute(holdId: string): Promise<ExpireHoldOutcome> {
-    await this.views.loadForExpire(holdId);
-    throw new Error('ExpireHold.execute not implemented — fill in 6.5');
+    const view = await this.views.loadForExpire(holdId);
+    // Idempotent retry gate — the row already left `held` (confirm / rejected
+    // payment / lazy liberation / a prior run resolved it): never act twice.
+    if (!view || !view.isHeld) return 'no-op';
+    // "Regla que elimina el peor caso" (design 150): a payment in flight is
+    // never touched by the timer — it waits for ProcessPaymentUseCase's
+    // terminal state.
+    if (view.paymentPending) return 'no-op';
+    // A plain (non-absence-offer) hold has no origin seña to refund and no
+    // cancellation-with-refund to send — the lazy read path frees its slot;
+    // Phase 12 owns the no-seña origin sub-case and RejectOfferUseCase.
+    const origin = view.originOccupancyId;
+    if (!origin) return 'no-op';
+
+    const result = await this.refund.execute({ appointmentId: origin, reason: 'hold-expired' });
+    switch (result.outcome) {
+      case 'refunded': {
+        // The notification fires only when money moved AND the client has an
+        // email registrado (notification-port spec: no email → no dispatch).
+        if (view.originClientEmail) {
+          await this.notifications.send({
+            to: view.originClientEmail,
+            template: 'cancellation_with_refund',
+            data: { refundId: result.refundId, amountCents: String(result.amountCents) },
+          });
+          return 'refunded-and-notified';
+        }
+        return 'refunded';
+      }
+      // 428 — business state, NOT lost and NOT a tight loop: the pg-boss wiring
+      // (next slice) requeues this with backoff; the notification MUST NOT fire
+      // because the refund did not move.
+      case 'pending-insufficient-funds':
+        return 'retry';
+      // Idempotent money + notify gate 2 — a prior run already flipped the
+      // deposit to `refunded`: no second gateway call, no second notification.
+      case 'already-refunded':
+        return 'no-op';
+      // The origin appointment had no seña (phone / walk-in) — nothing to
+      // refund and no cancellation-with-refund to dispatch.
+      case 'no-deposit':
+        return 'no-op';
+      default: {
+        const _exhaustive: never = result;
+        throw new Error(`ExpireHold: unhandled RefundOutcome ${JSON.stringify(_exhaustive)}`);
+      }
+    }
   }
 }

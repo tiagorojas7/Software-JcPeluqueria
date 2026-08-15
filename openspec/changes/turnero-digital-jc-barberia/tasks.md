@@ -189,7 +189,7 @@ Requisitos que cierra: mecanismo de pago para **client-booking** (Reserva web co
 - [x] 6.2 RED: `hold.expire` se encola con `startAfter` 15 min en la misma transacción que crea el hold.
 - [x] 6.3 GREEN: implementar el encolado en `CreateHold` (ajusta 2.8).
 - [x] 6.4 RED: `hold.expire` dispara reembolso y notificación cuando corresponde, idempotente ante reintento.
-- [ ] 6.5 GREEN: handler `hold.expire`.
+- [x] 6.5 GREEN: handler `hold.expire`.
 - [ ] 6.6 RED: cron `59 2 * * *` (UTC) transiciona a `sin registrar` los `reservado` del día no marcados, con y sin seña. → *appointment-lifecycle: Barrido diario de las 23:59*
 - [ ] 6.7 GREEN: job de barrido usando `ShopClock.businessDayBounds`.
 - [ ] 6.8 RED: turnos de un día futuro no son tocados por el barrido. → *appointment-lifecycle: Turnos futuros no son afectados por el barrido*
