@@ -1,0 +1,39 @@
+import { describe, expect, it } from 'vitest';
+
+import { createTemplateRegistry } from './index';
+
+// 7.7 RED — "plantillas — codigo/enlace de acceso, cancelacion con reembolso,
+// oferta de reasignacion, recordatorio." The minimal set the spec enumerates
+// (notification-port: "Eventos mínimos que deben notificarse"). The reasignación
+// offer has NO event type yet (a `NotificationTemplate` member would have to be
+// added — Phase 12 owns task 12.5, the outbox writer for it); Fase 7 only
+// renders the EXISTING event types per the brief. Every `NotificationTemplate`
+// MUST have a renderer (exhaustive registry) and each renders non-empty
+// `{ subject, body }` from its outbox payload.
+
+describe('createTemplateRegistry (7.7) — una plantilla por evento existente', () => {
+  const registry = createTemplateRegistry();
+
+  it('staff_activation / staff_password_reset: codigo o enlace de acceso con el token', () => {
+    for (const template of ['staff_activation', 'staff_password_reset'] as const) {
+      const rendered = registry[template]({ token: 'abc123', expiresAt: '2026-09-01T13:00:00.000Z' });
+      expect(rendered.subject.length).toBeGreaterThan(0);
+      expect(rendered.body).toContain('abc123');
+    }
+  });
+
+  it('cancellation_with_refund: confirma el reembolso y menciona la seña', () => {
+    const rendered = registry['cancellation_with_refund']({ refundId: 'rf-1', amountCents: '250000' });
+    expect(rendered.subject.length).toBeGreaterThan(0);
+    // The amount is rendered in pesos (cents -> dollars), never raw cents.
+    expect(rendered.body).toContain('2.500'); // 250000 cents = 2500.00
+  });
+
+  it('reminder_with_deposit / reminder_without_deposit: recordatorio de turno', () => {
+    for (const template of ['reminder_with_deposit', 'reminder_without_deposit'] as const) {
+      const rendered = registry[template]({ appointmentId: 'apt-1', appointmentTime: '2026-09-01T13:00:00.000Z' });
+      expect(rendered.subject.length).toBeGreaterThan(0);
+      expect(rendered.body.length).toBeGreaterThan(0);
+    }
+  });
+});
