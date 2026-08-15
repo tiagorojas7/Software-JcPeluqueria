@@ -9,3 +9,12 @@ export { DrizzlePaymentEventRepository } from './payments/payment-event.reposito
 export { MercadoPagoApiError, MercadoPagoPaymentAdapter } from './payments/mercadopago-payment.adapter';
 export { verifyMercadoPagoSignature } from './payments/mercadopago-signature';
 export type { WebhookSignatureInput } from './payments/mercadopago-signature';
+export { ConsoleNotificationAdapter } from './notifications/console-notification.adapter';
+export { GmailNotificationAdapter } from './notifications/gmail-notification.adapter';
+export type { GmailAdapterConfig, GmailAdapterDeps } from './notifications/gmail-notification.adapter';
+export { createNotificationPort } from './notifications/notification-adapter';
+export type {
+  NotificationChannel,
+  NotificationChannelConfig,
+  NotificationChannelDeps,
+} from './notifications/notification-adapter';
