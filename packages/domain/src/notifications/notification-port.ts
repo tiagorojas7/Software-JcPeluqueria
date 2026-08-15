@@ -1,12 +1,21 @@
 /**
  * What kind of message is being sent — determines which template the real
- * adapter renders (Phase 7). `staff_password_reset` is the only one this
- * slice exercises; `staff_activation` is declared now for the same reason
+ * adapter renders (Phase 7). `staff_password_reset` is the only one its
+ * slice exercises; `staff_activation` is declared for the same reason
  * `AuthChallengePurpose` declares its full set upfront (see
  * `packages/domain/src/identity/auth-challenge.ts`) — a later phase wires
  * activation-link delivery through the same port without changing its shape.
+ *
+ * `cancellation_with_refund` lands in Phase 6: the `hold.expire` handler
+ * (`ExpireHold`) fires it when an absence-offer hold lapses and the origin
+ * seña was refunded ("Hold vencido con cobro asociado"). Phase 7 owns the
+ * rendered content (template) and the outbox-backed delivery; here only the
+ * intent is expressed so the port is transport-agnostic.
  */
-export type NotificationTemplate = 'staff_activation' | 'staff_password_reset';
+export type NotificationTemplate =
+  | 'staff_activation'
+  | 'staff_password_reset'
+  | 'cancellation_with_refund';
 
 /**
  * A dispatch intention — deliberately transport-agnostic. `data` carries

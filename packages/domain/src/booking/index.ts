@@ -1,6 +1,7 @@
 export type { Hold, HoldRepository, OccupancyChannel } from './hold';
 export { HOLD_DURATION_MINUTES, SlotUnavailableError } from './hold';
 export type { HoldExpireScheduler } from './hold-expire-scheduler';
+export type { ExpiredHoldView, HoldExpireViewRepository } from './expired-hold-view';
 export { findNearestAvailable } from './nearest-available';
 export type {
   AvailableCandidate,
@@ -11,3 +12,4 @@ export { FakeHoldRepository } from './testing/fake-hold-repository';
 export type { RecordedCreateCall } from './testing/fake-hold-repository';
 export { FakeHoldExpireScheduler } from './testing/fake-hold-expire-scheduler';
 export type { RecordedScheduleExpireCall } from './testing/fake-hold-expire-scheduler';
+export { FakeHoldExpireViewRepository } from './testing/fake-hold-expire-view-repository';
