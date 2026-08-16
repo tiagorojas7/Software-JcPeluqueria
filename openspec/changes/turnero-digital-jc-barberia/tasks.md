@@ -211,9 +211,9 @@ Requisitos que cierra: **appointment-lifecycle** (2/4 restantes: Barrido diario 
 - [x] 7.6 GREEN: confirmar vía inyección de dependencias (token de puerto, no import directo).
 - [x] 7.7 RED: plantillas — código/enlace de acceso, cancelación con reembolso, oferta de reasignación, recordatorio. → *notification-port: Eventos mínimos que deben notificarse*
 - [x] 7.8 GREEN: implementar las cuatro plantillas, conectadas a los outbox-writers de 3a/5/6/9/10/12.
-- [ ] 7.9 RED: recordatorio con seña incluye "última oportunidad" y la hora exacta de corte (hora del turno − 1h). → *notification-port: El recordatorio informa la última oportunidad de cancelar*
-- [ ] 7.10 RED: recordatorio sin seña no menciona ninguna seña. → *notification-port: mismo requirement, rama sin seña*
-- [ ] 7.11 GREEN: plantilla condicional de recordatorio según `DepositState`.
+- [x] 7.9 RED: recordatorio con seña incluye "última oportunidad" y la hora exacta de corte (hora del turno − 1h). → *notification-port: El recordatorio informa la última oportunidad de cancelar*
+- [x] 7.10 RED: recordatorio sin seña no menciona ninguna seña. → *notification-port: mismo requirement, rama sin seña*
+- [x] 7.11 GREEN: plantilla condicional de recordatorio según `DepositState`.
 
 Requisitos que cierra: **notification-port** (5/5: Puerto desacoplado · Adaptador de Gmail · Intercambiar el canal no toca el dominio · Eventos mínimos · El recordatorio informa la última oportunidad).
 

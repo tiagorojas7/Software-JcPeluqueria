@@ -74,4 +74,18 @@ export class FakeClock implements Clock {
   addMinutes(date: Date, minutes: number): Date {
     return new Date(date.getTime() + minutes * 60_000);
   }
+
+  parseInstant(iso: string): Date {
+    return new Date(iso);
+  }
+
+  wallClockTimeOf(instant: Date): string {
+    // Same shift `calendarDateOf` uses: local = UTC + offsetMinutes (−03:00
+    // turns 15:00 UTC into 12:00). Reading the UTC components of the shifted
+    // instant yields the shop's wall-clock parts, never the host's.
+    const local = new Date(instant.getTime() + this.offsetMinutes * 60_000);
+    const hh = String(local.getUTCHours()).padStart(2, '0');
+    const mm = String(local.getUTCMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
 }

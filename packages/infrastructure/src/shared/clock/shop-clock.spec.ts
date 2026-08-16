@@ -167,3 +167,34 @@ describe('ShopClock.addMinutes', () => {
     expect(clock.addMinutes(start, -50).toISOString()).toBe('2026-08-11T12:00:00.000Z');
   });
 });
+
+describe('ShopClock.parseInstant + wallClockTimeOf (7.11)', () => {
+  const originalOffset = process.env.SHOP_UTC_OFFSET;
+
+  beforeEach(() => {
+    process.env.SHOP_UTC_OFFSET = '-03:00';
+  });
+  afterEach(() => {
+    if (originalOffset === undefined) delete process.env.SHOP_UTC_OFFSET;
+    else process.env.SHOP_UTC_OFFSET = originalOffset;
+  });
+
+  it('parseInstant recovers the same instant an ISO string held (round-trips through toISOString)', () => {
+    const clock = new ShopClock();
+    const iso = '2026-09-01T16:00:00.000Z';
+
+    expect(clock.parseInstant(iso).toISOString()).toBe(iso);
+  });
+
+  it('wallClockTimeOf renders the SHOPS wall-clock (UTC + offset), never UTC', () => {
+    const clock = new ShopClock();
+    // 2026-09-01T16:00:00.000Z is 13:00 shop-local (UTC-3). Its turno − 1h
+    // cutoff (15:00Z) is 12:00 shop-local — exactly the "última oportunidad"
+    // reminder renders.
+    const appointmentUtc = clock.parseInstant('2026-09-01T16:00:00.000Z');
+    const cutoffUtc = clock.addMinutes(appointmentUtc, -60);
+
+    expect(clock.wallClockTimeOf(appointmentUtc)).toBe('13:00');
+    expect(clock.wallClockTimeOf(cutoffUtc)).toBe('12:00');
+  });
+});

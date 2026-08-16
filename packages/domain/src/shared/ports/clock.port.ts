@@ -49,8 +49,26 @@ export interface Clock {
   /**
    * Adds (or, with a negative value, subtracts) whole minutes to an instant.
    * No offset/timezone math involved — plain instant arithmetic. This is how
-   * a hold's expiry ("now + 15 minutes") is computed without any module
-   * outside `ShopClock` constructing a `Date` itself.
+   * a hold's expiry ("now + 15 minutes") is computed without any module outside
+   * `ShopClock` constructing a `Date` itself.
    */
   addMinutes(date: Date, minutes: number): Date;
+
+  /**
+   * Parses an ISO-8601 instant string (e.g. an outbox payload's
+   * `appointmentTime`) to a `Date`. The ONLY way a module that is not
+   * `ShopClock`/`FakeClock` recovers a `Date` from a serialized instant — the
+   * shared lint rule forbids `new Date(iso)` outside those two, so an outbox
+   * consumer or a template must round-trip through here, never parse itself.
+   */
+  parseInstant(iso: string): Date;
+
+  /**
+   * The shop-local wall-clock time (`HH:mm`) a UTC instant falls on — the
+   * inverse of `localTimeToUtc`'s time half. Used by the reminder template to
+   * render the "última oportunidad" cancel cutoff (turno − 1h) in the shop's
+   * own clock, never in UTC: the customer reads shop time, not a timezone
+   * offset. Mutually consistent with `calendarDateOf` (the date half).
+   */
+  wallClockTimeOf(instant: Date): string;
 }

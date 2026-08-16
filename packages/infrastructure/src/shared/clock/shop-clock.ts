@@ -88,4 +88,24 @@ export class ShopClock implements Clock {
   addMinutes(date: Date, minutes: number): Date {
     return new Date(date.getTime() + minutes * 60_000);
   }
+
+  parseInstant(iso: string): Date {
+    return new Date(iso);
+  }
+
+  wallClockTimeOf(instant: Date): string {
+    const local = shopLocalOf(instant);
+    const hh = String(local.getUTCHours()).padStart(2, '0');
+    const mm = String(local.getUTCMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+}
+
+/** The shop-local `Date` a UTC instant falls on — same shift `calendarDateOf`
+ *  uses: `local = UTC + offsetMinutes` (−03:00 turns 15:00 UTC into 12:00).
+ *  Reading the UTC components of that shifted instant yields shop-local wall-
+ *  clock parts, so a rendered time is the shop's own clock, never the host's. */
+function shopLocalOf(instant: Date): Date {
+  const offsetMinutes = parseOffsetMinutes(process.env.SHOP_UTC_OFFSET ?? DEFAULT_OFFSET);
+  return new Date(instant.getTime() + offsetMinutes * 60_000);
 }

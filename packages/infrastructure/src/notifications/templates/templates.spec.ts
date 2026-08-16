@@ -1,3 +1,4 @@
+import { FakeClock } from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
 import { createTemplateRegistry } from './index';
@@ -12,7 +13,7 @@ import { createTemplateRegistry } from './index';
 // `{ subject, body }` from its outbox payload.
 
 describe('createTemplateRegistry (7.7) — una plantilla por evento existente', () => {
-  const registry = createTemplateRegistry();
+  const registry = createTemplateRegistry(new FakeClock());
 
   it('staff_activation / staff_password_reset: codigo o enlace de acceso con el token', () => {
     for (const template of ['staff_activation', 'staff_password_reset'] as const) {
