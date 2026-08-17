@@ -240,7 +240,7 @@ Requisitos que cierra: **notification-port** (5/5: Puerto desacoplado · Adaptad
 - [x] 9.6 GREEN: formulario de cuenta al final del flujo con validación zod compartida (`packages/contracts`).
 - [x] 9.7 RED: confirmar la reserva crea la cuenta sin contraseña, sin solicitar/almacenar contraseña. → *client-booking: Cuenta sin contraseña creada al final del flujo*
 - [x] 9.8 GREEN: `RegisterClientUseCase` (usa 3a.8).
-- [ ] 9.9 RED: código de acceso vencido es rechazado, exige nueva solicitud. → *client-booking: Código de acceso vencido*
+- [x] 9.9 RED: código de acceso vencido es rechazado, exige nueva solicitud. → *client-booking: Código de acceso vencido*
 - [ ] 9.10 GREEN: flujo de reintento en el frontend.
 - [ ] 9.11 RED: checkout cobra el 50% y el turno pasa a `reservado` solo si el cobro fue exitoso. → *client-booking: Reserva web con seña obligatoria del 50%*
 - [ ] 9.12 GREEN: conectar el frontend a `CheckoutUseCase` (5.6) y a la confirmación por webhook.
