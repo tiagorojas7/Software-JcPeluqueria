@@ -1,8 +1,10 @@
 import { Module, type OnApplicationShutdown } from '@nestjs/common';
-import { CreateHold, GetPublicAvailabilityUseCase } from '@jc-barberia/application';
+import { CreateHold, GetPublicAvailabilityUseCase, RegisterClientUseCase } from '@jc-barberia/application';
 import {
   db,
   DrizzleBarberRepository,
+  DrizzleClientAccountRepository,
+  DrizzleClientRepository,
   DrizzleFreeRangesQuery,
   DrizzleHoldRepository,
   DrizzleScheduleRepository,
@@ -15,6 +17,8 @@ import {
 import type {
   BarberRepository,
   Clock,
+  ClientAccountRepository,
+  ClientRepository,
   FreeRangesQuery,
   HoldExpireScheduler,
   HoldRepository,
@@ -27,6 +31,8 @@ import { AvailabilityController } from './availability.controller';
 import { HoldController } from './hold.controller';
 import {
   BARBER_REPOSITORY,
+  CLIENT_ACCOUNT_REPOSITORY,
+  CLIENT_REPOSITORY,
   CLOCK,
   FREE_RANGES_QUERY,
   HOLD_EXPIRE_SCHEDULER,

@@ -21,3 +21,5 @@ export type { FakeUser } from './testing/fake-user-credentials-repository';
 export type { Session, SessionRepository, SessionSubjectKind } from './session';
 export { SESSION_TTL_MINUTES_BY_SUBJECT } from './session';
 export { FakeSessionRepository } from './testing/fake-session-repository';
+export type { ClientAccount, ClientAccountRepository, CreateClientAccountInput } from './client-account';
+export { FakeClientAccountRepository } from './testing/fake-client-account-repository';

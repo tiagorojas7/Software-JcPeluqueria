@@ -42,6 +42,22 @@ export interface HoldRepository {
    */
   create(hold: Hold, searchWindow: TimeWindow): Promise<void>;
 
+  /** The hold as it stands right now, or `null` if it does not exist. Read
+   *  path only — no caller may derive a write decision from a stale read
+   *  the way `create`/`confirm`/`beginCheckout`/`attachClient` never do. */
+  findById(holdId: string): Promise<Hold | null>;
+
+  /**
+   * Attaches the client identified at the end of the web flow to an
+   * already-created hold (client-booking: "Cuenta sin contraseña creada al
+   * final del flujo" — `clientId` is `null` at creation, task 2.8, and only
+   * becomes known here). Re-validates the hold is still `held` in the same
+   * statement, the same re-validate-then-write shape as `confirm`/
+   * `beginCheckout`: `false` means the hold already expired or was
+   * consumed by something else, never a second write.
+   */
+  attachClient(holdId: string, clientId: string): Promise<boolean>;
+
   /**
    * Atomically re-validates and confirms — a status transition on the same
    * row, never a second `create`/insert. Returns `false` when nothing was

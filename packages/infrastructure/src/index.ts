@@ -32,5 +32,6 @@ export { DrizzleClientRepository } from './clients/client.repository';
 export { DrizzleUserCredentialsRepository } from './identity/user-credentials.repository';
 export { DrizzleAuthChallengeRepository } from './identity/auth-challenge.repository';
 export { DrizzleSessionRepository } from './identity/session.repository';
+export { DrizzleClientAccountRepository } from './identity/client-account.repository';
 export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
 export { DrizzleAbsenceRecordRepository } from './appointments/absence-record.repository';
