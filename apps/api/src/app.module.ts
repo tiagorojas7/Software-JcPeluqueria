@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AbsenceReassignmentModule } from './absence-reassignment/absence-reassignment.module';
 import { AccessControlModule } from './access-control/access-control.module';
 import { AgendaModule } from './agenda/agenda.module';
 import { AppointmentsModule } from './appointments/appointments.module';
@@ -16,7 +17,8 @@ import { BookingModule } from './booking/booking.module';
  * booking) is the second; `BookingModule` (Phase 9, the public web booking
  * flow) is the third — its controllers are `@Public()` by requirement
  * (client-booking: "Exploración sin cuenta"), not by omission; `BarbersModule`
- * (Phase 11, the barber's own profile) is the fourth.
+ * (Phase 11, the barber's own profile) is the fourth; `AbsenceReassignmentModule`
+ * (Phase 12, barber-absence-reassignment's detection entry point) is the fifth.
  *
  * Deliberately no `main.ts` yet: this app is still only a module graph, not
  * a listening HTTP server — that starts whichever later phase needs one
@@ -29,6 +31,7 @@ import { BookingModule } from './booking/booking.module';
     AppointmentsModule,
     BookingModule,
     BarbersModule,
+    AbsenceReassignmentModule,
   ],
 })
 export class AppModule {}
