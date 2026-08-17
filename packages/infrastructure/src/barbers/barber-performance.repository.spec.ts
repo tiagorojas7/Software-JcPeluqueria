@@ -58,19 +58,27 @@ describe('DrizzleBarberPerformanceRepository (Testcontainers)', () => {
     barberBId = barberB.id;
     serviceId = service.id;
 
+    // Channels are `telefonico` here, deliberately. Phase 5's
+    // `web_channel_requires_deposit_once_settled` makes a `web` row past the
+    // hold stage without a `deposit_id` unrepresentable, so seeding one would
+    // be seeding a state the running system can never produce. Own stats count
+    // `realizado` regardless of channel — the theoretical revenue is by list
+    // price, not by what was collected — so the channel is not this suite's
+    // subject and the deposit-free one keeps the fixture honest.
+    //
     // Barber A: two realizado in August (counts), one reservado in August
     // (must not count), one realizado in July (out of range, must not count).
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
-                 values (${barberAId}, ${serviceId}, 'web', 'realizado', ${range('2026-08-05', '09:00', '09:30')}::tstzrange)`;
+                 values (${barberAId}, ${serviceId}, 'telefonico', 'realizado', ${range('2026-08-05', '09:00', '09:30')}::tstzrange)`;
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
-                 values (${barberAId}, ${serviceId}, 'web', 'realizado', ${range('2026-08-10', '09:00', '09:30')}::tstzrange)`;
+                 values (${barberAId}, ${serviceId}, 'telefonico', 'realizado', ${range('2026-08-10', '09:00', '09:30')}::tstzrange)`;
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
-                 values (${barberAId}, ${serviceId}, 'web', 'reservado', ${range('2026-08-12', '09:00', '09:30')}::tstzrange)`;
+                 values (${barberAId}, ${serviceId}, 'telefonico', 'reservado', ${range('2026-08-12', '09:00', '09:30')}::tstzrange)`;
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
-                 values (${barberAId}, ${serviceId}, 'web', 'realizado', ${range('2026-07-20', '09:00', '09:30')}::tstzrange)`;
+                 values (${barberAId}, ${serviceId}, 'telefonico', 'realizado', ${range('2026-07-20', '09:00', '09:30')}::tstzrange)`;
     // Barber B: one realizado in August — must never appear in barber A's result.
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
-                 values (${barberBId}, ${serviceId}, 'web', 'realizado', ${range('2026-08-06', '09:00', '09:30')}::tstzrange)`;
+                 values (${barberBId}, ${serviceId}, 'telefonico', 'realizado', ${range('2026-08-06', '09:00', '09:30')}::tstzrange)`;
   }, 300_000);
 
   afterAll(async () => {
