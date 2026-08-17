@@ -4,10 +4,12 @@ import {
   createService,
   createShopHours,
   FakeBarberRepository,
+  FakeClientRepository,
   FakeClock,
   FakeFreeRangesQuery,
   FakeHoldExpireScheduler,
   FakeHoldRepository,
+  FakeNotificationOutboxRepository,
   FakeScheduleRepository,
   FakeServiceRepository,
   type Appointment,
@@ -41,7 +43,9 @@ async function buildScenario() {
   const services = new FakeServiceRepository();
   const schedules = new FakeScheduleRepository();
   const freeRanges = new FakeFreeRangesQuery();
+  const clients = new FakeClientRepository();
   const holds = new FakeHoldRepository();
+  const outbox = new FakeNotificationOutboxRepository();
   const createHold = new CreateHold(holds, clock, new FakeHoldExpireScheduler());
 
   await barbers.create(createBarber({ id: 'barber-absent', name: 'Ausente', active: true }));
@@ -54,10 +58,20 @@ async function buildScenario() {
   await schedules.createBarberSchedule(
     createBarberSchedule({ barberId: 'barber-other', dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
   );
+  clients.seed({ id: 'client-1', name: 'Marcos', phone: '3511234567', email: 'marcos@example.com', age: null });
 
-  const useCase = new GenerateAbsenceReassignmentOffers(barbers, services, schedules, freeRanges, createHold, clock);
+  const useCase = new GenerateAbsenceReassignmentOffers(
+    barbers,
+    services,
+    schedules,
+    freeRanges,
+    clients,
+    createHold,
+    outbox,
+    clock,
+  );
 
-  return { useCase, barbers, services, schedules, freeRanges, holds };
+  return { useCase, barbers, services, schedules, freeRanges, clients, holds, outbox };
 }
 
 // 12.3 RED — derived from specs/barber-absence-reassignment/spec.md:
@@ -113,5 +127,66 @@ describe('GenerateAbsenceReassignmentOffers', () => {
     const results = await useCase.execute([affected]);
 
     expect(results).toEqual([{ originalAppointmentId: affected.id, outcome: 'no-availability', hold: null }]);
+  });
+});
+
+// 12.5 RED — derived from specs/barber-absence-reassignment/spec.md,
+// "Requirement: Ofertas del mismo día, de cualquier barbero": "... y MUST
+// notificar al cliente por el canal de notificación configurado." Not
+// covered by the named Scenario's THEN clauses (those only assert on which
+// barbers get searched and that a hold exists), but the Requirement prose
+// itself is a MUST this suite pins independently, the same way 6.10 pins
+// notification-port's reminder MUST off appointment-lifecycle's own Scenario.
+describe('GenerateAbsenceReassignmentOffers — notifies the client (12.5)', () => {
+  it('enqueues an absence_reassignment_offer notification to the outbox once a hold is claimed', async () => {
+    const { useCase, freeRanges, outbox } = await buildScenario();
+    const affected = anAppointment();
+    freeRanges.seed('barber-absent', []);
+    freeRanges.seed('barber-other', [{ start: at('11:00'), end: at('11:30') }]);
+
+    await useCase.execute([affected]);
+
+    expect(outbox.enqueued).toEqual([
+      {
+        notificationType: 'absence_reassignment_offer',
+        recipientEmail: 'marcos@example.com',
+        payload: {
+          appointmentId: affected.id,
+          offeredBarberId: 'barber-other',
+          offeredStart: at('11:00').toISOString(),
+          offeredEnd: at('11:30').toISOString(),
+          holdExpiresAt: clock.addMinutes(clock.now(), 15).toISOString(),
+        },
+      },
+    ]);
+  });
+
+  // notification-port spec, "un cliente sin email no recibe ningún
+  // recordatorio" — the same email gate every other outbox-writer in this
+  // codebase applies (AppointmentReminder, Phase 6). The offer hold is still
+  // claimed regardless: staff can still act on it by phone.
+  it('claims the hold but skips the outbox when the client has no email registrado', async () => {
+    const { useCase, clients, freeRanges, holds, outbox } = await buildScenario();
+    clients.seed({ id: 'client-2', name: 'Sin Mail', phone: '3510000000', email: null, age: null });
+    const affected = anAppointment({ id: 'appointment-2', clientId: 'client-2' });
+    freeRanges.seed('barber-absent', []);
+    freeRanges.seed('barber-other', [{ start: at('11:00'), end: at('11:30') }]);
+
+    const results = await useCase.execute([affected]);
+
+    expect(results[0]!.outcome).toBe('offered');
+    expect(holds.createCalls).toHaveLength(1);
+    expect(outbox.enqueued).toEqual([]);
+  });
+
+  it('does not enqueue anything when no candidate was found', async () => {
+    const { useCase, freeRanges, outbox } = await buildScenario();
+    const affected = anAppointment();
+    freeRanges.seed('barber-absent', []);
+    freeRanges.seed('barber-other', []);
+
+    await useCase.execute([affected]);
+
+    expect(outbox.enqueued).toEqual([]);
   });
 });
