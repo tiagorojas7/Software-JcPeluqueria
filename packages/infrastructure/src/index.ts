@@ -1,6 +1,10 @@
 export { ShopClock } from './shared/clock/shop-clock';
 export { db } from './db/connection';
+export { DrizzleBarberRepository } from './availability/barber.repository';
+export { DrizzleServiceRepository } from './availability/service.repository';
+export { DrizzleScheduleRepository } from './availability/schedule.repository';
 export { DrizzleAppointmentSweepRepository } from './booking/appointment-sweep.repository';
+export { DrizzleFreeRangesQuery } from './booking/free-ranges-query.repository';
 export { DrizzleRolePermissionRepository } from './access-control/role-permission.repository';
 export { DrizzleActorContextRepository } from './access-control/actor-context.repository';
 export { DrizzleAgendaRepository } from './access-control/agenda.repository';
@@ -25,5 +29,8 @@ export type { HoldExpireJob, JobSender, TransactionalDb } from './booking/pg-bos
 export { jobSender, stopJobSender } from './booking/job-producer';
 export { DrizzleWalkInRepository } from './booking/walk-in.repository';
 export { DrizzleClientRepository } from './clients/client.repository';
+export { DrizzleUserCredentialsRepository } from './identity/user-credentials.repository';
+export { DrizzleAuthChallengeRepository } from './identity/auth-challenge.repository';
+export { DrizzleSessionRepository } from './identity/session.repository';
 export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
 export { DrizzleAbsenceRecordRepository } from './appointments/absence-record.repository';

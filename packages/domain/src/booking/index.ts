@@ -1,5 +1,7 @@
 export type { Hold, HoldRepository, OccupancyChannel } from './hold';
 export { HOLD_DURATION_MINUTES, SlotUnavailableError } from './hold';
+export type { FreeRangesQuery } from './free-ranges-query';
+export { FakeFreeRangesQuery } from './testing/fake-free-ranges-query';
 export type { HoldExpireScheduler } from './hold-expire-scheduler';
 export { REMINDER_LEAD_MINUTES } from './appointment-reminder-scheduler';
 export type { AppointmentReminderScheduler } from './appointment-reminder-scheduler';
