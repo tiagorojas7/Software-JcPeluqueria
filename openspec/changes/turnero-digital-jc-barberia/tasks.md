@@ -241,7 +241,7 @@ Requisitos que cierra: **notification-port** (5/5: Puerto desacoplado · Adaptad
 - [x] 9.7 RED: confirmar la reserva crea la cuenta sin contraseña, sin solicitar/almacenar contraseña. → *client-booking: Cuenta sin contraseña creada al final del flujo*
 - [x] 9.8 GREEN: `RegisterClientUseCase` (usa 3a.8).
 - [x] 9.9 RED: código de acceso vencido es rechazado, exige nueva solicitud. → *client-booking: Código de acceso vencido*
-- [ ] 9.10 GREEN: flujo de reintento en el frontend.
+- [x] 9.10 GREEN: flujo de reintento en el frontend. `AccessCodeForm` (`apps/web/src/booking`), puramente presentacional — mismo split contenedor/presentacional que `AccountForm`. Alcance acotado al componente que el RED ya comprometido prueba: sin contenedor que llame al login/pedido de codigo nuevo todavia (nadie mas lo importa aun), mismo patron de "componente base antes del wiring" que 8.6/10.2.
 - [ ] 9.11 RED: checkout cobra el 50% y el turno pasa a `reservado` solo si el cobro fue exitoso. → *client-booking: Reserva web con seña obligatoria del 50%*
 - [ ] 9.12 GREEN: conectar el frontend a `CheckoutUseCase` (5.6) y a la confirmación por webhook.
 - [x] 9.13 RED: cancelación propia con más de 1h de anticipación → `cancelado` + reembolso automático. → *client-booking: Cancelación del cliente con reembolso automático*
