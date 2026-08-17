@@ -19,4 +19,13 @@ export class DrizzleServiceRepository implements ServiceRepository {
   async list(): Promise<Service[]> {
     return this.db.select().from(services);
   }
+
+  async updatePrice(id: string, priceCents: number): Promise<boolean> {
+    const updated = await this.db
+      .update(services)
+      .set({ priceCents })
+      .where(eq(services.id, id))
+      .returning({ id: services.id });
+    return updated.length > 0;
+  }
 }

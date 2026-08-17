@@ -8,7 +8,7 @@ import {
   type ScheduleRepository,
   type ShopHours,
 } from '@jc-barberia/domain';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import { barberSchedules, barberTimeOff, shopHours } from '../db/schema/availability';
@@ -49,6 +49,20 @@ export class DrizzleScheduleRepository implements ScheduleRepository {
         closesAt: toWallClockTime(row.closesAt),
       }),
     );
+  }
+
+  async updateBarberSchedule(schedule: BarberSchedule): Promise<boolean> {
+    const updated = await this.db
+      .update(barberSchedules)
+      .set({ opensAt: schedule.opensAt, closesAt: schedule.closesAt })
+      .where(
+        and(
+          eq(barberSchedules.barberId, schedule.barberId),
+          eq(barberSchedules.dayOfWeek, schedule.dayOfWeek),
+        ),
+      )
+      .returning({ barberId: barberSchedules.barberId });
+    return updated.length > 0;
   }
 
   async createBarberTimeOff(timeOff: BarberTimeOff): Promise<void> {

@@ -32,4 +32,10 @@ export interface CreateClientInput {
 export interface ClientRepository {
   findByPhone(phone: string): Promise<Client | null>;
   create(input: CreateClientInput): Promise<Client>;
+  /**
+   * admin-operations spec, "Gestión de clientes y de barberos": "El sistema
+   * MUST poder ver... los registros de clientes." No filtering/pagination
+   * yet — nothing beyond "view the client list" is asked for.
+   */
+  list(): Promise<Client[]>;
 }

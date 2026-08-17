@@ -160,4 +160,67 @@ describe('availability repositories (Testcontainers)', () => {
 
     expect(own).toEqual([timeOff]);
   });
+
+  // Task 10.14/10.15 — admin-operations spec, "Gestión de clientes y de
+  // barberos": "el alta y baja de barberos, y la configuración de horarios
+  // base y precios de servicios". These three prove the atomic
+  // `UPDATE ... RETURNING` idiom for real against Postgres, the same "zero
+  // rows means not found, never an exception" shape `HoldRepository.confirm()`
+  // established in Fase 2 — approval-style against the already-written
+  // adapter (strict-tdd.md), same honest labeling `repositories.spec.ts`
+  // used for 8.7's dedicated Testcontainers pass.
+  it('deactivate() flips active to false for a real row and reports false for a missing id', async () => {
+    const repo = new DrizzleBarberRepository(db);
+    const barber = createBarber({ id: crypto.randomUUID(), name: 'Franco', active: true });
+    await repo.create(barber);
+
+    const deactivated = await repo.deactivate(barber.id);
+    const missing = await repo.deactivate(crypto.randomUUID());
+
+    expect(deactivated).toBe(true);
+    expect(missing).toBe(false);
+    expect(await repo.findById(barber.id)).toEqual({ ...barber, active: false });
+  });
+
+  it('updatePrice() changes only price_cents for a real service and reports false for a missing id', async () => {
+    const repo = new DrizzleServiceRepository(db);
+    const service = createService({
+      id: crypto.randomUUID(),
+      name: 'Corte + barba',
+      durationMinutes: 45,
+      priceCents: 600000,
+    });
+    await repo.create(service);
+
+    const updated = await repo.updatePrice(service.id, 650000);
+    const missing = await repo.updatePrice(crypto.randomUUID(), 650000);
+
+    expect(updated).toBe(true);
+    expect(missing).toBe(false);
+    expect(await repo.findById(service.id)).toEqual({ ...service, priceCents: 650000 });
+  });
+
+  it('updateBarberSchedule() changes an existing day and never inserts a second row for it', async () => {
+    const barberRepo = new DrizzleBarberRepository(db);
+    const scheduleRepo = new DrizzleScheduleRepository(db);
+    const barber = createBarber({ id: crypto.randomUUID(), name: 'Gaby', active: true });
+    await barberRepo.create(barber);
+    await scheduleRepo.createBarberSchedule(
+      createBarberSchedule({ barberId: barber.id, dayOfWeek: 1, opensAt: '09:00', closesAt: '17:00' }),
+    );
+
+    const updated = await scheduleRepo.updateBarberSchedule(
+      createBarberSchedule({ barberId: barber.id, dayOfWeek: 1, opensAt: '10:00', closesAt: '19:00' }),
+    );
+    const missingDay = await scheduleRepo.updateBarberSchedule(
+      createBarberSchedule({ barberId: barber.id, dayOfWeek: 2, opensAt: '10:00', closesAt: '19:00' }),
+    );
+
+    expect(updated).toBe(true);
+    expect(missingDay).toBe(false); // no row for day 2 yet — caller falls back to create
+    const own = await scheduleRepo.listBarberSchedule(barber.id);
+    expect(own).toEqual([
+      createBarberSchedule({ barberId: barber.id, dayOfWeek: 1, opensAt: '10:00', closesAt: '19:00' }),
+    ]);
+  });
 });

@@ -20,4 +20,8 @@ export class DrizzleClientRepository implements ClientRepository {
     }
     return created;
   }
+
+  async list(): Promise<Client[]> {
+    return this.db.select().from(clients);
+  }
 }

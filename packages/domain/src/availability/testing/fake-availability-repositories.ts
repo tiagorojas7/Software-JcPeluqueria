@@ -25,6 +25,15 @@ export class FakeBarberRepository implements BarberRepository {
   async list(): Promise<Barber[]> {
     return [...this.byId.values()];
   }
+
+  async deactivate(id: string): Promise<boolean> {
+    const existing = this.byId.get(id);
+    if (!existing) {
+      return false;
+    }
+    this.byId.set(id, { ...existing, active: false });
+    return true;
+  }
 }
 
 export class FakeServiceRepository implements ServiceRepository {
@@ -40,6 +49,15 @@ export class FakeServiceRepository implements ServiceRepository {
 
   async list(): Promise<Service[]> {
     return [...this.byId.values()];
+  }
+
+  async updatePrice(id: string, priceCents: number): Promise<boolean> {
+    const existing = this.byId.get(id);
+    if (!existing) {
+      return false;
+    }
+    this.byId.set(id, { ...existing, priceCents });
+    return true;
   }
 }
 
@@ -62,6 +80,17 @@ export class FakeScheduleRepository implements ScheduleRepository {
 
   async listBarberSchedule(barberId: string): Promise<BarberSchedule[]> {
     return this.barberSchedules.filter((s) => s.barberId === barberId);
+  }
+
+  async updateBarberSchedule(schedule: BarberSchedule): Promise<boolean> {
+    const index = this.barberSchedules.findIndex(
+      (s) => s.barberId === schedule.barberId && s.dayOfWeek === schedule.dayOfWeek,
+    );
+    if (index === -1) {
+      return false;
+    }
+    this.barberSchedules[index] = schedule;
+    return true;
   }
 
   async createBarberTimeOff(timeOff: BarberTimeOff): Promise<void> {

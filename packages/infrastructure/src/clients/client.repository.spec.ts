@@ -59,4 +59,18 @@ describe('DrizzleClientRepository (Testcontainers)', () => {
 
     expect(found).toBeNull();
   });
+
+  // Task 10.14/10.15 — admin-operations spec, "Gestión de clientes y de
+  // barberos": "El sistema MUST poder ver... los registros de clientes."
+  // Approval-style against the already-written adapter, same honest
+  // labeling as `repositories.spec.ts`'s own new tests in this slice.
+  it('list() returns every client on file', async () => {
+    const repo = new DrizzleClientRepository(db);
+    const a = await repo.create({ name: 'Nora', phone: '3519990001', email: null, age: null });
+    const b = await repo.create({ name: 'Pablo', phone: '3519990002', email: 'pablo@example.com', age: 40 });
+
+    const all = await repo.list();
+
+    expect(all).toEqual(expect.arrayContaining([a, b]));
+  });
 });

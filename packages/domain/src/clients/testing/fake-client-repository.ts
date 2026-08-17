@@ -20,4 +20,8 @@ export class FakeClientRepository implements ClientRepository {
     this.byPhone.set(client.phone, client);
     return client;
   }
+
+  async list(): Promise<Client[]> {
+    return [...this.byPhone.values()];
+  }
 }

@@ -19,4 +19,13 @@ export class DrizzleBarberRepository implements BarberRepository {
   async list(): Promise<Barber[]> {
     return this.db.select().from(barbers);
   }
+
+  async deactivate(id: string): Promise<boolean> {
+    const updated = await this.db
+      .update(barbers)
+      .set({ active: false })
+      .where(eq(barbers.id, id))
+      .returning({ id: barbers.id });
+    return updated.length > 0;
+  }
 }
