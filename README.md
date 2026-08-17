@@ -4,6 +4,8 @@ Sistema de gestión de turnos para **JC Barbería**, una barbería real de Córd
 
 Este documento es la fuente de verdad de la **lógica de negocio** del proyecto. Todo cambio o decisión que se tome queda reflejado acá, para que cualquier persona del equipo entienda **qué problema resolvemos, con qué reglas y por qué**.
 
+> Para levantar el proyecto y ver una demo funcionando, ver [`docs/DEMO.md`](docs/DEMO.md).
+
 ---
 
 ## Índice
