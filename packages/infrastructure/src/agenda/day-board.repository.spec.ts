@@ -58,17 +58,32 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
     barberAId = barberA.id;
     barberBId = barberB.id;
 
-    // A confirmed slot for each barber that day...
+    // The board carries BOTH channels, so the fixture does too. Phase 5's
+    // `web_channel_requires_deposit_once_settled` makes a web row past the
+    // hold stage without a deposit unrepresentable ("pagar despues" on the
+    // web channel cannot exist), and `only_web_channel_carries_deposit` is
+    // its inverse: phone and walk-in rows never carry one. A fixture that
+    // ignored either would be seeding a state the running system can never
+    // produce.
+    const [deposit] = await client<{ id: string }[]>`
+      insert into deposits (amount_cents, payment_id, state)
+      values (250000, 'pay-day-board-a', 'settled')
+      returning id`;
+
+    // A confirmed slot for each barber that day — barber A's came through the
+    // web with its 50% deposit, barber B's by phone with none...
+    await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range, deposit_id)
+                 values (${barberAId}, ${service.id}, 'web', 'reservado', ${range(DAY, '09:00', '09:30')}::tstzrange, ${deposit!.id})`;
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
-                 values (${barberAId}, ${service.id}, 'web', 'reservado', ${range(DAY, '09:00', '09:30')}::tstzrange)`;
-    await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
-                 values (${barberBId}, ${service.id}, 'web', 'reservado', ${range(DAY, '10:00', '10:30')}::tstzrange)`;
-    // ...a hold, mid-checkout, on barber A that day (must never appear — held/liberado are "anteriores al ciclo de vida del turno")...
+                 values (${barberBId}, ${service.id}, 'telefonico', 'reservado', ${range(DAY, '10:00', '10:30')}::tstzrange)`;
+    // ...a hold, mid-checkout, on barber A that day (must never appear — held/liberado are "anteriores al ciclo de vida del turno").
+    // `held` is exempt from the deposit constraint: that is exactly the window
+    // in which the client has not paid yet.
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range, hold_expires_at)
                  values (${barberAId}, ${service.id}, 'web', 'held', ${range(DAY, '11:00', '11:30')}::tstzrange, ${at(DAY, '11:15').toISOString()})`;
     // ...and a confirmed slot for barber A on a DIFFERENT day (must never appear in DAY's board).
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
-                 values (${barberAId}, ${service.id}, 'web', 'reservado', ${range(OTHER_DAY, '09:00', '09:30')}::tstzrange)`;
+                 values (${barberAId}, ${service.id}, 'telefonico', 'reservado', ${range(OTHER_DAY, '09:00', '09:30')}::tstzrange)`;
   }, 300_000);
 
   afterAll(async () => {
