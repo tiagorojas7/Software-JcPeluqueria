@@ -24,6 +24,7 @@ const originalHold: Hold = {
   // is exactly what lets these tests tell 'any-day' and 'same-day' apart.
   timeRange: { start: at('2026-09-01', '23:00'), end: at('2026-09-01', '23:30') },
   holdExpiresAt: at('2026-09-01', '23:15'),
+  originOccupancyId: null,
 };
 
 const reofferedSearchWindow = { start: at('2026-09-01', '00:00'), end: at('2026-09-02', '23:59') };

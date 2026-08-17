@@ -27,6 +27,7 @@ export class DrizzleHoldRepository implements HoldRepository {
         status: 'held',
         timeRange: toRangeLiteral(hold.timeRange),
         holdExpiresAt: hold.holdExpiresAt,
+        originOccupancyId: hold.originOccupancyId,
       });
     } catch (error) {
       if (!isExclusionViolation(error)) {
@@ -121,6 +122,7 @@ export class DrizzleHoldRepository implements HoldRepository {
         start: sql`lower(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
         end: sql`upper(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
         holdExpiresAt: slotOccupancies.holdExpiresAt,
+        originOccupancyId: slotOccupancies.originOccupancyId,
       })
       .from(slotOccupancies)
       .where(eq(slotOccupancies.id, holdId));
@@ -137,7 +139,32 @@ export class DrizzleHoldRepository implements HoldRepository {
       channel: row.channel as Hold['channel'],
       timeRange: { start: row.start as Date, end: row.end as Date },
       holdExpiresAt: row.holdExpiresAt,
+      originOccupancyId: row.originOccupancyId,
     };
+  }
+
+  /**
+   * Same re-validate-then-write shape as `confirm()`, but transitions to
+   * `liberado` instead of `reservado` — the accept-offer path
+   * (`AcceptOfferUseCase`) uses this to vacate an offer hold's EXCLUDE-
+   * protected range before `AppointmentRepository.updateSchedule` claims that
+   * exact (barberId, timeRange) for the original appointment. `false` means
+   * the hold already expired or was consumed by something else — never a
+   * second write.
+   */
+  async release(holdId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(slotOccupancies)
+      .set({ status: 'liberado' })
+      .where(
+        and(
+          eq(slotOccupancies.id, holdId),
+          eq(slotOccupancies.status, 'held'),
+          sql`${slotOccupancies.holdExpiresAt} > now()`,
+        ),
+      )
+      .returning({ id: slotOccupancies.id });
+    return rows.length > 0;
   }
 
   /**

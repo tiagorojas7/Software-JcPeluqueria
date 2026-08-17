@@ -39,4 +39,16 @@ export interface AppointmentRepository {
    *  is proven through `PaymentPort` and the returned in-memory `Appointment`,
    *  not through this column. */
   updateStatus(id: string, status: AppointmentStatus): Promise<void>;
+
+  /**
+   * Every `reservado` appointment belonging to `barberId` whose `timeRange`
+   * overlaps `range` — the detection query barber-absence-reassignment spec
+   * names "Detección de turnos afectados". Scoped to exactly ONE barber's own
+   * rows by construction (`WHERE barber_id = :barberId`), so a turno
+   * belonging to a DIFFERENT barber can never come back here, even one
+   * sitting in the exact same time window — the same requirement's "No
+   * interferencia con otros turnos" is a structural guarantee of this query's
+   * shape, not a filter applied after the fact.
+   */
+  findReservedByBarberInRange(barberId: string, range: TimeWindow): Promise<Appointment[]>;
 }

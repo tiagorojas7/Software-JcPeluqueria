@@ -50,6 +50,7 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
     channel,
     timeRange: { start: at(from), end: at(to) },
     holdExpiresAt: at('23:00'),
+    originOccupancyId: null,
   });
   // Each competing scenario gets its own barber: the constraint is scoped per
   // barber, so this keeps the tests from occupying each other's ranges.

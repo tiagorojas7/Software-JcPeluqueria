@@ -20,6 +20,15 @@ export interface Hold {
   readonly channel: OccupancyChannel;
   readonly timeRange: TimeWindow;
   readonly holdExpiresAt: Date;
+  /**
+   * Non-null only for a barber-absence-reassignment offer (barber-absence-
+   * reassignment spec, "Ofertas del mismo día, de cualquier barbero"): the id
+   * of the `reservado` appointment this hold was created to replace. Null for
+   * every ordinary client-booking/phone/walk-in hold. `ExpireHold` (Phase 6)
+   * reads this back through `ExpiredHoldView` to decide whether an unconsumed
+   * offer must refund + cancel its origin turno when it lapses.
+   */
+  readonly originOccupancyId: string | null;
 }
 
 /**
@@ -75,4 +84,18 @@ export interface HoldRepository {
    * exactly like `confirm()`.
    */
   beginCheckout(holdId: string, paymentExpiresAt: Date): Promise<boolean>;
+
+  /**
+   * Re-validates and releases a hold WITHOUT confirming it into an
+   * appointment (`held` -> `liberado`, never `held` -> `reservado`) — the
+   * shape `AcceptOfferUseCase` needs (barber-absence-reassignment spec,
+   * "Aceptación reagenda sin mover dinero"): the client accepted an offer, so
+   * the OFFER hold itself must vacate the EXCLUDE-protected range it claims
+   * before `AppointmentRepository.updateSchedule` can move the ORIGINAL
+   * appointment onto that exact same (barberId, timeRange). Same
+   * re-validate-then-write shape as `confirm()`/`beginCheckout()`: `false`
+   * means the hold already expired or was consumed by something else, never
+   * a second write.
+   */
+  release(holdId: string): Promise<boolean>;
 }

@@ -13,6 +13,16 @@ export interface AvailableCandidate {
   /** ISO calendar date (`YYYY-MM-DD`) the window falls on, shop-local. */
   readonly date: string;
   readonly window: TimeWindow;
+  /**
+   * Optional: which barber the window belongs to. `ConfirmHold` never sets
+   * it — its candidates are always offered on the SAME barber as the hold
+   * that failed re-validation, so the caller already knows the barber
+   * without reading it back here. `GenerateAbsenceReassignmentOffers`
+   * (barber-absence-reassignment) DOES set it: its whole candidate pool
+   * spans every active barber, so the winning candidate's barber can only be
+   * recovered through this field.
+   */
+  readonly barberId?: string;
 }
 
 export interface FindNearestAvailableInput {
