@@ -232,14 +232,14 @@ Requisitos que cierra: **notification-port** (5/5: Puerto desacoplado · Adaptad
 
 ## Phase 9: Web pública (~400 líneas) — PR 11 (base: PR 10) — depende de 5, 8
 
-- [ ] 9.1 RED: visitante consulta horarios disponibles sin autenticarse. → *client-booking: Exploración sin cuenta*
-- [ ] 9.2 GREEN: endpoint público de disponibilidad + página de selección de servicio/barbero/horario.
-- [ ] 9.3 RED: seleccionar un horario crea un hold (reutiliza 2.8) y lo muestra con cuenta regresiva.
-- [ ] 9.4 GREEN: flujo de selección en `apps/web/src/booking`.
-- [ ] 9.5 RED: confirmación sin nombre, teléfono o email es rechazada, no crea turno ni cobra la seña. → *client-booking: Intento de confirmar sin los datos obligatorios*
-- [ ] 9.6 GREEN: formulario de cuenta al final del flujo con validación zod compartida (`packages/contracts`).
-- [ ] 9.7 RED: confirmar la reserva crea la cuenta sin contraseña, sin solicitar/almacenar contraseña. → *client-booking: Cuenta sin contraseña creada al final del flujo*
-- [ ] 9.8 GREEN: `RegisterClientUseCase` (usa 3a.8).
+- [x] 9.1 RED: visitante consulta horarios disponibles sin autenticarse. → *client-booking: Exploración sin cuenta*
+- [x] 9.2 GREEN: endpoint público de disponibilidad + página de selección de servicio/barbero/horario.
+- [x] 9.3 RED: seleccionar un horario crea un hold (reutiliza 2.8) y lo muestra con cuenta regresiva.
+- [x] 9.4 GREEN: flujo de selección en `apps/web/src/booking`.
+- [x] 9.5 RED: confirmación sin nombre, teléfono o email es rechazada, no crea turno ni cobra la seña. → *client-booking: Intento de confirmar sin los datos obligatorios*
+- [x] 9.6 GREEN: formulario de cuenta al final del flujo con validación zod compartida (`packages/contracts`).
+- [x] 9.7 RED: confirmar la reserva crea la cuenta sin contraseña, sin solicitar/almacenar contraseña. → *client-booking: Cuenta sin contraseña creada al final del flujo*
+- [x] 9.8 GREEN: `RegisterClientUseCase` (usa 3a.8).
 - [ ] 9.9 RED: código de acceso vencido es rechazado, exige nueva solicitud. → *client-booking: Código de acceso vencido*
 - [ ] 9.10 GREEN: flujo de reintento en el frontend.
 - [ ] 9.11 RED: checkout cobra el 50% y el turno pasa a `reservado` solo si el cobro fue exitoso. → *client-booking: Reserva web con seña obligatoria del 50%*
