@@ -1,15 +1,17 @@
 import { BadRequestException, Body, ConflictException, Controller, HttpCode, Inject, Post } from '@nestjs/common';
-import { CreateHold, RegisterClientUseCase } from '@jc-barberia/application';
+import { CheckoutUseCase, CreateHold, RegisterClientUseCase } from '@jc-barberia/application';
 import {
+  CheckoutRequestSchema,
   ConfirmReservationRequestSchema,
   CreateHoldRequestSchema,
+  type CheckoutResponseBody,
   type ConfirmReservationResponse,
   type HoldResponse,
 } from '@jc-barberia/contracts';
-import { SlotUnavailableError, type Clock } from '@jc-barberia/domain';
+import { SlotUnavailableError, type Clock, type HoldRepository, type ServiceRepository } from '@jc-barberia/domain';
 
 import { Public } from '../access-control/decorators/public.decorator';
-import { CLOCK } from './tokens';
+import { CLOCK, HOLD_REPOSITORY, SERVICE_REPOSITORY } from './tokens';
 
 /**
  * client-booking spec, "Exploración sin cuenta" + slot-hold "Creación del
@@ -25,7 +27,10 @@ export class HoldController {
   constructor(
     private readonly createHold: CreateHold,
     private readonly registerClient: RegisterClientUseCase,
+    private readonly checkout: CheckoutUseCase,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(HOLD_REPOSITORY) private readonly holds: HoldRepository,
+    @Inject(SERVICE_REPOSITORY) private readonly services: ServiceRepository,
   ) {}
 
   @Public()
@@ -98,5 +103,48 @@ export class HoldController {
       throw new ConflictException({ message: 'El horario retenido ya venció' });
     }
     return { clientId: result.clientId };
+  }
+
+  /**
+   * client-booking spec, "Reserva web con seña obligatoria del 50%" (task
+   * 9.11/9.12): reuses `CheckoutUseCase` (5.6) untouched — this handler's
+   * only job is to resolve the two primitives that use case needs
+   * (`priceCents`/`description`) from the hold's own `serviceId`, then hand
+   * off. `outcome: 'hold-expired'` is a normal `200` response, not an
+   * exception, deliberately mirroring `CheckoutResponseBody`'s own shape:
+   * the browser is expected to branch on it, same as `AccessCodeForm`
+   * branches on `ClientLoginResult['outcome']`. Never creates or confirms
+   * anything itself — "Falla el cobro de la seña" (MUST NOT crear el turno
+   * reservado) holds structurally because nothing on this path ever writes
+   * `reservado`; that happens only in `ProcessPaymentUseCase`, driven by the
+   * webhook, never by this synchronous response.
+   */
+  @Public()
+  @Post('checkout')
+  @HttpCode(200)
+  async startCheckout(@Body() body: unknown): Promise<CheckoutResponseBody> {
+    const parsed = CheckoutRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    const { holdId } = parsed.data;
+
+    const hold = await this.holds.findById(holdId);
+    if (!hold) {
+      return { outcome: 'hold-expired' };
+    }
+    const service = await this.services.findById(hold.serviceId);
+    if (!service) {
+      throw new ConflictException({ message: 'El servicio del horario retenido ya no existe' });
+    }
+
+    const result = await this.checkout.execute({
+      holdId,
+      priceCents: service.priceCents,
+      description: service.name,
+    });
+    return result.outcome === 'created'
+      ? { outcome: 'created', initPoint: result.initPoint }
+      : { outcome: 'hold-expired' };
   }
 }

@@ -5,6 +5,7 @@ import { AgendaModule } from './agenda/agenda.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { BarbersModule } from './barbers/barbers.module';
 import { BookingModule } from './booking/booking.module';
+import { PaymentsModule } from './payments/payments.module';
 
 /**
  * Composition root. `PermissionsGuard` is registered globally here via
@@ -16,7 +17,11 @@ import { BookingModule } from './booking/booking.module';
  * booking) is the second; `BookingModule` (Phase 9, the public web booking
  * flow) is the third — its controllers are `@Public()` by requirement
  * (client-booking: "Exploración sin cuenta"), not by omission; `BarbersModule`
- * (Phase 11, the barber's own profile) is the fourth.
+ * (Phase 11, the barber's own profile) is the fourth; `PaymentsModule`
+ * (task 9.11/9.12, the MercadoPago webhook) is the fifth — deliberately not
+ * imported here until now ("real business endpoints start Phase 8/9/10", its
+ * own doc comment said), because until `PgBossPaymentJobQueue` existed there
+ * was no real `PAYMENT_JOB_QUEUE` to give it.
  *
  * Deliberately no `main.ts` yet: this app is still only a module graph, not
  * a listening HTTP server — that starts whichever later phase needs one
@@ -29,6 +34,7 @@ import { BookingModule } from './booking/booking.module';
     AppointmentsModule,
     BookingModule,
     BarbersModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

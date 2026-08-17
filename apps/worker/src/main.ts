@@ -1,17 +1,33 @@
 import { PgBoss } from 'pg-boss';
-import { DailySweepUseCase } from '@jc-barberia/application';
-import { DrizzleAppointmentSweepRepository, ShopClock, db } from '@jc-barberia/infrastructure';
+import { DailySweepUseCase, ProcessPaymentUseCase } from '@jc-barberia/application';
+import {
+  DrizzleAppointmentSweepRepository,
+  DrizzleDepositRepository,
+  MercadoPagoPaymentAdapter,
+  PAYMENT_PROCESS_QUEUE,
+  ShopClock,
+  db,
+} from '@jc-barberia/infrastructure';
 
 /**
  * The single background process for the turnero (design.md "Procesos de
  * fondo"). pg-boss shares the app's own PostgreSQL — no extra Redis — so a
  * `hold.expire` job can be enqueued in the same transaction that creates the
  * hold (no orphan jobs on rollback). Phase 6 registers the handlers here; the
- * tasks.md wiring map names the four:
+ * tasks.md wiring map names the four, plus `payment.process` (task 9.11/9.12,
+ * `PAYMENT_JOB_QUEUE`'s consuming half — the webhook has enqueued into this
+ * exact queue name since 5.10; nothing ever consumed it until now):
  *
  *  - `daily.sweep`   (6.7): `59 2 * * *` UTC — wired HERE now; its adapters
  *    (ShopClock + DrizzleAppointmentSweepRepository) already exist, so this
  *    slice boots a production-grade sweep.
+ *  - `payment.process` (9.11/9.12): wired HERE now — `ProcessPaymentUseCase`
+ *    (5.9/5.10) and its two adapters (`MercadoPagoPaymentAdapter`,
+ *    `DrizzleDepositRepository`) already existed and were already tested;
+ *    the only missing piece was this registration. Same reused use case the
+ *    application layer already proved in `process-payment.spec.ts` — no
+ *    second payment path, this is just the consumer for the queue
+ *    `PgBossPaymentJobQueue` (the producer, `apps/api`) already sends to.
  *  - `hold.expire` (6.5): deferred — needs `DrizzleHoldExpireViewRepository`
  *    (the row + client-email join) + `RefundUseCase` + a `NotificationPort`
  *    adapter. Scaffolding below marks the contract; Phase 7/wiring step owns
@@ -45,6 +61,23 @@ async function main(): Promise<void> {
     console.log(`[worker] daily.sweep transitioned ${swept} reservados to sin_registrado`);
   });
 
+  // 9.11/9.12 — the webhook's consuming half. `getPayment()` is the only
+  // source of truth (design.md: "el redirect del navegador no es fuente de
+  // verdad"), never the enqueued payload — `ProcessPaymentUseCase` re-reads
+  // the payment id against MercadoPago itself before deciding anything.
+  const processPayment = new ProcessPaymentUseCase(
+    new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? ''),
+    new DrizzleDepositRepository(db),
+  );
+  // pg-boss v12's `work()` handler always receives a batch (`Job<T>[]`), even
+  // for a single enqueue — never a lone job object.
+  await boss.work<{ paymentId: string }>(PAYMENT_PROCESS_QUEUE, async (jobs) => {
+    for (const job of jobs) {
+      const result = await processPayment.execute(job.data.paymentId);
+      console.log(`[worker] payment.process ${job.data.paymentId} -> ${result.outcome}`);
+    }
+  });
+
   // TODO(phase-7): wire `hold.expire` — once DrizzleHoldExpireViewRepository
   //   lands:
   //   const expire = new ExpireHold(new DrizzleHoldExpireViewRepository(db),
@@ -76,7 +109,7 @@ async function main(): Promise<void> {
   //     await outboxConsumer.execute();
   //   });
 
-  console.log('[worker] pg-boss started — daily.sweep registered');
+  console.log('[worker] pg-boss started — daily.sweep, payment.process registered');
 }
 
 main().catch((error: unknown) => {

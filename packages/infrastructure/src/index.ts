@@ -13,6 +13,7 @@ export { DrizzlePaymentEventRepository } from './payments/payment-event.reposito
 export { MercadoPagoApiError, MercadoPagoPaymentAdapter } from './payments/mercadopago-payment.adapter';
 export { verifyMercadoPagoSignature } from './payments/mercadopago-signature';
 export type { WebhookSignatureInput } from './payments/mercadopago-signature';
+export { PAYMENT_PROCESS_QUEUE, PgBossPaymentJobQueue } from './payments/pg-boss-payment-job-queue';
 export { ConsoleNotificationAdapter } from './notifications/console-notification.adapter';
 export { GmailNotificationAdapter } from './notifications/gmail-notification.adapter';
 export type { GmailAdapterConfig, GmailAdapterDeps } from './notifications/gmail-notification.adapter';

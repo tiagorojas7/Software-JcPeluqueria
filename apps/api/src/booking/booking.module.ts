@@ -1,5 +1,5 @@
 import { Module, type OnApplicationShutdown } from '@nestjs/common';
-import { CreateHold, GetPublicAvailabilityUseCase, RegisterClientUseCase } from '@jc-barberia/application';
+import { CheckoutUseCase, CreateHold, GetPublicAvailabilityUseCase, RegisterClientUseCase } from '@jc-barberia/application';
 import {
   db,
   DrizzleBarberRepository,
@@ -10,6 +10,7 @@ import {
   DrizzleScheduleRepository,
   DrizzleServiceRepository,
   lazyJobSender,
+  MercadoPagoPaymentAdapter,
   PgBossHoldExpireScheduler,
   ShopClock,
   stopJobSender,
@@ -22,6 +23,7 @@ import type {
   FreeRangesQuery,
   HoldExpireScheduler,
   HoldRepository,
+  PaymentPort,
   ScheduleRepository,
   ServiceRepository,
 } from '@jc-barberia/domain';
@@ -37,6 +39,7 @@ import {
   FREE_RANGES_QUERY,
   HOLD_EXPIRE_SCHEDULER,
   HOLD_REPOSITORY,
+  PAYMENT_PORT,
   SCHEDULE_REPOSITORY,
   SERVICE_REPOSITORY,
 } from './tokens';
@@ -101,6 +104,23 @@ import {
         accounts: ClientAccountRepository,
         holds: HoldRepository,
       ) => new RegisterClientUseCase(clients, accounts, holds),
+    },
+    {
+      // Task 9.11/9.12 — the seam this token was declared for and nothing
+      // ever bound: MercadoPago is a plain HTTP client, so unlike
+      // `HOLD_EXPIRE_SCHEDULER` there is no pg-boss laziness concern here.
+      provide: PAYMENT_PORT,
+      useFactory: () => new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? ''),
+    },
+    {
+      // client-booking: "Reserva web con seña obligatoria del 50%" — reuses
+      // `CheckoutUseCase` (5.6) exactly, no second payment path. The 50%
+      // math and the re-validate-then-charge order live entirely in that
+      // class; this module only supplies its three ports.
+      provide: CheckoutUseCase,
+      inject: [HOLD_REPOSITORY, PAYMENT_PORT, CLOCK],
+      useFactory: (holds: HoldRepository, paymentPort: PaymentPort, clock: Clock) =>
+        new CheckoutUseCase(holds, paymentPort, clock),
     },
   ],
 })
