@@ -26,6 +26,7 @@ const stubRegistry = {
   // covering EVERY member: the adapter is agnostic to content, but a registry
   // missing a case would let an unrenderable notification reach production.
   absence_reassignment_offer: () => ({ subject: 'Tu barbero no esta disponible', body: 'body-offer' }),
+  client_access_code: () => ({ subject: 'Tu codigo de acceso', body: 'body-access-code' }),
 } as const;
 
 describe('createNotificationPort (7.5/7.6 — intercambio de canal)', () => {

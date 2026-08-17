@@ -3,6 +3,7 @@ import type { Clock } from '@jc-barberia/domain';
 import type { TemplateRegistry } from './types';
 import { accessTemplate } from './access.template';
 import { createAbsenceReassignmentOfferTemplate } from './absence-reassignment-offer.template';
+import { createClientAccessCodeTemplate } from './client-access-code.template';
 import { cancellationWithRefundTemplate } from './cancellation-with-refund.template';
 import { createReminderWithDepositTemplate } from './reminder-with-deposit.template';
 import { reminderWithoutDepositTemplate } from './reminder-without-deposit.template';
@@ -27,6 +28,7 @@ export function createTemplateRegistry(clock: Clock): TemplateRegistry {
     reminder_with_deposit: createReminderWithDepositTemplate(clock),
     reminder_without_deposit: reminderWithoutDepositTemplate,
     absence_reassignment_offer: createAbsenceReassignmentOfferTemplate(clock),
+    client_access_code: createClientAccessCodeTemplate(clock),
   };
 }
 

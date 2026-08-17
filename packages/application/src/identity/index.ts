@@ -18,3 +18,5 @@ export { SessionService } from './session-service';
 export type { CreateSessionInput } from './session-service';
 export { RegisterClientUseCase } from './register-client';
 export type { RegisterClientInput, RegisterClientResult } from './register-client';
+export { RequestClientAccessUseCase } from './request-client-access';
+export type { RequestClientAccessInput, RequestClientAccessResult } from './request-client-access';

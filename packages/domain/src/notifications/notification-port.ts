@@ -32,7 +32,11 @@ export type NotificationTemplate =
   | 'cancellation_with_refund'
   | 'reminder_with_deposit'
   | 'reminder_without_deposit'
-  | 'absence_reassignment_offer';
+  | 'absence_reassignment_offer'
+  // The client's own passwordless access code (client-booking: access happens
+  // through a one-time code or link). Distinct from the two staff templates:
+  // staff have passwords, clients never do.
+  | 'client_access_code';
 
 /**
  * A dispatch intention — deliberately transport-agnostic. `data` carries
