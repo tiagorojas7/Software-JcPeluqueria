@@ -31,6 +31,7 @@ export { jobSender, lazyJobSender, stopJobSender } from './booking/job-producer'
 export { DrizzleWalkInRepository } from './booking/walk-in.repository';
 export { DrizzleClientRepository } from './clients/client.repository';
 export { DrizzleUserCredentialsRepository } from './identity/user-credentials.repository';
+export { Argon2PasswordHasher } from './identity/argon2-password-hasher';
 export { DrizzleAuthChallengeRepository } from './identity/auth-challenge.repository';
 export { DrizzleSessionRepository } from './identity/session.repository';
 export { DrizzleClientAccountRepository } from './identity/client-account.repository';

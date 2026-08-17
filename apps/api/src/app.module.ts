@@ -6,6 +6,7 @@ import { AgendaModule } from './agenda/agenda.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { BarbersModule } from './barbers/barbers.module';
 import { BookingModule } from './booking/booking.module';
+import { IdentityModule } from './identity/identity.module';
 import { PanelModule } from './panel/panel.module';
 import { PaymentsModule } from './payments/payments.module';
 
@@ -24,13 +25,16 @@ import { PaymentsModule } from './payments/payments.module';
  * imported here until now ("real business endpoints start Phase 8/9/10", its
  * own doc comment said), because until `PgBossPaymentJobQueue` existed there
  * was no real `PAYMENT_JOB_QUEUE` to give it; `PanelModule` (task 10.14/10.15,
- * client/barber management) is the sixth; and `AbsenceReassignmentModule`
+ * client/barber management) is the sixth; `AbsenceReassignmentModule`
  * (Phase 12, barber-absence-reassignment's detection entry point) is the
- * seventh and last of the tracker.
+ * seventh of the tracker; and `IdentityModule` (arranque slice, NOT one of
+ * the 40 tracked requirements) is the eighth and last: `StaffLoginUseCase`/
+ * `SessionService` existed since Phase 3a but had no HTTP route, so every
+ * `@RequiresPermission` endpoint above was unreachable in practice — there
+ * was no way to ever obtain a `session_id` cookie.
  *
- * Deliberately no `main.ts` yet: this app is still only a module graph, not
- * a listening HTTP server — that starts whichever later phase needs one
- * first.
+ * `main.ts` (arranque slice) makes this a listening HTTP server, not only a
+ * module graph.
  */
 @Module({
   imports: [
@@ -42,6 +46,7 @@ import { PaymentsModule } from './payments/payments.module';
     PaymentsModule,
     PanelModule,
     AbsenceReassignmentModule,
+    IdentityModule,
   ],
 })
 export class AppModule {}

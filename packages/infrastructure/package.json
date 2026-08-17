@@ -8,7 +8,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "vite-node src/db/seed.ts"
   },
   "dependencies": {
     "@jc-barberia/domain": "workspace:*",
@@ -24,6 +25,8 @@
     "drizzle-kit": "^0.30.2",
     "testcontainers": "^12.1.0",
     "unplugin-swc": "^1.5.1",
+    "vite": "^6.0.11",
+    "vite-node": "^3.0.4",
     "vitest": "^3.0.4"
   }
 }

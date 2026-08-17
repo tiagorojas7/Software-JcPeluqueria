@@ -6,7 +6,9 @@
   "description": "NestJS HTTP API. `PermissionsGuard` (deny-by-default authorization) starts Phase 3b; HTTP endpoints start Phase 8/9/10.",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev": "vite-node --watch src/main.ts",
+    "start": "vite-node src/main.ts"
   },
   "dependencies": {
     "@jc-barberia/application": "workspace:*",
@@ -16,14 +18,18 @@
     "@nestjs/common": "^11.1.29",
     "@nestjs/core": "^11.1.29",
     "@nestjs/platform-express": "^11.1.29",
+    "cookie-parser": "^1.4.7",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.29",
+    "@types/cookie-parser": "^1.4.8",
     "@types/supertest": "^7.2.1",
     "supertest": "^7.2.2",
     "unplugin-swc": "^1.5.1",
+    "vite": "^6.0.11",
+    "vite-node": "^3.0.4",
     "vitest": "^3.0.4"
   }
 }

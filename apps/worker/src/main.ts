@@ -3,6 +3,7 @@ import { DailySweepUseCase, ProcessPaymentUseCase } from '@jc-barberia/applicati
 import {
   DrizzleAppointmentSweepRepository,
   DrizzleDepositRepository,
+  HOLD_EXPIRE_QUEUE,
   MercadoPagoPaymentAdapter,
   PAYMENT_PROCESS_QUEUE,
   ShopClock,
@@ -54,7 +55,17 @@ async function main(): Promise<void> {
   // swept day from now() (calendarDateOf → businessDayBounds); the Drizzle
   // repo transitions the in-bounds reservados to sin_registrado con y sin seña
   // alike. The cron is `59 2 * * *` UTC = 23:59 shop-local (UTC-3).
+  //
+  // arranque finding: pg-boss v12 requires a queue to be explicitly
+  // registered (`createQueue`) before `schedule()`/`work()` can target it —
+  // `schedule.name` carries an FK to `pgboss.queue.name` in this version.
+  // Older pg-boss auto-created queues on first use; this codebase never ran
+  // against a real database outside tests until this slice, so the gap was
+  // invisible until `pnpm --filter @jc-barberia/worker start` was actually
+  // tried. `createQueue` is `ON CONFLICT DO NOTHING` internally, so calling
+  // it on every boot is safe.
   const sweep = new DailySweepUseCase(new ShopClock(), new DrizzleAppointmentSweepRepository(db));
+  await boss.createQueue('daily.sweep');
   await boss.schedule('daily.sweep', '59 2 * * *');
   await boss.work('daily.sweep', async () => {
     const swept = await sweep.execute();
@@ -70,7 +81,11 @@ async function main(): Promise<void> {
     new DrizzleDepositRepository(db),
   );
   // pg-boss v12's `work()` handler always receives a batch (`Job<T>[]`), even
-  // for a single enqueue — never a lone job object.
+  // for a single enqueue — never a lone job object. Same `createQueue`
+  // requirement as `daily.sweep` above: `PgBossPaymentJobQueue` (the
+  // producer, `apps/api`) enqueues by name only, it never registers the
+  // queue itself.
+  await boss.createQueue(PAYMENT_PROCESS_QUEUE);
   await boss.work<{ paymentId: string }>(PAYMENT_PROCESS_QUEUE, async (jobs) => {
     for (const job of jobs) {
       const result = await processPayment.execute(job.data.paymentId);
@@ -78,7 +93,19 @@ async function main(): Promise<void> {
     }
   });
 
-  // TODO(phase-7): wire `hold.expire` — once DrizzleHoldExpireViewRepository
+  // arranque finding: `CreateHold` (both `HoldController` and
+  // `PhoneAppointmentController`, i.e. the FIRST step of every booking)
+  // unconditionally calls `PgBossHoldExpireScheduler.scheduleExpire`, which
+  // sends into this exact queue name. Without registering it, `send()`
+  // throws "Queue hold.expire does not exist" the moment a demo operator
+  // creates the very first hold — discovered by actually running the app,
+  // not by reading the code. No `.work()` handler is registered here YET
+  // (see the TODO below): the jobs land and sit unconsumed, which is exactly
+  // the "slot liberation stays LAZY" behavior the comment below already
+  // documents as correct for this phase — only the registration was missing.
+  await boss.createQueue(HOLD_EXPIRE_QUEUE);
+
+  // TODO(phase-7): wire `hold.expire`'s CONSUMER — once DrizzleHoldExpireViewRepository
   //   AND a Drizzle-backed NotificationOutboxRepository land (still missing
   //   from this codebase as of Phase 12 — see apply-progress for the
   //   honest accounting of this gap):
@@ -117,7 +144,10 @@ async function main(): Promise<void> {
   //     await outboxConsumer.execute();
   //   });
 
-  console.log('[worker] pg-boss started — daily.sweep, payment.process registered');
+  console.log(
+    '[worker] pg-boss started — daily.sweep, payment.process registered (consumed); ' +
+      'hold.expire registered (queue only, no consumer yet — see TODO(phase-7))',
+  );
 }
 
 main().catch((error: unknown) => {
