@@ -22,6 +22,10 @@ const stubRegistry = {
   cancellation_with_refund: () => ({ subject: 'Se devolvio tu sena', body: 'body-cancel' }),
   reminder_with_deposit: () => ({ subject: 'Recordatorio', body: 'body-deposit' }),
   reminder_without_deposit: () => ({ subject: 'Recordatorio', body: 'body-no-deposit' }),
+  // Phase 12 added this template to the registry's type. The stub has to keep
+  // covering EVERY member: the adapter is agnostic to content, but a registry
+  // missing a case would let an unrenderable notification reach production.
+  absence_reassignment_offer: () => ({ subject: 'Tu barbero no esta disponible', body: 'body-offer' }),
 } as const;
 
 describe('createNotificationPort (7.5/7.6 — intercambio de canal)', () => {

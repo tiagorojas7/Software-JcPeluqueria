@@ -27,10 +27,15 @@ export interface CreateClientInput {
 /**
  * Persistence for clients. `findByPhone` backs "nuevo o existente" (a
  * repeat caller is reused, never duplicated) — the phone number is the only
- * natural key a phone booking reliably has.
+ * natural key a phone booking reliably has. `findById` backs any flow that
+ * already holds a `clientId` off an appointment/hold row and needs the
+ * client's own data — first consumer is `GenerateAbsenceReassignmentOffers`
+ * (barber-absence-reassignment), which needs the affected client's email to
+ * dispatch the reassignment-offer notification.
  */
 export interface ClientRepository {
   findByPhone(phone: string): Promise<Client | null>;
+  findById(id: string): Promise<Client | null>;
   create(input: CreateClientInput): Promise<Client>;
   /**
    * admin-operations spec, "Gestión de clientes y de barberos": "El sistema

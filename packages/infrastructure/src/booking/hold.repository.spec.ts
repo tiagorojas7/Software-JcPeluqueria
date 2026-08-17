@@ -50,6 +50,7 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
     channel,
     timeRange: { start: at(from), end: at(to) },
     holdExpiresAt: at('23:00'),
+    originOccupancyId: null,
   });
   // Each competing scenario gets its own barber: the constraint is scoped per
   // barber, so this keeps the tests from occupying each other's ranges.
@@ -286,5 +287,77 @@ describe('slot occupancy exclusivity (Testcontainers)', () => {
     expect(began).toBe(false);
     const rows = await client`select payment_pending from slot_occupancies where id = ${expiredId}`;
     expect([...rows]).toEqual([{ payment_pending: false }]);
+  });
+
+  // Task 12.3/12.4 — barber-absence-reassignment offers persist
+  // origin_occupancy_id so ExpireHold/AcceptOfferUseCase can read it back.
+  it('persists and reads back originOccupancyId on create()/findById()', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const barber = await newBarber();
+    // origin_occupancy_id has a real FK to slot_occupancies.id — a REAL row
+    // (the "original appointment" this offer replaces) must exist first.
+    const originBarber = await newBarber();
+    const origin = holdFor(originBarber, '08:00', '08:30');
+    await repo.create(origin, workingWindow);
+    const hold = { ...holdFor(barber, '19:00', '19:30'), originOccupancyId: origin.id };
+
+    await repo.create(hold, workingWindow);
+    const found = await repo.findById(hold.id);
+
+    expect(found?.originOccupancyId).toBe(origin.id);
+  });
+
+  it('findById returns null originOccupancyId for an ordinary (non-offer) hold', async () => {
+    const repo = new DrizzleHoldRepository(db);
+    const hold = holdFor(await newBarber(), '19:30', '20:00');
+
+    await repo.create(hold, workingWindow);
+    const found = await repo.findById(hold.id);
+
+    expect(found?.originOccupancyId).toBeNull();
+  });
+
+  // Task 12.7/12.8 — AcceptOfferUseCase releases the offer hold BEFORE the
+  // original appointment's UPDATE claims that exact (barberId, timeRange);
+  // release() must vacate the EXCLUDE-protected range without confirming
+  // into `reservado`.
+  describe('release (12.7/12.8)', () => {
+    it('re-validates and transitions an active hold from held to liberado, never reservado', async () => {
+      const repo = new DrizzleHoldRepository(db);
+      const hold = holdFor(await newBarber(), '20:00', '20:30');
+      await repo.create(hold, workingWindow);
+
+      const released = await repo.release(hold.id);
+
+      expect(released).toBe(true);
+      const rows = await client`select status from slot_occupancies where id = ${hold.id}`;
+      expect([...rows]).toEqual([{ status: 'liberado' }]);
+    });
+
+    it('vacates the EXCLUDE-protected range: a new hold on the exact same barber/range succeeds right after release', async () => {
+      const repo = new DrizzleHoldRepository(db);
+      const barber = await newBarber();
+      const offer = holdFor(barber, '21:00', '21:30');
+      await repo.create(offer, workingWindow);
+
+      await repo.release(offer.id);
+      // The original appointment's updateSchedule would claim this exact
+      // range next — simulated here as a second hold on the same slot,
+      // proving the EXCLUDE constraint no longer blocks it.
+      await expect(repo.create(holdFor(barber, '21:00', '21:30'), workingWindow)).resolves.toBeUndefined();
+    });
+
+    it('returns false without transitioning a hold that already expired', async () => {
+      const barber = await newBarber();
+      const expiredId = crypto.randomUUID();
+      await client`insert into slot_occupancies (id, barber_id, service_id, channel, status, time_range, hold_expires_at)
+                   values (${expiredId}, ${barber}, ${serviceId}, 'web', 'held', ${range('22:00', '22:30')}::tstzrange, ${PAST_HOLD_EXPIRY.toISOString()})`;
+
+      const released = await new DrizzleHoldRepository(db).release(expiredId);
+
+      expect(released).toBe(false);
+      const rows = await client`select status from slot_occupancies where id = ${expiredId}`;
+      expect([...rows]).toEqual([{ status: 'held' }]);
+    });
   });
 });

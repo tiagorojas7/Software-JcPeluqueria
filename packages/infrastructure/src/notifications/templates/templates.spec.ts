@@ -37,4 +37,20 @@ describe('createTemplateRegistry (7.7) — una plantilla por evento existente', 
       expect(rendered.body.length).toBeGreaterThan(0);
     }
   });
+
+  // 12.5 RED — barber-absence-reassignment now owns a NotificationTemplate
+  // member ('absence_reassignment_offer'); the registry MUST render it (the
+  // exhaustive Record<NotificationTemplate, ...> forces this — see the type
+  // doc comment above).
+  it('absence_reassignment_offer: ofrece el horario alternativo del mismo dia', () => {
+    const rendered = registry['absence_reassignment_offer']({
+      appointmentId: 'apt-1',
+      offeredBarberId: 'barber-2',
+      offeredStart: '2026-09-01T14:00:00.000Z',
+      offeredEnd: '2026-09-01T14:30:00.000Z',
+      holdExpiresAt: '2026-09-01T14:15:00.000Z',
+    });
+    expect(rendered.subject.length).toBeGreaterThan(0);
+    expect(rendered.body.length).toBeGreaterThan(0);
+  });
 });

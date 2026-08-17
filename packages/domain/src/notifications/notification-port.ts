@@ -19,13 +19,20 @@
  * branch exists so Phase 7's template can render the "última oportunidad"
  * deadline for the con-seña row and omit it for the sin-seña one; here the
  * handler only records the event in `notification_outbox`.
+ *
+ * `absence_reassignment_offer` lands in Phase 12: `GenerateAbsenceReassignmentOffers`
+ * fires it once per affected turno right after it claims the same-day
+ * replacement hold (barber-absence-reassignment spec, "Ofertas del mismo
+ * día, de cualquier barbero" — "MUST notificar al cliente por el canal de
+ * notificación configurado").
  */
 export type NotificationTemplate =
   | 'staff_activation'
   | 'staff_password_reset'
   | 'cancellation_with_refund'
   | 'reminder_with_deposit'
-  | 'reminder_without_deposit';
+  | 'reminder_without_deposit'
+  | 'absence_reassignment_offer';
 
 /**
  * A dispatch intention — deliberately transport-agnostic. `data` carries

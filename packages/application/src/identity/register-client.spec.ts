@@ -38,6 +38,7 @@ function buildHold(overrides: Partial<Hold> = {}): Hold {
     channel: 'web',
     timeRange: { start: at('10:00'), end: at('10:30') },
     holdExpiresAt: at('10:15'),
+    originOccupancyId: null,
     ...overrides,
   };
 }

@@ -73,4 +73,23 @@ describe('DrizzleClientRepository (Testcontainers)', () => {
 
     expect(all).toEqual(expect.arrayContaining([a, b]));
   });
+
+  // Task 12.5/12.6 — GenerateAbsenceReassignmentOffers needs the affected
+  // client's email by id (an appointment carries clientId, not email).
+  it('finds an existing client by id', async () => {
+    const repo = new DrizzleClientRepository(db);
+    const created = await repo.create({ name: 'Sofia', phone: '3519998888', email: 'sofia@example.com', age: 28 });
+
+    const found = await repo.findById(created.id);
+
+    expect(found).toEqual(created);
+  });
+
+  it('returns null for an id that does not exist', async () => {
+    const repo = new DrizzleClientRepository(db);
+
+    const found = await repo.findById(crypto.randomUUID());
+
+    expect(found).toBeNull();
+  });
 });

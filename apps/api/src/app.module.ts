@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AbsenceReassignmentModule } from './absence-reassignment/absence-reassignment.module';
 import { AccessControlModule } from './access-control/access-control.module';
 import { AgendaModule } from './agenda/agenda.module';
 import { AppointmentsModule } from './appointments/appointments.module';
@@ -23,7 +24,9 @@ import { PaymentsModule } from './payments/payments.module';
  * imported here until now ("real business endpoints start Phase 8/9/10", its
  * own doc comment said), because until `PgBossPaymentJobQueue` existed there
  * was no real `PAYMENT_JOB_QUEUE` to give it; `PanelModule` (task 10.14/10.15,
- * client/barber management) is the sixth.
+ * client/barber management) is the sixth; and `AbsenceReassignmentModule`
+ * (Phase 12, barber-absence-reassignment's detection entry point) is the
+ * seventh and last of the tracker.
  *
  * Deliberately no `main.ts` yet: this app is still only a module graph, not
  * a listening HTTP server — that starts whichever later phase needs one
@@ -38,6 +41,7 @@ import { PaymentsModule } from './payments/payments.module';
     BarbersModule,
     PaymentsModule,
     PanelModule,
+    AbsenceReassignmentModule,
   ],
 })
 export class AppModule {}

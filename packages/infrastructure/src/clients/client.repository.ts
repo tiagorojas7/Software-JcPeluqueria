@@ -12,6 +12,11 @@ export class DrizzleClientRepository implements ClientRepository {
     return rows[0] ?? null;
   }
 
+  async findById(id: string): Promise<Client | null> {
+    const rows = await this.db.select().from(clients).where(eq(clients.id, id)).limit(1);
+    return rows[0] ?? null;
+  }
+
   async create(input: CreateClientInput): Promise<Client> {
     const rows = await this.db.insert(clients).values(input).returning();
     const created = rows[0];

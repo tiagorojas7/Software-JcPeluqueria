@@ -1,3 +1,4 @@
+export * from './absence-reassignment';
 export * from './agenda';
 export * from './appointments';
 export * from './availability';

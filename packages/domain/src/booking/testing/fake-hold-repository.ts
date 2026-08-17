@@ -19,17 +19,20 @@ export class FakeHoldRepository implements HoldRepository {
   readonly confirmCalls: string[] = [];
   readonly beginCheckoutCalls: { holdId: string; paymentExpiresAt: Date }[] = [];
   readonly attachClientCalls: { holdId: string; clientId: string }[] = [];
+  readonly releaseCalls: string[] = [];
   private readonly byId = new Map<string, Hold>();
 
   /**
    * @param confirmResult What every `confirm()` call resolves to.
    * @param beginCheckoutResult What every `beginCheckout()` call resolves to.
    * @param attachClientResult What every `attachClient()` call resolves to.
+   * @param releaseResult What every `release()` call resolves to.
    */
   constructor(
     private readonly confirmResult: boolean = true,
     private readonly beginCheckoutResult: boolean = true,
     private readonly attachClientResult: boolean = true,
+    private readonly releaseResult: boolean = true,
   ) {}
 
   /** Test-only seam so a spec can make `findById` resolve a hold it never
@@ -66,5 +69,14 @@ export class FakeHoldRepository implements HoldRepository {
       }
     }
     return this.attachClientResult;
+  }
+
+  /** Mirrors `confirm()`/`beginCheckout()`'s shape, but never transitions a
+   *  seeded hold to `reservado` — callers assert on `releaseCalls` instead of
+   *  reading the hold back, since this fake does not model a `liberado`
+   *  status the way the real adapter's `status` column does. */
+  async release(holdId: string): Promise<boolean> {
+    this.releaseCalls.push(holdId);
+    return this.releaseResult;
   }
 }

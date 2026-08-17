@@ -17,6 +17,14 @@ export interface CreateHoldInput {
   readonly timeRange: TimeWindow;
   /** Where alternatives are searched if the slot turns out to be taken. */
   readonly searchWindow: TimeWindow;
+  /**
+   * Set only by `GenerateAbsenceReassignmentOffers` (barber-absence-
+   * reassignment, task 12.4): the `reservado` appointment this hold is
+   * offered as a same-day replacement for. Every other caller (client-
+   * booking, phone/walk-in, `ConfirmHold`'s reoffer) omits it, which
+   * defaults to `null` — an ordinary hold with nothing to replace.
+   */
+  readonly originOccupancyId?: string | null;
 }
 
 /**
@@ -49,6 +57,7 @@ export class CreateHold {
       channel: input.channel,
       timeRange: input.timeRange,
       holdExpiresAt: this.clock.addMinutes(this.clock.now(), HOLD_DURATION_MINUTES),
+      originOccupancyId: input.originOccupancyId ?? null,
     };
     await this.holds.create(hold, input.searchWindow);
     await this.holdExpire.scheduleExpire({ holdId: hold.id, startAfter: hold.holdExpiresAt });

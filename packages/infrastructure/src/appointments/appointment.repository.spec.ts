@@ -35,6 +35,18 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
     return id;
   };
 
+  // A FRESH barber per test that needs one, isolated from the shared
+  // `barberId`/`otherBarberId` fixtures OTHER tests in this file accumulate
+  // `reservado` rows against over the whole suite's run (no per-test reset).
+  // findReservedByBarberInRange's own tests query a WIDE working-day window
+  // by design (that IS the detection query's real shape), so they need this
+  // isolation to avoid seeing leftover rows from earlier, unrelated tests.
+  const newBarber = async (): Promise<string> => {
+    const barber = createBarber({ id: crypto.randomUUID(), name: 'Barbero aislado', active: true });
+    await new DrizzleBarberRepository(db).create(barber);
+    return barber.id;
+  };
+
   beforeAll(async () => {
     container = await new PostgreSqlContainer('postgres:16')
       .withDatabase('jc_barberia_test')
@@ -134,5 +146,87 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
 
     const rows = await client`select status from slot_occupancies where id = ${id}`;
     expect([...rows]).toEqual([{ status: 'cancelado' }]);
+  });
+
+  // Task 12.7/12.9 bugfix — findById used to THROW for any appointment
+  // carrying a deposit_id ("the deposits table is not wired yet", a Phase 4
+  // comment nobody updated once Phase 5 actually built it). Without this
+  // fix, the "con seña" path barber-absence-reassignment spec explicitly
+  // requires to work — "el turno original puede tener o no tener seña
+  // asociada ... ambos casos deben resolverse correctamente" — could never
+  // even load. Mirrors DrizzleDepositRepository.findDepositForAppointment's
+  // own reconstruction exactly.
+  it('reconstructs a settled DepositState instead of throwing, for a web appointment with a real deposit_id', async () => {
+    const appointmentId = crypto.randomUUID();
+    const [deposit] = await client`insert into deposits (amount_cents, payment_id, state)
+                                     values (250000, ${'mp-' + appointmentId}, 'settled') returning id`;
+    await client`insert into slot_occupancies (id, barber_id, service_id, client_id, channel, status, time_range, deposit_id)
+                 values (${appointmentId}, ${barberId}, ${serviceId}, ${clientId}, 'web', 'reservado', ${range('08:00', '08:30')}::tstzrange, ${deposit!.id})`;
+    const repo = new DrizzleAppointmentRepository(db);
+
+    const appointment = await repo.findById(appointmentId);
+
+    expect(appointment?.deposit).toEqual({ kind: 'settled', paymentId: 'mp-' + appointmentId, amountCents: 250000 });
+  });
+
+  it('reconstructs a refunded DepositState the same way', async () => {
+    const appointmentId = crypto.randomUUID();
+    const [deposit] = await client`insert into deposits (amount_cents, payment_id, state)
+                                     values (250000, ${'mp-refunded-' + appointmentId}, 'refunded') returning id`;
+    await client`insert into slot_occupancies (id, barber_id, service_id, client_id, channel, status, time_range, deposit_id)
+                 values (${appointmentId}, ${barberId}, ${serviceId}, ${clientId}, 'web', 'cancelado', ${range('08:30', '09:00')}::tstzrange, ${deposit!.id})`;
+    const repo = new DrizzleAppointmentRepository(db);
+
+    const appointment = await repo.findById(appointmentId);
+
+    expect(appointment?.deposit).toEqual({ kind: 'refunded', refundId: '', amountCents: 250000 });
+  });
+
+  // 12.1/12.2/12.12/12.13 — barber-absence-reassignment, "Detección de
+  // turnos afectados" + "No interferencia con otros turnos": the WHERE
+  // clause is what makes the scope structural.
+  describe('findReservedByBarberInRange (12.1/12.2/12.12/12.13)', () => {
+    it('returns only THIS barber\'s reservado appointments inside the range, excluding another barber\'s turno in the exact same window', async () => {
+      const absentBarber = await newBarber();
+      const otherActiveBarber = await newBarber();
+      const affected = await insertAppointment(absentBarber, '09:00', '09:30');
+      // Same window, different (non-absent) barber — MUST NOT come back.
+      await insertAppointment(otherActiveBarber, '09:00', '09:30');
+      const repo = new DrizzleAppointmentRepository(db);
+
+      const found = await repo.findReservedByBarberInRange(absentBarber, {
+        start: at('09:00'),
+        end: at('18:00'),
+      });
+
+      expect(found.map((a) => a.id)).toEqual([affected]);
+    });
+
+    it('excludes a reservado appointment for the same barber OUTSIDE the range', async () => {
+      const barber = await newBarber();
+      await insertAppointment(barber, '20:00', '20:30');
+      const repo = new DrizzleAppointmentRepository(db);
+
+      const found = await repo.findReservedByBarberInRange(barber, {
+        start: at('09:00'),
+        end: at('18:00'),
+      });
+
+      expect(found).toEqual([]);
+    });
+
+    it('excludes a cancelled appointment for the same barber inside the range — only reservado counts', async () => {
+      const barber = await newBarber();
+      const id = await insertAppointment(barber, '17:00', '17:30');
+      const repo = new DrizzleAppointmentRepository(db);
+      await repo.updateStatus(id, 'cancelado');
+
+      const found = await repo.findReservedByBarberInRange(barber, {
+        start: at('09:00'),
+        end: at('18:00'),
+      });
+
+      expect(found).toEqual([]);
+    });
   });
 });

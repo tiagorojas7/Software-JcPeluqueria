@@ -54,6 +54,9 @@ function buildHold(): Hold {
     serviceId: SERVICE_ID,
     clientId: 'client-1',
     channel: 'web',
+    // An ordinary web booking replaces no earlier appointment; only a
+    // Phase 12 reassignment offer carries an origin.
+    originOccupancyId: null,
     timeRange: { start: at('10:00'), end: at('10:30') },
     holdExpiresAt: at('10:15'),
   };

@@ -1,9 +1,18 @@
+import type { TimeWindow } from '../../availability';
 import type { Appointment } from '../appointment';
 import type {
   AppointmentRepository,
   AppointmentScheduleChange,
 } from '../appointment-repository';
 import type { AppointmentStatus } from '../appointment-status';
+
+/** `[a, b)` overlaps `[c, d)` iff `a < d && c < b` — the same half-open
+ *  interval semantics `no_overlap_per_barber` (migration 0003) enforces in
+ *  PostgreSQL, mirrored here so this fake's scoping matches the real EXCLUDE
+ *  constraint's without needing a database. */
+function overlaps(a: TimeWindow, b: TimeWindow): boolean {
+  return a.start < b.end && b.start < a.end;
+}
 
 /**
  * In-memory `AppointmentRepository` test double. Real conflict detection
@@ -39,5 +48,14 @@ export class FakeAppointmentRepository implements AppointmentRepository {
     if (existing) {
       this.byId.set(id, { ...existing, status });
     }
+  }
+
+  async findReservedByBarberInRange(barberId: string, range: TimeWindow): Promise<Appointment[]> {
+    return [...this.byId.values()].filter(
+      (appointment) =>
+        appointment.barberId === barberId &&
+        appointment.status === 'reservado' &&
+        overlaps(appointment.timeRange, range),
+    );
   }
 }
