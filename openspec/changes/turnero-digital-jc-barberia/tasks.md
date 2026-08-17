@@ -294,19 +294,19 @@ Requisitos que cierra: **barber-profile** (4/4: Agenda propia filtrada · Estad�
 
 ## Phase 12: Reasignación por ausencia (~350 líneas) — PR 14 (base: PR 13, última del tracker) — depende de 2, 6, 7, 10
 
-- [ ] 12.1 RED: marcar un barbero no disponible identifica todos sus turnos `reservado` de la franja. → *barber-absence-reassignment: Detección de turnos afectados*
-- [ ] 12.2 GREEN: `MarkBarberAbsentUseCase` (permiso `barber:mark-absent`, reutiliza 3b).
-- [ ] 12.3 RED: por cada turno afectado se buscan huecos libres del mismo día de cualquier barbero y se crea un hold con `origin_occupancy_id`. → *barber-absence-reassignment: Ofertas del mismo día, de cualquier barbero*
-- [ ] 12.4 GREEN: generación de ofertas reutilizando `CreateHold` (2.8) con scope `same-day`.
-- [ ] 12.5 RED: se despacha notificación con las opciones del día vía `notification_outbox`.
-- [ ] 12.6 GREEN: conectar la generación de ofertas al outbox (7.7 plantilla de oferta).
-- [ ] 12.7 RED: aceptar una oferta con hold activo re-valida y reasigna el turno original (mueve `barber_id`/`time_range`), conserva `deposit_id`, sin cobro ni reembolso nuevo. → *barber-absence-reassignment: Aceptación reagenda sin mover dinero*
-- [ ] 12.8 GREEN: `AcceptOfferUseCase` como `UPDATE` del turno original, no INSERT/DELETE.
-- [ ] 12.9 RED: rechazo explícito con seña cancela el turno original y dispara reembolso automático. → *barber-absence-reassignment: Rechazo o falta de respuesta cancela el turno original*
-- [ ] 12.10 RED: no responder en 15 min (vía `hold.expire` con `origin_occupancy_id`) cancela sin seña, sin reembolso.
-- [ ] 12.11 GREEN: `RejectOfferUseCase` + extender el handler `hold.expire` (6.5) para la rama con `origin_occupancy_id`.
-- [ ] 12.12 RED: turnos `reservado` de otros clientes en la misma franja, con barberos no afectados, permanecen intactos. → *barber-absence-reassignment: No interferencia con otros turnos*
-- [ ] 12.13 GREEN: confirmar el alcance de la query de detección (12.1) y de la generación de ofertas (12.3) contra 12.12.
+- [x] 12.1 RED: marcar un barbero no disponible identifica todos sus turnos `reservado` de la franja. → *barber-absence-reassignment: Detección de turnos afectados*
+- [x] 12.2 GREEN: `MarkBarberAbsentUseCase` (permiso `barber:mark-absent`, reutiliza 3b).
+- [x] 12.3 RED: por cada turno afectado se buscan huecos libres del mismo día de cualquier barbero y se crea un hold con `origin_occupancy_id`. → *barber-absence-reassignment: Ofertas del mismo día, de cualquier barbero*
+- [x] 12.4 GREEN: generación de ofertas reutilizando `CreateHold` (2.8) con scope `same-day`.
+- [x] 12.5 RED: se despacha notificación con las opciones del día vía `notification_outbox`.
+- [x] 12.6 GREEN: conectar la generación de ofertas al outbox (7.7 plantilla de oferta).
+- [x] 12.7 RED: aceptar una oferta con hold activo re-valida y reasigna el turno original (mueve `barber_id`/`time_range`), conserva `deposit_id`, sin cobro ni reembolso nuevo. → *barber-absence-reassignment: Aceptación reagenda sin mover dinero*
+- [x] 12.8 GREEN: `AcceptOfferUseCase` como `UPDATE` del turno original, no INSERT/DELETE.
+- [x] 12.9 RED: rechazo explícito con seña cancela el turno original y dispara reembolso automático. → *barber-absence-reassignment: Rechazo o falta de respuesta cancela el turno original*
+- [x] 12.10 RED: no responder en 15 min (vía `hold.expire` con `origin_occupancy_id`) cancela sin seña, sin reembolso.
+- [x] 12.11 GREEN: `RejectOfferUseCase` + extender el handler `hold.expire` (6.5) para la rama con `origin_occupancy_id`.
+- [x] 12.12 RED: turnos `reservado` de otros clientes en la misma franja, con barberos no afectados, permanecen intactos. → *barber-absence-reassignment: No interferencia con otros turnos*
+- [x] 12.13 GREEN: confirmar el alcance de la query de detección (12.1) y de la generación de ofertas (12.3) contra 12.12.
 
 Requisitos que cierra: **barber-absence-reassignment** (5/5: Detección de turnos afectados · Ofertas del mismo día, de cualquier barbero · Aceptación reagenda sin mover dinero · Rechazo o falta de respuesta cancela el turno original · No interferencia con otros turnos).
 
