@@ -6,7 +6,10 @@
   "description": "React SPA (public booking + panel + agenda). Implementation starts Phase 8.",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview"
   },
   "dependencies": {
     "@jc-barberia/contracts": "workspace:*",

@@ -51,6 +51,28 @@ export default [
     },
   },
   {
+    // apps/web is the only package that runs IN a browser (every other
+    // package is Node-only) — the arranque slice's pages are the first code
+    // in this repo to touch these globals directly (every pre-existing
+    // component is purely presentational, receiving data through props
+    // instead), so nothing declared them before now. Scoped to this one
+    // package on purpose: Node code getting `window`/`document`/`fetch` as
+    // valid globals would just weaken `no-undef` there for no reason.
+    files: ['apps/web/src/**/*.ts', 'apps/web/src/**/*.tsx'],
+    languageOptions: {
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
+        RequestInit: 'readonly',
+        URLSearchParams: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+      },
+    },
+  },
+  {
     // Agent worktrees are whole copies of the repo living inside it. Linting
     // them reports every finding N+1 times and attributes it to a path that is
     // not the source of truth — the real file is linted on its own.

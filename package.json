@@ -10,7 +10,16 @@
     "test": "pnpm -r --if-present run test",
     "lint": "eslint .",
     "typecheck": "pnpm -r --if-present run typecheck",
-    "depcruise": "depcruise --config .dependency-cruiser.cjs packages apps"
+    "depcruise": "depcruise --config .dependency-cruiser.cjs packages apps",
+    "docker:up": "docker compose up -d",
+    "db:migrate": "pnpm --filter @jc-barberia/infrastructure run db:migrate",
+    "seed": "pnpm --filter @jc-barberia/infrastructure run db:seed",
+    "dev:api": "pnpm --filter @jc-barberia/api run dev",
+    "dev:worker": "pnpm --filter @jc-barberia/worker run dev",
+    "dev:web": "pnpm --filter @jc-barberia/web run dev",
+    "start:api": "pnpm --filter @jc-barberia/api run start",
+    "start:worker": "pnpm --filter @jc-barberia/worker run start",
+    "start:web": "pnpm --filter @jc-barberia/web run start"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
