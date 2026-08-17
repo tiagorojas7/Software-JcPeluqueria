@@ -11,6 +11,14 @@ export interface ClientLoginInput {
 
 export type ClientLoginResult =
   | { readonly outcome: 'authenticated'; readonly userId: string }
+  /**
+   * The challenge is dead — expired, out of attempts, or already spent.
+   * Retrying the same one can never succeed, so the caller must send the
+   * client back to "request a new code" (client-booking spec, "Código de
+   * acceso vencido": rechazarlo AND exigir una nueva solicitud).
+   */
+  | { readonly outcome: 'must-request-new-code'; readonly reason: 'expired' | 'exhausted' | 'consumed' }
+  /** Wrong secret on a challenge that is still alive — a retry is meaningful. */
   | { readonly outcome: 'rejected' };
 
 const CLIENT_LOGIN_PURPOSE: AuthChallengePurpose = 'client_login';
@@ -34,7 +42,13 @@ export class ClientLoginUseCase {
       secret: input.secret,
     });
     if (!result.consumed) {
-      return { outcome: 'rejected' };
+      // Only `mismatch` leaves the challenge usable. Everything else means the
+      // client needs a fresh code, and saying so is the requirement's second
+      // half — without it the web can only ever offer "try again", on a
+      // challenge that can never succeed.
+      return result.reason === 'mismatch'
+        ? { outcome: 'rejected' }
+        : { outcome: 'must-request-new-code', reason: result.reason };
     }
     return { outcome: 'authenticated', userId: result.userId };
   }

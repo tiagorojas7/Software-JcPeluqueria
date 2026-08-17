@@ -2,6 +2,7 @@ export type {
   AuthChallenge,
   AuthChallengePurpose,
   AuthChallengeRepository,
+  ConsumeChallengeFailure,
   ConsumeChallengeResult,
 } from './auth-challenge';
 export {

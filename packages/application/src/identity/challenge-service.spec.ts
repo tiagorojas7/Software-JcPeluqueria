@@ -122,6 +122,8 @@ describe('ChallengeService.consume', () => {
       secret: 'wrong-secret',
     });
 
-    expect(result).toEqual({ consumed: false });
+    // 9.9 widened the losing branch with WHY it lost, so the caller can tell
+    // 'wrong digits, retry' from 'dead challenge, request a new one'.
+    expect(result).toEqual({ consumed: false, reason: 'mismatch' });
   });
 });

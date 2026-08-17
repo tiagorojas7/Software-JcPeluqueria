@@ -62,6 +62,56 @@ export class DrizzleAuthChallengeRepository implements AuthChallengeRepository {
       .returning({ userId: authChallenges.userId, consumedAt: authChallenges.consumedAt });
 
     const row = rows[0];
-    return row && row.consumedAt !== null ? { consumed: true, userId: row.userId } : { consumed: false };
+    if (row && row.consumedAt !== null) {
+      return { consumed: true, userId: row.userId };
+    }
+    // The row came back untouched-by-CASE: it was alive and the guess simply
+    // did not match. The attempt has already been recorded by the same
+    // statement — nothing more to look up.
+    if (row) {
+      return { consumed: false, reason: 'mismatch' };
+    }
+    return { consumed: false, reason: await this.classifyMiss(challengeId, purpose) };
+  }
+
+  /**
+   * Zero rows means the WHERE excluded the challenge, and the caller needs to
+   * know whether a retry could ever work (client-booking, "Código de acceso
+   * vencido": the system must demand a NEW request, not another guess).
+   *
+   * Safe to read AFTER the fact: the conditional UPDATE has already run and
+   * already lost, so this adds no read-then-write race — it only explains a
+   * decision the database has finished making. It runs exclusively on the
+   * losing path, so the winning case is still exactly one round trip.
+   */
+  private async classifyMiss(
+    challengeId: string,
+    purpose: AuthChallengePurpose,
+  ): Promise<'expired' | 'exhausted' | 'consumed' | 'mismatch'> {
+    const found = await this.db
+      .select({
+        consumedAt: authChallenges.consumedAt,
+        attempts: authChallenges.attempts,
+        expired: sql<boolean>`${authChallenges.expiresAt} <= now()`,
+      })
+      .from(authChallenges)
+      .where(and(eq(authChallenges.id, challengeId), eq(authChallenges.purpose, purpose)))
+      .limit(1);
+
+    const state = found[0];
+    // No row under this id AND purpose is reported as `mismatch`, never as its
+    // own reason: "this id exists but belongs to a staff reset" is exactly the
+    // fact the client-login path must not be able to learn. The purpose stays
+    // in the WHERE for the same reason it is in `consume`'s.
+    if (!state) {
+      return 'mismatch';
+    }
+    if (state.consumedAt !== null) {
+      return 'consumed';
+    }
+    if (state.expired) {
+      return 'expired';
+    }
+    return state.attempts >= MAX_CHALLENGE_ATTEMPTS ? 'exhausted' : 'mismatch';
   }
 }

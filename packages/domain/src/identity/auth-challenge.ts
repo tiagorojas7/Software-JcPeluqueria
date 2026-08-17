@@ -48,9 +48,27 @@ export interface AuthChallenge {
   readonly expiresAt: Date;
 }
 
+/**
+ * Why a consume lost. The distinction exists for one requirement
+ * (client-booking, "Código de acceso vencido"): the caller MUST be able to
+ * demand a NEW access request rather than another guess, and it cannot do
+ * that if every losing case looks the same.
+ *
+ * `expired`, `exhausted` and `consumed` all mean the challenge is dead —
+ * retrying is pointless, a new one must be issued. Only `mismatch` leaves the
+ * challenge alive and a retry meaningful.
+ *
+ * This describes the CHALLENGE, never the secret: the caller already holds the
+ * challenge id, so learning that this particular one is dead tells its
+ * legitimate holder nothing they did not already have. `mismatch` deliberately
+ * stays a single value — it never reveals how close a guess was, nor whether
+ * the id matched a code or a token.
+ */
+export type ConsumeChallengeFailure = 'expired' | 'exhausted' | 'consumed' | 'mismatch';
+
 export type ConsumeChallengeResult =
   | { readonly consumed: true; readonly userId: string }
-  | { readonly consumed: false };
+  | { readonly consumed: false; readonly reason: ConsumeChallengeFailure };
 
 export interface AuthChallengeRepository {
   /** Persists a freshly issued challenge. Only hashes are ever written. */

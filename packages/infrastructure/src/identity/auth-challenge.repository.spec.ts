@@ -93,7 +93,9 @@ describe('auth challenge consumption (Testcontainers)', () => {
     const replay = await repo.consume(id, 'client_login', sha256Hex(code));
 
     expect(first).toEqual({ consumed: true, userId });
-    expect(replay).toEqual({ consumed: false });
+    // Single use: the replay loses because the row is already spent, which is
+    // a dead challenge — the caller must request a new one, not guess again.
+    expect(replay).toEqual({ consumed: false, reason: 'consumed' });
   });
 
   it('consumes on a matching magic-link token just as well as the code', async () => {
@@ -119,7 +121,8 @@ describe('auth challenge consumption (Testcontainers)', () => {
       sha256Hex('000000'),
     );
 
-    expect(result).toEqual({ consumed: false });
+    // Alive challenge, wrong secret: the only losing case a retry can still fix.
+    expect(result).toEqual({ consumed: false, reason: 'mismatch' });
   });
 
   it('never consumes a challenge issued for a different purpose', async () => {
@@ -134,7 +137,10 @@ describe('auth challenge consumption (Testcontainers)', () => {
       sha256Hex(code),
     );
 
-    expect(result).toEqual({ consumed: false });
+    // A leaked staff-activation link reports plain `mismatch`, never its own
+    // reason: that this id exists under another purpose must not be learnable
+    // from the client-login path.
+    expect(result).toEqual({ consumed: false, reason: 'mismatch' });
   });
 
   // The only real proof of single-use under concurrency, mirroring
@@ -170,7 +176,9 @@ describe('auth challenge consumption (Testcontainers)', () => {
 
     const result = await new DrizzleAuthChallengeRepository(db).consume(id, 'client_login', sha256Hex(code));
 
-    expect(result).toEqual({ consumed: false });
+    // The requirement's case (client-booking, "Codigo de acceso vencido"):
+    // reported as `expired` so the caller can demand a NEW request.
+    expect(result).toEqual({ consumed: false, reason: 'expired' });
   });
 
   // 5 failed attempts must invalidate the challenge outright — the 6th
@@ -183,13 +191,17 @@ describe('auth challenge consumption (Testcontainers)', () => {
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const failed = await repo.consume(id, 'client_login', wrongHash);
-      expect(failed).toEqual({ consumed: false });
+      // Each of the five wrong guesses is still an ordinary retryable miss.
+      expect(failed).toEqual({ consumed: false, reason: 'mismatch' });
     }
     const rows = await client`select attempts from auth_challenges where id = ${id}`;
     expect(rows[0]).toEqual({ attempts: 5 });
 
     const finalTry = await repo.consume(id, 'client_login', sha256Hex(code));
 
-    expect(finalTry).toEqual({ consumed: false });
+    // The sixth try carries the CORRECT secret and still loses, and the reason
+    // is the attempt limit, not the secret — so the caller sends the client to
+    // request a new code instead of insisting with a code that is actually right.
+    expect(finalTry).toEqual({ consumed: false, reason: 'exhausted' });
   });
 });
