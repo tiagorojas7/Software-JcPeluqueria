@@ -9,7 +9,7 @@ import {
   DrizzleHoldRepository,
   DrizzleScheduleRepository,
   DrizzleServiceRepository,
-  jobSender,
+  lazyJobSender,
   PgBossHoldExpireScheduler,
   ShopClock,
   stopJobSender,
@@ -61,8 +61,12 @@ import {
     { provide: FREE_RANGES_QUERY, useFactory: () => new DrizzleFreeRangesQuery(db) },
     { provide: HOLD_REPOSITORY, useFactory: () => new DrizzleHoldRepository(db) },
     {
+      // Synchronous on purpose: `lazyJobSender()` defers the pg-boss
+      // connection to the first enqueue. Building the module graph must not
+      // touch the network, or a queue outage stops the whole API from
+      // booting — and every Nest test dies before its first assertion.
       provide: HOLD_EXPIRE_SCHEDULER,
-      useFactory: async () => new PgBossHoldExpireScheduler(await jobSender()),
+      useFactory: () => new PgBossHoldExpireScheduler(lazyJobSender()),
     },
     {
       provide: GetPublicAvailabilityUseCase,
@@ -80,6 +84,23 @@ import {
       inject: [HOLD_REPOSITORY, CLOCK, HOLD_EXPIRE_SCHEDULER],
       useFactory: (holds: HoldRepository, clock: Clock, holdExpire: HoldExpireScheduler) =>
         new CreateHold(holds, clock, holdExpire),
+    },
+    { provide: CLIENT_REPOSITORY, useFactory: () => new DrizzleClientRepository(db) },
+    {
+      provide: CLIENT_ACCOUNT_REPOSITORY,
+      useFactory: () => new DrizzleClientAccountRepository(db),
+    },
+    {
+      // Task 9.7/9.8 — the account is created at the END of the booking flow,
+      // never at the start. No password parameter reaches this graph at any
+      // point: `ClientAccountRepository.create` structurally cannot accept one.
+      provide: RegisterClientUseCase,
+      inject: [CLIENT_REPOSITORY, CLIENT_ACCOUNT_REPOSITORY, HOLD_REPOSITORY],
+      useFactory: (
+        clients: ClientRepository,
+        accounts: ClientAccountRepository,
+        holds: HoldRepository,
+      ) => new RegisterClientUseCase(clients, accounts, holds),
     },
   ],
 })
