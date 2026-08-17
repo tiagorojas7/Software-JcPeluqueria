@@ -1,0 +1,1 @@
+export const WALK_IN_REPOSITORY = Symbol('WALK_IN_REPOSITORY');

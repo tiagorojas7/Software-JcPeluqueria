@@ -15,7 +15,7 @@ import { slotOccupancies } from '../db/schema/slot-occupancy';
 export class DrizzleHoldRepository implements HoldRepository {
   constructor(private readonly db: PostgresJsDatabase) {}
 
-  async create(hold: Hold, searchWindow: TimeWindow): Promise<void> {
+  async create(hold: Hold, searchWindow: TimeWindow, originOccupancyId?: string): Promise<void> {
     await this.releaseExpiredHolds(hold.barberId, searchWindow);
     try {
       await this.db.insert(slotOccupancies).values({
@@ -27,12 +27,13 @@ export class DrizzleHoldRepository implements HoldRepository {
         status: 'held',
         timeRange: toRangeLiteral(hold.timeRange),
         holdExpiresAt: hold.holdExpiresAt,
+        originOccupancyId: originOccupancyId ?? undefined,
       });
     } catch (error) {
       if (!isExclusionViolation(error)) {
         throw error;
       }
-      throw new SlotUnavailableError(await freeRanges(this.db, hold.barberId, searchWindow));
+      throw new SlotUnavailableError(await freeRanges(hold.barberId, searchWindow));
     }
   }
 

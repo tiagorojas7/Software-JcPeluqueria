@@ -31,5 +31,6 @@ export interface CreateClientInput {
  */
 export interface ClientRepository {
   findByPhone(phone: string): Promise<Client | null>;
+  list(): Promise<Client[]>;
   create(input: CreateClientInput): Promise<Client>;
 }

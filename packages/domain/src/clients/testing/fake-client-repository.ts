@@ -9,15 +9,21 @@ import type { Client, ClientRepository, CreateClientInput } from '../client';
  */
 export class FakeClientRepository implements ClientRepository {
   private readonly byPhone = new Map<string, Client>();
+  private readonly all: Client[] = [];
   private nextId = 1;
 
   async findByPhone(phone: string): Promise<Client | null> {
     return this.byPhone.get(phone) ?? null;
   }
 
+  async list(): Promise<Client[]> {
+    return this.all;
+  }
+
   async create(input: CreateClientInput): Promise<Client> {
     const client: Client = { id: `client-${this.nextId++}`, ...input };
     this.byPhone.set(client.phone, client);
+    this.all.push(client);
     return client;
   }
 }
