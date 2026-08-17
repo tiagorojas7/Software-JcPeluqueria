@@ -4,6 +4,7 @@ export * from './access-control';
 export * from './agenda';
 export * from './appointments';
 export * from './availability';
+export * from './barbers';
 export * from './booking';
 export * from './clients';
 export * from './identity';
