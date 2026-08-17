@@ -5,3 +5,4 @@ export type { DayBoardColumn, DayBoardResponse, DayBoardSlot, SlotAction } from 
 export { SLOT_ACTIONS } from './agenda';
 export type { CreatePhoneAppointmentRequest, PhoneAppointmentResponse } from './appointments';
 export { CreatePhoneAppointmentRequestSchema } from './appointments';
+export type { BarberRevenueResponse, BarberStatsResponse } from './barbers';

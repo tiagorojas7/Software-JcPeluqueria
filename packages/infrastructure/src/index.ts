@@ -27,3 +27,4 @@ export { DrizzleWalkInRepository } from './booking/walk-in.repository';
 export { DrizzleClientRepository } from './clients/client.repository';
 export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
 export { DrizzleAbsenceRecordRepository } from './appointments/absence-record.repository';
+export { DrizzleBarberPerformanceRepository } from './barbers/barber-performance.repository';
