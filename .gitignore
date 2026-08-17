@@ -30,3 +30,9 @@ coverage/
 
 # Configuración local de herramientas (rutas absolutas por máquina)
 .atl/
+.claude/
+.opencode/
+
+# Worktrees de agentes creados dentro del repo (deberían vivir fuera, pero
+# mientras existan no pueden entrar al índice como copia completa del proyecto)
+recon-*/
