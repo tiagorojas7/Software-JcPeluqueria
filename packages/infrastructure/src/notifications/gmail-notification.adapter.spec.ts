@@ -24,6 +24,7 @@ const stubRegistry = {
   cancellation_with_refund: () => ({ subject: 'Se devolvio tu sena', body: 'body-cancel' }),
   reminder_with_deposit: () => ({ subject: 'Recordatorio', body: 'body-reminder-deposit' }),
   reminder_without_deposit: () => ({ subject: 'Recordatorio', body: 'body-reminder' }),
+  absence_reassignment_offer: () => ({ subject: 'Horario alternativo', body: 'body-offer' }),
 } as const;
 
 describe('GmailNotificationAdapter (7.3)', () => {
