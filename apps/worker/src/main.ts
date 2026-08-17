@@ -46,15 +46,23 @@ async function main(): Promise<void> {
   });
 
   // TODO(phase-7): wire `hold.expire` — once DrizzleHoldExpireViewRepository
-  //   lands:
+  //   AND a Drizzle-backed NotificationOutboxRepository land (still missing
+  //   from this codebase as of Phase 12 — see apply-progress for the
+  //   honest accounting of this gap):
   //   const expire = new ExpireHold(new DrizzleHoldExpireViewRepository(db),
-  //     new RefundUseCase(...), notifications /* GmailNotificationAdapter */);
+  //     new RefundUseCase(...), notifications /* GmailNotificationAdapter */,
+  //     new DrizzleAppointmentRepository(db) /* task 12.11 — cancels the
+  //     origin turno once its offer hold lapses unconfirmed */);
   //   await boss.work('hold.expire', async (job: { data: { holdId: string } }) => {
   //     await expire.execute(job.data.holdId);
   //   });
   // The 23:59 sweep + the reminder + the outbox consumer below are independent;
   // `hold.expire` not being registered only means the human-absolute refund +
   // cancel-on-lapse stays the lazy path until Phase 7 — safe by design (6.5).
+  // design.md's own testing table scopes barber-absence-reassignment's
+  // application layer to in-memory adapters (task 12.10/12.11's ExpireHold
+  // extension is proven that way, in hold-expire.spec.ts); this TODO's real
+  // wiring remains open, exactly as it already was before this phase.
 
   // TODO(phase-7): wire `appointment.reminder` — once the Drizzle outbox writer
   //   + the appointment reminder view land:
