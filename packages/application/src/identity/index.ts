@@ -16,3 +16,5 @@ export type {
 } from './reset-password';
 export { SessionService } from './session-service';
 export type { CreateSessionInput } from './session-service';
+export { RegisterClientUseCase } from './register-client';
+export type { RegisterClientInput, RegisterClientResult } from './register-client';

@@ -71,6 +71,13 @@
       "when": 1786660000000,
       "tag": "0009_client_absences",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786660100000,
+      "tag": "0010_users_client_fk",
+      "breakpoints": true
     }
   ]
 }

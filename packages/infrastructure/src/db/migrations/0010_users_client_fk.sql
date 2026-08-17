@@ -1,0 +1,11 @@
+-- Hand-written (drizzle-kit generate fails on a pre-existing snapshot-lineage
+-- collision from the parallel phase branches merged into this history —
+-- 0007/0008's meta/*_snapshot.json both point at the same parent snapshot).
+-- The migrator only reads this file + meta/_journal.json, never the
+-- snapshots, so that collision does not affect applying this migration.
+--
+-- `users.client_id` existed since migration 0004 with no FK ("clients"
+-- didn't exist yet); `clients` landed in migration 0008. Same
+-- deferred-then-added-once-the-target-exists pattern migration 0008 already
+-- used for `slot_occupancies.client_id`.
+ALTER TABLE "users" ADD CONSTRAINT "users_client_id_clients_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."clients"("id") ON DELETE no action ON UPDATE no action;

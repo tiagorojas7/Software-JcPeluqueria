@@ -106,4 +106,52 @@ export class DrizzleHoldRepository implements HoldRepository {
       .returning({ id: slotOccupancies.id });
     return rows.length > 0;
   }
+
+  /** Read path only — never a source of a write decision (see the port's
+   *  own doc comment). Reuses the same `lower()`/`upper()` + `.mapWith`
+   *  decoding `freeRanges` already established for `tstzrange`. */
+  async findById(holdId: string): Promise<Hold | null> {
+    const rows = await this.db
+      .select({
+        id: slotOccupancies.id,
+        barberId: slotOccupancies.barberId,
+        serviceId: slotOccupancies.serviceId,
+        clientId: slotOccupancies.clientId,
+        channel: slotOccupancies.channel,
+        start: sql`lower(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
+        end: sql`upper(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
+        holdExpiresAt: slotOccupancies.holdExpiresAt,
+      })
+      .from(slotOccupancies)
+      .where(eq(slotOccupancies.id, holdId));
+
+    const row = rows[0];
+    if (!row || !row.holdExpiresAt) {
+      return null;
+    }
+    return {
+      id: row.id,
+      barberId: row.barberId,
+      serviceId: row.serviceId,
+      clientId: row.clientId,
+      channel: row.channel as Hold['channel'],
+      timeRange: { start: row.start as Date, end: row.end as Date },
+      holdExpiresAt: row.holdExpiresAt,
+    };
+  }
+
+  /**
+   * Attaches the client identified at the end of the web flow
+   * (client-booking: "Cuenta sin contraseña creada al final del flujo") —
+   * re-validates `status = 'held'` in the same statement, the identical
+   * re-validate-then-write shape `confirm()`/`beginCheckout()` already use.
+   */
+  async attachClient(holdId: string, clientId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(slotOccupancies)
+      .set({ clientId })
+      .where(and(eq(slotOccupancies.id, holdId), eq(slotOccupancies.status, 'held')))
+      .returning({ id: slotOccupancies.id });
+    return rows.length > 0;
+  }
 }

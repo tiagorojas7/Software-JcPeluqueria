@@ -6,3 +6,20 @@ export { SLOT_ACTIONS } from './agenda';
 export type { CreatePhoneAppointmentRequest, PhoneAppointmentResponse } from './appointments';
 export { CreatePhoneAppointmentRequestSchema } from './appointments';
 export type { BarberRevenueResponse, BarberStatsResponse } from './barbers';
+export type {
+  AvailabilityResponse,
+  AvailabilitySlot,
+  CheckoutRequest,
+  CheckoutResponseBody,
+  ConfirmReservationRequest,
+  ConfirmReservationResponse,
+  CreateHoldRequest,
+  GetAvailabilityQuery,
+  HoldResponse,
+} from './booking';
+export {
+  CheckoutRequestSchema,
+  ConfirmReservationRequestSchema,
+  CreateHoldRequestSchema,
+  GetAvailabilityQuerySchema,
+} from './booking';

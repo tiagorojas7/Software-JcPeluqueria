@@ -2,13 +2,18 @@ import { boolean, integer, pgTable, timestamp, uuid, varchar } from 'drizzle-orm
 
 import { roles } from './access-control';
 import { barbers } from './availability';
+import { clients } from './clients';
 
 /**
- * Identity model. `client_id` carries no foreign key yet — `clients`
- * (Phase 9/10) doesn't exist yet, the same deferred-FK pattern
- * `slot_occupancies.client_id`/`deposit_id` used in Phase 2. `barber_id`
- * and (as of migration 0006, Phase 3b) `role_id` DO get their FK now that
- * `barbers`/`roles` exist.
+ * Identity model. `client_id` gained its FK in migration 0010 (Phase 9), now
+ * that `clients` exists — the same deferred-then-added-once-the-target-
+ * exists pattern `slot_occupancies.client_id` already went through in
+ * migration 0008. `barber_id` and (as of migration 0006, Phase 3b) `role_id`
+ * got theirs earlier, the same way, once `barbers`/`roles` existed.
+ *
+ * A passwordless client account (client-booking: "Cuenta sin contraseña
+ * creada al final del flujo") is exactly a `users` row with `client_id` set
+ * and `role_id`/`barber_id`/`password_hash` all `NULL` — no separate table.
  *
  * `password_hash`/`password_changed_at` (added in migration 0005, Phase 3a
  * staff sub-slice) are `NULL` for clients — clients never have a password,
@@ -21,7 +26,7 @@ export const users = pgTable('users', {
   email: varchar('email', { length: 255 }).notNull().unique(),
   roleId: uuid('role_id').references(() => roles.id),
   barberId: uuid('barber_id').references(() => barbers.id),
-  clientId: uuid('client_id'),
+  clientId: uuid('client_id').references(() => clients.id),
   active: boolean('active').notNull().default(true),
   passwordHash: varchar('password_hash', { length: 255 }),
   passwordChangedAt: timestamp('password_changed_at', { withTimezone: true }),
