@@ -4,6 +4,7 @@ import {
   FakeActorContextRepository,
   FakeClientRepository,
   FakeClock,
+  FakeHoldExpireScheduler,
   FakeHoldRepository,
   FakeRolePermissionRepository,
   type Permission,
@@ -14,7 +15,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ACTOR_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from '../src/access-control/tokens';
 import { SESSION_COOKIE_NAME } from '../src/access-control/session-cookie';
 import { AppModule } from '../src/app.module';
-import { CLIENT_REPOSITORY, CLOCK, HOLD_REPOSITORY } from '../src/appointments/tokens';
+import {
+  CLIENT_REPOSITORY,
+  CLOCK,
+  HOLD_EXPIRE_SCHEDULER,
+  HOLD_REPOSITORY,
+} from '../src/appointments/tokens';
 
 const OWNER_SESSION = 'session-owner';
 const BARBER_SESSION = 'session-barber';
@@ -57,6 +63,12 @@ describe('POST /appointments/phone (App Nest levantada en memoria)', () => {
       .useValue(new FakeHoldRepository())
       .overrideProvider(CLOCK)
       .useValue(clock)
+      // `CreateHold` enqueues `hold.expire` for every hold (task 6.3), so the
+      // real provider would reach for pg-boss. This suite is about the HTTP
+      // wiring, not the queue: the enqueue is proven in the scheduler's own
+      // unit test, and the worker owns the consuming half.
+      .overrideProvider(HOLD_EXPIRE_SCHEDULER)
+      .useValue(new FakeHoldExpireScheduler())
       .compile();
 
     app = moduleRef.createNestApplication();

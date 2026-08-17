@@ -28,6 +28,25 @@ export function jobSender(): Promise<JobSender> {
   return started;
 }
 
+/**
+ * A `JobSender` that connects on its FIRST SEND, never at construction.
+ *
+ * Nest builds its whole module graph eagerly — at boot, and again in every
+ * test that creates the app. A provider factory that awaited `jobSender()`
+ * therefore opened a PostgreSQL connection just to exist, which meant the API
+ * could not start unless the queue's database was already reachable: a queue
+ * outage became a total API outage, for endpoints that may never enqueue
+ * anything. Deferring the connection keeps module construction pure.
+ *
+ * `connect` is a parameter so the laziness itself is testable without a
+ * database; production callers use the default.
+ */
+export function lazyJobSender(connect: () => Promise<JobSender> = jobSender): JobSender {
+  return {
+    send: async (name, data, options) => (await connect()).send(name, data, options),
+  };
+}
+
 /** Closes the producer. The composition root calls this on shutdown so the
  *  process does not hang on pg-boss's open pool. */
 export async function stopJobSender(): Promise<void> {

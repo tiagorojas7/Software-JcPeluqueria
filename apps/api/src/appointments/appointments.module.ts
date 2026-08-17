@@ -4,7 +4,7 @@ import {
   db,
   DrizzleClientRepository,
   DrizzleHoldRepository,
-  jobSender,
+  lazyJobSender,
   PgBossHoldExpireScheduler,
   ShopClock,
   stopJobSender,
@@ -29,8 +29,13 @@ import { CLIENT_REPOSITORY, CLOCK, HOLD_EXPIRE_SCHEDULER, HOLD_REPOSITORY } from
       // Task 6.3's production half. `CreateHold` enqueues `hold.expire` on
       // every hold it creates, so the API is a pg-boss PRODUCER (the worker is
       // the consumer). Without this provider the module cannot be built at all.
+      //
+      // The factory is synchronous and `lazyJobSender()` defers the connection
+      // to the first enqueue: building the module graph must not touch the
+      // network, or the API stops booting whenever the queue's database is
+      // down — and every Nest test dies before its first assertion.
       provide: HOLD_EXPIRE_SCHEDULER,
-      useFactory: async () => new PgBossHoldExpireScheduler(await jobSender()),
+      useFactory: () => new PgBossHoldExpireScheduler(lazyJobSender()),
     },
     {
       provide: CreateHold,

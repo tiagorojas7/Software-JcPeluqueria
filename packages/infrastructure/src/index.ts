@@ -22,7 +22,7 @@ export { DrizzleDayBoardRepository } from './agenda/day-board.repository';
 export { DrizzleHoldRepository } from './booking/hold.repository';
 export { HOLD_EXPIRE_QUEUE, PgBossHoldExpireScheduler } from './booking/pg-boss-hold-expire-scheduler';
 export type { HoldExpireJob, JobSender, TransactionalDb } from './booking/pg-boss-hold-expire-scheduler';
-export { jobSender, stopJobSender } from './booking/job-producer';
+export { jobSender, lazyJobSender, stopJobSender } from './booking/job-producer';
 export { DrizzleWalkInRepository } from './booking/walk-in.repository';
 export { DrizzleClientRepository } from './clients/client.repository';
 export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
