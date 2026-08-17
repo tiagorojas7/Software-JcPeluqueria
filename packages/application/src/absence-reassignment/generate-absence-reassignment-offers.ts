@@ -5,9 +5,11 @@ import {
   type Appointment,
   type AvailableCandidate,
   type BarberRepository,
+  type ClientRepository,
   type Clock,
   type FreeRangesQuery,
   type Hold,
+  type NotificationOutboxRepository,
   type ScheduleRepository,
   type ServiceRepository,
 } from '@jc-barberia/domain';
@@ -25,10 +27,10 @@ export interface AbsenceOfferResult {
  * barbero": for each affected turno (produced by `MarkBarberAbsentUseCase`),
  * searches every ACTIVE barber's free windows on the ORIGIN turno's own
  * calendar day (never just the absent barber's), and claims the nearest one
- * with a 15-minute hold carrying `originOccupancyId`. Reuses `CreateHold`
- * (task 2.8) unmodified with `scope: 'same-day'` — no second hold-creation
- * code path. Task 12.4's scope stops at "what did we offer"; dispatching the
- * notification is task 12.5/12.6, added on top of this same class.
+ * with a 15-minute hold carrying `originOccupancyId`, then notifies the
+ * client (task 12.5/12.6, "MUST notificar al cliente por el canal de
+ * notificación configurado"). Reuses `CreateHold` (task 2.8) unmodified with
+ * `scope: 'same-day'` — no second hold-creation code path.
  *
  * "no-availability" (no candidate anywhere, on any barber, that day) is a
  * legitimate outcome, not an error: staff still knows which turnos need a
@@ -40,7 +42,9 @@ export class GenerateAbsenceReassignmentOffers {
     private readonly services: ServiceRepository,
     private readonly schedules: ScheduleRepository,
     private readonly freeRangesQuery: FreeRangesQuery,
+    private readonly clients: ClientRepository,
     private readonly createHold: CreateHold,
+    private readonly outbox: NotificationOutboxRepository,
     private readonly clock: Clock,
   ) {}
 
@@ -88,7 +92,35 @@ export class GenerateAbsenceReassignmentOffers {
       originOccupancyId: appointment.id,
     });
 
+    await this.notifyClient(appointment, hold);
+
     return { originalAppointmentId: appointment.id, outcome: 'offered', hold };
+  }
+
+  /**
+   * "MUST notificar al cliente por el canal de notificación configurado" —
+   * gated on the client having an email registrado, the same rule
+   * `AppointmentReminder` (Phase 6) already established for the reminder
+   * outbox-writer: no email, no dispatch, never a crash. The hold itself is
+   * still claimed regardless of whether this fires — staff can still act on
+   * it by phone even when email dispatch is skipped.
+   */
+  private async notifyClient(appointment: Appointment, hold: Hold): Promise<void> {
+    const client = await this.clients.findById(appointment.clientId);
+    if (!client || !client.email) {
+      return;
+    }
+    await this.outbox.enqueue({
+      notificationType: 'absence_reassignment_offer',
+      recipientEmail: client.email,
+      payload: {
+        appointmentId: appointment.id,
+        offeredBarberId: hold.barberId,
+        offeredStart: hold.timeRange.start.toISOString(),
+        offeredEnd: hold.timeRange.end.toISOString(),
+        holdExpiresAt: hold.holdExpiresAt.toISOString(),
+      },
+    });
   }
 
   /**
