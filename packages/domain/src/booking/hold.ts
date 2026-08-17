@@ -10,6 +10,10 @@ export type OccupancyChannel = 'web' | 'telefonico' | 'walk_in';
  * A provisional claim over one barber's time. Physically it is the same row
  * as the appointment it may become — confirming it is a status transition,
  * never a second insert.
+ *
+ * `originOccupancyId` connects this hold to the original slot occupancy row
+ * (e.g. the turn it replaces in a barber-absence-reassignment flow). Null when
+ * the hold is created through the ordinary client-booking flow.
  */
 export interface Hold {
   readonly id: string;
@@ -20,6 +24,8 @@ export interface Hold {
   readonly channel: OccupancyChannel;
   readonly timeRange: TimeWindow;
   readonly holdExpiresAt: Date;
+  /** Id of the original slot occupancy row this hold replaces. */
+  readonly originOccupancyId: string | null;
 }
 
 /**
