@@ -244,11 +244,11 @@ Requisitos que cierra: **notification-port** (5/5: Puerto desacoplado · Adaptad
 - [ ] 9.10 GREEN: flujo de reintento en el frontend.
 - [ ] 9.11 RED: checkout cobra el 50% y el turno pasa a `reservado` solo si el cobro fue exitoso. → *client-booking: Reserva web con seña obligatoria del 50%*
 - [ ] 9.12 GREEN: conectar el frontend a `CheckoutUseCase` (5.6) y a la confirmación por webhook.
-- [ ] 9.13 RED: cancelación propia con más de 1h de anticipación → `cancelado` + reembolso automático. → *client-booking: Cancelación del cliente con reembolso automático*
-- [ ] 9.14 RED: cancelación con menos de 1h de anticipación → rechazada. → *client-booking: Intento de cancelación fuera de la ventana permitida*
-- [ ] 9.15 GREEN: `SelfCancelUseCase` con ventana de 1h vía `ShopClock`.
-- [ ] 9.16 RED: cliente autenticado no puede cancelar el turno de otra cuenta. → *client-booking: El cliente solo actúa sobre sus propios datos*
-- [ ] 9.17 GREEN: aplicar `ActorContext` (clientId) al `SelfCancelUseCase` reutilizando el guard de 3b.
+- [x] 9.13 RED: cancelación propia con más de 1h de anticipación → `cancelado` + reembolso automático. → *client-booking: Cancelación del cliente con reembolso automático*
+- [x] 9.14 RED: cancelación con menos de 1h de anticipación → rechazada. → *client-booking: Intento de cancelación fuera de la ventana permitida*
+- [x] 9.15 GREEN: `SelfCancelUseCase` con ventana de 1h vía `ShopClock`.
+- [x] 9.16 RED: cliente autenticado no puede cancelar el turno de otra cuenta. → *client-booking: El cliente solo actúa sobre sus propios datos*
+- [x] 9.17 GREEN: acotar `SelfCancelAppointmentUseCase` al cliente autenticado. **Corrección al plan**: la tarea decía "aplicar `ActorContext` (clientId)", pero `ActorContext.role` es `owner | secretary | barber` (Fase 3b) y no tiene miembro cliente — un cliente nunca aparece en la matriz de roles. El use case recibe un `clientId` plano; el endpoint lo resuelve de la sesión (`users.client_id`, migración 0004). El chequeo de propiedad corre **antes** que el de ventana, y un turno inexistente se responde igual que uno ajeno: invertir ese orden convertiría el resultado en un oráculo para descubrir si un turno existe y a qué hora empieza.
 
 Requisitos que cierra: **client-booking** (5/5: Exploración sin cuenta · Cuenta sin contraseña creada al final del flujo · Reserva web con seña obligatoria del 50% · Cancelación del cliente con reembolso automático · El cliente solo actúa sobre sus propios datos).
 

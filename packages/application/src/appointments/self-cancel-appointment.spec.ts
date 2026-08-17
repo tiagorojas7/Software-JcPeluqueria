@@ -153,7 +153,10 @@ describe('SelfCancelAppointmentUseCase', () => {
     it('rechaza cancelar un turno que ya no esta reservado', async () => {
       const { useCase, paymentPort } = buildUseCase(
         at('08:30'),
-        buildAppointment({ status: 'cancelado', deposit: { kind: 'refunded', paymentId: 'pay-1' } }),
+        buildAppointment({
+          status: 'cancelado',
+          deposit: { kind: 'refunded', refundId: 'refund-1', amountCents: 500000 },
+        }),
       );
 
       const result = await useCase.execute({ appointmentId: 'appt-1', clientId: 'client-1' });

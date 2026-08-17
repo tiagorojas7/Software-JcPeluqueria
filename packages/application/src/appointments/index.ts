@@ -7,3 +7,5 @@ export { AdminMarkCompletedUseCase } from './admin-mark-completed';
 export { AdminConfirmAbsenceUseCase } from './admin-confirm-absence';
 export { CreateWalkInUseCase } from './create-walk-in';
 export type { CreateWalkInInput, WalkIn } from './create-walk-in';
+export { SELF_CANCEL_WINDOW_MINUTES, SelfCancelAppointmentUseCase } from './self-cancel-appointment';
+export type { SelfCancelInput, SelfCancelResult } from './self-cancel-appointment';
