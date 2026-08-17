@@ -4,12 +4,10 @@ import {
   createService,
   createShopHours,
   FakeBarberRepository,
-  FakeClientRepository,
   FakeClock,
   FakeFreeRangesQuery,
   FakeHoldExpireScheduler,
   FakeHoldRepository,
-  FakeNotificationOutboxRepository,
   FakeScheduleRepository,
   FakeServiceRepository,
   type Appointment,
@@ -43,9 +41,7 @@ async function buildScenario() {
   const services = new FakeServiceRepository();
   const schedules = new FakeScheduleRepository();
   const freeRanges = new FakeFreeRangesQuery();
-  const clients = new FakeClientRepository();
   const holds = new FakeHoldRepository();
-  const outbox = new FakeNotificationOutboxRepository();
   const createHold = new CreateHold(holds, clock, new FakeHoldExpireScheduler());
 
   await barbers.create(createBarber({ id: 'barber-absent', name: 'Ausente', active: true }));
@@ -58,20 +54,10 @@ async function buildScenario() {
   await schedules.createBarberSchedule(
     createBarberSchedule({ barberId: 'barber-other', dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
   );
-  clients.seed({ id: 'client-1', name: 'Marcos', phone: '3511234567', email: 'marcos@example.com', age: null });
 
-  const useCase = new GenerateAbsenceReassignmentOffers(
-    barbers,
-    services,
-    schedules,
-    freeRanges,
-    clients,
-    createHold,
-    outbox,
-    clock,
-  );
+  const useCase = new GenerateAbsenceReassignmentOffers(barbers, services, schedules, freeRanges, createHold, clock);
 
-  return { useCase, barbers, services, schedules, freeRanges, clients, holds, outbox };
+  return { useCase, barbers, services, schedules, freeRanges, holds };
 }
 
 // 12.3 RED — derived from specs/barber-absence-reassignment/spec.md:
