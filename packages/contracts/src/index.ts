@@ -23,3 +23,16 @@ export {
   CreateHoldRequestSchema,
   GetAvailabilityQuerySchema,
 } from './booking';
+export type {
+  AddBarberRequest,
+  BarberResponse,
+  ClientRecordResponse,
+  ClientsListResponse,
+  ConfigureBarberScheduleRequest,
+  ConfigureServicePriceRequest,
+} from './panel';
+export {
+  AddBarberRequestSchema,
+  ConfigureBarberScheduleRequestSchema,
+  ConfigureServicePriceRequestSchema,
+} from './panel';

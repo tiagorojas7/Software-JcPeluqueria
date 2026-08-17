@@ -5,6 +5,7 @@ import { AgendaModule } from './agenda/agenda.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { BarbersModule } from './barbers/barbers.module';
 import { BookingModule } from './booking/booking.module';
+import { PanelModule } from './panel/panel.module';
 import { PaymentsModule } from './payments/payments.module';
 
 /**
@@ -21,7 +22,8 @@ import { PaymentsModule } from './payments/payments.module';
  * (task 9.11/9.12, the MercadoPago webhook) is the fifth — deliberately not
  * imported here until now ("real business endpoints start Phase 8/9/10", its
  * own doc comment said), because until `PgBossPaymentJobQueue` existed there
- * was no real `PAYMENT_JOB_QUEUE` to give it.
+ * was no real `PAYMENT_JOB_QUEUE` to give it; `PanelModule` (task 10.14/10.15,
+ * client/barber management) is the sixth.
  *
  * Deliberately no `main.ts` yet: this app is still only a module graph, not
  * a listening HTTP server — that starts whichever later phase needs one
@@ -35,6 +37,7 @@ import { PaymentsModule } from './payments/payments.module';
     BookingModule,
     BarbersModule,
     PaymentsModule,
+    PanelModule,
   ],
 })
 export class AppModule {}
