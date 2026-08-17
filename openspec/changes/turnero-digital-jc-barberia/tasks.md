@@ -219,16 +219,16 @@ Requisitos que cierra: **notification-port** (5/5: Puerto desacoplado · Adaptad
 
 ## Phase 8: Vista del día (~400 líneas) — PR 10 (base: PR 9) — depende de 1, 3b
 
-- [ ] 8.1 RED: `DayBoard` organism recibe `columns`, `slots`, `onSlotAction` y renderiza sin conocer el rol.
-- [ ] 8.2 GREEN: implementar `DayBoard` (`apps/web/src/agenda`) puramente presentacional.
-- [ ] 8.3 RED: endpoint del día devuelve `allowedActions` por slot, calculado en el servidor según `ActorContext`.
-- [ ] 8.4 GREEN: `GetDayBoardUseCase` con cálculo de `allowedActions`.
-- [ ] 8.5 RED: vista admin muestra una columna por barbero, con turnos, nombre y edad del cliente si está cargada. → *admin-operations: Vista del día por columnas de barbero*
-- [ ] 8.6 GREEN: `AdminDayBoardContainer` (todas las columnas).
-- [ ] 8.7 RED: endpoint del día respeta el estrechamiento por `barber_id` para el actor barbero (reutiliza 3b.7).
-- [ ] 8.8 GREEN: confirmar que `GetDayBoardUseCase` delega el filtro al repositorio.
+- [x] 8.1 RED: `DayBoard` organism recibe `columns`, `slots`, `onSlotAction` y renderiza sin conocer el rol. Toolchain de `apps/web` (Vite + React 19 + Vitest jsdom + Testing Library) levantado como prerrequisito — el paquete solo tenía `package.json`. `DayBoard.spec.tsx` escrito primero y confirmado fallando por módulo inexistente (`./DayBoard`).
+- [x] 8.2 GREEN: implementar `DayBoard` (`apps/web/src/agenda`) puramente presentacional. Recibe `columns`/`slots`/`onSlotAction` de `@jc-barberia/contracts` (nuevo `packages/contracts/src/agenda.ts`: `DayBoardColumn`, `DayBoardSlot`, `SlotAction`, `DayBoardResponse`) y solo dibuja `allowedActions` por slot — 3/3 tests en verde, incluyendo que un slot sin una acción no renderiza su botón.
+- [x] 8.3 RED: endpoint del día devuelve `allowedActions` por slot, calculado en el servidor según `ActorContext`. Dos specs escritos primero y confirmados fallando por módulo inexistente: `packages/application/src/agenda/get-day-board.spec.ts` (unit, `FakeDayBoardRepository`+`FakeRolePermissionRepository`) y `apps/api/test/day-board.spec.ts` (HTTP, app Nest real en memoria — primer endpoint de producción de `apps/api`, no un controlador de prueba).
+- [x] 8.4 GREEN: `GetDayBoardUseCase` con cálculo de `allowedActions`. Nuevo puerto `DayBoardRepository` (`packages/domain/src/agenda`, separado de `AgendaRepository` de 3b.6/3b.7 — ese lee horario semanal, este lee `slot_occupancies` del día) + `DrizzleDayBoardRepository` (`packages/infrastructure`, excluye `held`/`liberado`). `GetDayBoardUseCase` traduce la matriz de permisos a `edit`/`cancel`/`mark-completed` por slot leyendo `RolePermissionRepository` en cada llamada (nunca hardcodeado). `DayBoardController`+`AgendaModule` en `apps/api/src/agenda` montan `GET /agenda/day-board?date=` tras `@RequiresPermission('agenda:read:any','agenda:read:own')`. `AccessControlModule` ahora exporta `ROLE_PERMISSION_REPOSITORY`/`ACTOR_CONTEXT_REPOSITORY` para que `AgendaModule` reutilice la misma instancia. 3+3 tests en verde; suite completa de `apps/api` (34) y `packages/application` (56) sin regresiones.
+- [x] 8.5 RED: vista admin muestra una columna por barbero, con turnos, nombre y edad del cliente si está cargada. → *admin-operations: Vista del día por columnas de barbero* `AdminDayBoardContainer.spec.tsx` escrito primero, confirmado fallando por módulo inexistente.
+- [x] 8.6 GREEN: `AdminDayBoardContainer` (todas las columnas). Envoltorio delgado a propósito: qué columnas/slots ve el dueño/secretaria ya lo decidió el servidor (8.3/8.4/8.7/8.8); este componente es el punto de entrada semántico que una futura página de panel usará, no un segundo lugar donde filtrar. `clientName`/`clientAge` se renderizan cuando están presentes en el fixture — el backend real aún no los completa (sin tabla `clients`, Fase 9/10), documentado en `packages/contracts/src/agenda.ts`.
+- [x] 8.7 RED: endpoint del día respeta el estrechamiento por `barber_id` para el actor barbero (reutiliza 3b.7). `packages/infrastructure/src/agenda/day-board.repository.spec.ts` (Testcontainers, Postgres real) — 3/3: dueño ve ambas columnas y ambos slots `reservado` excluyendo `held`; barbero queda acotado a su propia columna/slot vía `WHERE barber_id` en la query (nunca post-filtro); un slot de otro día calendario queda excluido. Nota honesta: `DrizzleDayBoardRepository` ya existía desde 8.4 (`AgendaModule` necesitaba una clase concreta para el DI) — esta prueba dedicada contra Postgres real llegó después, estilo *approval test* (strict-tdd.md) más que RED-first puro para este archivo puntual.
+- [x] 8.8 GREEN: confirmar que `GetDayBoardUseCase` delega el filtro al repositorio. Ya cubierto por el tercer caso de `get-day-board.spec.ts` (8.3/8.4): verifica que el actor se pasa intacto a `dayBoardRepository.findDayBoard()` y que la respuesta no agrega ni quita columnas/slots más allá de lo que el repositorio devolvió — sin filtro adicional del use case.
 
-Requisitos que cierra: **admin-operations** (1/7: Vista del día por columnas de barbero). Componente base para Fases 9 y 11.
+**8/8 tareas completas.** Requisitos que cierra: **admin-operations** (1/7: Vista del día por columnas de barbero). Componente base para Fases 9 y 11.
 
 ## Phase 9: Web pública (~400 líneas) — PR 11 (base: PR 10) — depende de 5, 8
 
@@ -254,19 +254,19 @@ Requisitos que cierra: **client-booking** (5/5: Exploración sin cuenta · Cuent
 
 ## Phase 10: Operación del panel (~400 líneas) — PR 12 (base: PR 11) — depende de 8
 
-- [ ] 10.1 RED: personal autorizado crea turno telefónico en `reservado` sin seña; nombre+teléfono obligatorios, email/edad opcionales. → *admin-operations: Creación de turnos telefónicos sin seña*
-- [ ] 10.2 GREEN: `CreatePhoneAppointmentUseCase` + formulario del panel.
-- [ ] 10.3 RED: turno telefónico sin email se crea igual, sin bloqueo. → *admin-operations: Turno telefónico creado sin email*
-- [ ] 10.4 RED: cliente sin email no recibe recordatorio ni puede pedir acceso web. → *admin-operations: Consecuencias de un turno telefónico sin email*
-- [ ] 10.5 GREEN: confirmar ambas ramas contra 6.11 (recordatorio) y 3a.8/9.7 (acceso).
-- [ ] 10.6 RED: edición de servicio/barbero/horario de cualquier turno por personal autorizado. → *admin-operations: Edición y cancelación administrativa*
-- [ ] 10.7 RED: cancelación administrativa reembolsa si hay seña, no hace nada si no la hay.
-- [ ] 10.8 GREEN: `EditAppointmentUseCase` + `AdminCancelUseCase`.
-- [ ] 10.9 RED: marcar `realizado` cualquier turno, independientemente del barbero asignado. → *admin-operations: Marcado de realizados y resolución de pendientes*
-- [ ] 10.10 RED: resolver `sin registrar` a `realizado`/`ausente`, con y sin seña, registrando el historial de ausencias.
-- [ ] 10.11 GREEN: conectar el panel a `MarkCompletedUseCase`/`ConfirmAbsenceUseCase` (4.6/4.8) sin restricción de barbero.
-- [ ] 10.12 RED: walk-in se crea directamente en `realizado`, sin seña, y el horario deja de figurar disponible. → *admin-operations: Carga de walk-ins · appointment-lifecycle: Los walk-ins ingresan directamente como realizado*
-- [ ] 10.13 GREEN: `CreateWalkInUseCase` ocupa el hueco vía `slot_occupancies` con `status='realizado'`.
+- [x] 10.1 RED: personal autorizado crea turno telefónico en `reservado` sin seña; nombre+teléfono obligatorios, email/edad opcionales. → *admin-operations: Creación de turnos telefónicos sin seña* `create-phone-appointment.spec.ts` escrito primero y confirmado fallando por módulo inexistente antes de implementar.
+- [x] 10.2 GREEN: `CreatePhoneAppointmentUseCase` + formulario del panel. Reutiliza `HoldRepository.create()`+`confirm()` (Fase 2) en vez de un INSERT directo aparte — un turno telefónico es, físicamente, un hold confirmado en la misma request, sin pago que esperar. `ClientRepository`/`clients` (tabla nueva, migración `0008`, numerada así porque la 0007 la reserva `feat/turnero-05a-cobro`) resuelve "nuevo o existente" por teléfono. Endpoint `POST /appointments/phone` (`apps/api/src/appointments`) + `PhoneAppointmentForm` (`apps/web/src/appointments`, puramente presentacional, igual que `DayBoard`).
+- [x] 10.3 RED: turno telefónico sin email se crea igual, sin bloqueo. → *admin-operations: Turno telefónico creado sin email* Mismo archivo que 10.1/10.2: `email`/`age` viajan `null` sin bloquear nada, en dominio, infraestructura (Testcontainers) y el formulario.
+- [ ] 10.4 RED: cliente sin email no recibe recordatorio ni puede pedir acceso web. → *admin-operations: Consecuencias de un turno telefónico sin email* **Bloqueada, no completada**: el recordatorio (6.11) y el flujo de solicitud de acceso web (9.7 lo consume, pero quien lo *inicia* es un caso de uso de la Fase 9 que todavía no existe) no están mergeados en esta rama — no hay contra qué escribir el RED sin inventar el consumidor. Lo que sí se probó ahora (10.1/10.3): `email: null` se persiste fielmente, nunca se sustituye por un valor falso.
+- [ ] 10.5 GREEN: confirmar ambas ramas contra 6.11 (recordatorio) y 3a.8/9.7 (acceso). **Bloqueada por la misma razón que 10.4** — retomar cuando Fases 6/9 se incorporen a esta cadena.
+- [x] 10.6 RED: edición de servicio/barbero/horario de cualquier turno por personal autorizado. → *admin-operations: Edición y cancelación administrativa* `edit-appointment.spec.ts` escrito primero y confirmado fallando por módulo inexistente antes de implementar.
+- [x] 10.7 RED: cancelación administrativa reembolsa si hay seña, no hace nada si no la hay. `admin-cancel-appointment.spec.ts` escrito primero y confirmado fallando por módulo inexistente antes de implementar. Primer consumidor real de `resolveDepositForCancellation` (Fase 4: "no está conectado a ningún CancelUseCase todavía").
+- [x] 10.8 GREEN: `EditAppointmentUseCase` + `AdminCancelUseCase`. `AppointmentRepository` (puerto nuevo, `packages/domain/src/appointments`) + `DrizzleAppointmentRepository` (Testcontainers, reutiliza `freeRanges`/`toRangeLiteral`/`isExclusionViolation` extraídos de `DrizzleHoldRepository` a `db/occupancy-sql.ts` — Fase 2 sigue en verde tras la extracción). Sin wiring HTTP/UI todavía: ni la tarea 10.6 ni la 10.8 piden "endpoint"/"formulario" (a diferencia de la 10.2), y el presupuesto de esta fase ya está por encima del techo — decisión de alcance explícita, no un olvido.
+- [x] 10.9 RED: marcar `realizado` cualquier turno, independientemente del barbero asignado. → *admin-operations: Marcado de realizados y resolución de pendientes*
+- [x] 10.10 RED: resolver `sin registrar` a `realizado`/`ausente`, con y sin seña, registrando el historial de ausencias.
+- [x] 10.11 GREEN: conectar el panel a `MarkCompletedUseCase`/`ConfirmAbsenceUseCase` (4.6/4.8) sin restricción de barbero.
+- [x] 10.12 RED: walk-in se crea directamente en `realizado`, sin seña, y el horario deja de figurar disponible. → *admin-operations: Carga de walk-ins · appointment-lifecycle: Los walk-ins ingresan directamente como realizado*
+- [x] 10.13 GREEN: `CreateWalkInUseCase` ocupa el hueco vía `slot_occupancies` con `status='realizado'`.
 - [ ] 10.14 RED: alta de un barbero con horario base lo deja disponible para asignación. → *admin-operations: Gestión de clientes y de barberos*
 - [ ] 10.15 GREEN: `ManageClientsAndBarbersUseCase` (CRUD clientes, alta/baja barberos, configuración de horarios/precios), acotado por permisos de 3b.
 

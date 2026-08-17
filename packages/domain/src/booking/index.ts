@@ -5,6 +5,7 @@ export { REMINDER_LEAD_MINUTES } from './appointment-reminder-scheduler';
 export type { AppointmentReminderScheduler } from './appointment-reminder-scheduler';
 export type { ExpiredHoldView, HoldExpireViewRepository } from './expired-hold-view';
 export type { AppointmentSweepRepository } from './appointment-sweep-repository';
+export type { WalkInOccupancy, WalkInRepository } from './walk-in';
 export { findNearestAvailable } from './nearest-available';
 export type {
   AvailableCandidate,
@@ -19,3 +20,5 @@ export { FakeHoldExpireViewRepository } from './testing/fake-hold-expire-view-re
 export { FakeAppointmentSweepRepository } from './testing/fake-appointment-sweep-repository';
 export { FakeAppointmentReminderScheduler } from './testing/fake-appointment-reminder-scheduler';
 export type { RecordedScheduleReminderCall } from './testing/fake-appointment-reminder-scheduler';
+export { FakeWalkInRepository } from './testing/fake-walk-in-repository';
+export type { RecordedWalkInCreateCall } from './testing/fake-walk-in-repository';

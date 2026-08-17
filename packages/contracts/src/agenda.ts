@@ -1,0 +1,58 @@
+/**
+ * Wire contract for the Phase 8 day board — the server-computed read model
+ * `GetDayBoardUseCase` (packages/application) produces and `DayBoard`
+ * (apps/web) renders. `allowedActions` is the entire point (design.md,
+ * "Frontend"): the server decides what a slot's viewer may do with it, from
+ * `ActorContext` and `role_permissions`; the client only ever draws that
+ * decision, it never computes one of its own.
+ */
+
+/**
+ * The only actions a day-board slot currently exposes, each tied to one
+ * appointment permission from packages/domain's access-control catalog:
+ * `edit` → `appointment:update`, `cancel` → `appointment:cancel`,
+ * `mark-completed` → `appointment:mark-completed:any` / `:own`.
+ */
+export const SLOT_ACTIONS = ['edit', 'cancel', 'mark-completed'] as const;
+export type SlotAction = (typeof SLOT_ACTIONS)[number];
+
+export interface DayBoardColumn {
+  readonly barberId: string;
+  readonly barberName: string;
+}
+
+export interface DayBoardSlot {
+  readonly id: string;
+  readonly barberId: string;
+  readonly serviceId: string;
+  /**
+   * Raw `slot_occupancies.status` passthrough. `packages/domain/appointments`
+   * (built in a parallel phase) owns the closed appointment-status
+   * vocabulary — this stays a plain string here rather than duplicating or
+   * pre-empting that type.
+   */
+  readonly status: string;
+  /** ISO instants. */
+  readonly startsAt: string;
+  readonly endsAt: string;
+  /**
+   * Present only once a `clients` table exists (Phase 9/10) and this row is
+   * actually linked to one — "cuando esté cargada" per admin-operations'
+   * "Vista del día por columnas de barbero". Every row `GetDayBoardUseCase`
+   * produces today leaves both fields `undefined`; they exist now so
+   * `DayBoard`/`AdminDayBoardContainer` already render them correctly the
+   * moment that data starts arriving.
+   */
+  readonly clientName?: string;
+  readonly clientAge?: number;
+  /** Computed server-side by `GetDayBoardUseCase` from `ActorContext` and
+   *  `role_permissions` — never derived in the browser. */
+  readonly allowedActions: readonly SlotAction[];
+}
+
+export interface DayBoardResponse {
+  /** ISO calendar date, `YYYY-MM-DD`. */
+  readonly date: string;
+  readonly columns: readonly DayBoardColumn[];
+  readonly slots: readonly DayBoardSlot[];
+}

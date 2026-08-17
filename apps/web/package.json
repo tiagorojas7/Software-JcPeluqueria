@@ -3,5 +3,24 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "React SPA (public booking + panel + agenda). Implementation starts Phase 8."
+  "description": "React SPA (public booking + panel + agenda). Implementation starts Phase 8.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@jc-barberia/contracts": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "vite": "^6.0.11",
+    "vitest": "^3.0.4"
+  }
 }

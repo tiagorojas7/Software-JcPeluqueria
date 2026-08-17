@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@jc-barberia/contracts": "workspace:*",
     "@jc-barberia/domain": "workspace:*"
   },
   "devDependencies": {
