@@ -43,6 +43,8 @@ const sha256Hex = (value: string): string => createHash('sha256').update(value).
  * only their SHA-256 hashes.
  */
 export class ChallengeService {
+  private readonly issuedChallenges = new Map<string, AuthChallenge>();
+
   constructor(
     private readonly challenges: AuthChallengeRepository,
     private readonly clock: Clock,
@@ -63,6 +65,7 @@ export class ChallengeService {
       expiresAt,
     };
     await this.challenges.create(challenge);
+    this.issuedChallenges.set(challengeId, challenge);
 
     return { challengeId, code, token, expiresAt };
   }
@@ -71,9 +74,22 @@ export class ChallengeService {
    * Verifies whatever secret the caller presents (code or token) against
    * the challenge scoped to `purpose`. The plaintext `secret` is hashed
    * right here — the repository only ever sees `candidateHash`.
+   * Additionally validates that the challenge has not expired.
    */
   async consume(input: ConsumeChallengeInput): Promise<ConsumeChallengeResult> {
+    const challenge = this.issuedChallenges.get(input.challengeId);
+    if (!challenge) {
+      return this.challenges.consume(input.challengeId, input.purpose, sha256Hex(input.secret));
+    }
+
+    // Validación de expiry: si el desafío venció, rechazarlo
+    if (this.clock.now() > challenge.expiresAt) {
+      return { consumed: false };
+    }
+
     const candidateHash = sha256Hex(input.secret);
     return this.challenges.consume(input.challengeId, input.purpose, candidateHash);
   }
 }
+
+export type { ConsumeChallengeInput, IssuedChallenge };
