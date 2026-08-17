@@ -25,6 +25,12 @@ export class FakeAppointmentRepository implements AppointmentRepository {
     return this.byId.get(id) ?? null;
   }
 
+  async findByBarberId(barberId: string, status?: 'reservado' | 'realizado' | 'cancelado'): Promise<Appointment[]> {
+    return Array.from(this.byId.values()).filter(
+      (a) => a.barberId === barberId && (!status || a.status === status),
+    );
+  }
+
   async updateSchedule(id: string, change: AppointmentScheduleChange): Promise<void> {
     this.updateScheduleCalls.push({ id, change });
     const existing = this.byId.get(id);

@@ -27,6 +27,12 @@ export interface AppointmentRepository {
   findById(id: string): Promise<Appointment | null>;
 
   /**
+   * Returns all appointments for a given barber, optionally filtered by status.
+   * Used by the barber profile listing (Phase 11).
+   */
+  findByBarberId(barberId: string, status?: 'reservado' | 'realizado' | 'cancelado'): Promise<Appointment[]>;
+
+  /**
    * Moves the appointment to a different barber/service/time. Protected by
    * the same `no_overlap_per_barber` EXCLUDE constraint as `HoldRepository`
    * — a conflicting target range throws `SlotUnavailableError`, never

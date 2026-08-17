@@ -19,3 +19,4 @@ export {
   createService,
   createShopHours,
 } from './entities';
+export * from './testing';
