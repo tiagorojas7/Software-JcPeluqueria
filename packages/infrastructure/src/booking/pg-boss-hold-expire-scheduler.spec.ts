@@ -1,3 +1,4 @@
+import { FakeClock } from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
 import { PgBossHoldExpireScheduler } from './pg-boss-hold-expire-scheduler';
@@ -43,7 +44,9 @@ function fakeBoss() {
 }
 
 describe('PgBossHoldExpireScheduler (6.3)', () => {
-  const startAfter = new Date('2026-09-01T13:15:00.000Z');
+  // The expiry instant comes from the Clock port, exactly as a real hold's
+  // `holdExpiresAt` does — the lint rule forbids building it any other way.
+  const startAfter = new FakeClock().localTimeToUtc('2026-09-01', '10:15');
 
   it('encola en la cola hold.expire que el worker consume, con el holdId como payload', async () => {
     const boss = fakeBoss();

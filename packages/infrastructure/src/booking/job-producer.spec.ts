@@ -1,7 +1,10 @@
+import { FakeClock } from '@jc-barberia/domain';
 import { describe, expect, it, vi } from 'vitest';
 
 import { lazyJobSender } from './job-producer';
 import type { JobSender } from './pg-boss-hold-expire-scheduler';
+
+const startAfter = new FakeClock().localTimeToUtc('2026-09-01', '10:15');
 
 // Regression guard for a real defect: the first wiring of `HOLD_EXPIRE_SCHEDULER`
 // awaited `jobSender()` inside the Nest provider factory, so pg-boss opened a
@@ -30,13 +33,13 @@ describe('lazyJobSender', () => {
     const connect = vi.fn(async () => inner);
     const sender = lazyJobSender(connect);
 
-    const jobId = await sender.send('hold.expire', { holdId: 'h-1' }, { startAfter: new Date(0) });
+    const jobId = await sender.send('hold.expire', { holdId: 'h-1' }, { startAfter });
 
     expect(connect).toHaveBeenCalledTimes(1);
     expect(inner.send).toHaveBeenCalledWith(
       'hold.expire',
       { holdId: 'h-1' },
-      { startAfter: new Date(0) },
+      { startAfter },
     );
     expect(jobId).toBe('job-1');
   });

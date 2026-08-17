@@ -51,7 +51,17 @@ export default [
     },
   },
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**'],
+    // Agent worktrees are whole copies of the repo living inside it. Linting
+    // them reports every finding N+1 times and attributes it to a path that is
+    // not the source of truth — the real file is linted on its own.
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/coverage/**',
+      '.claude/**',
+      '.opencode/**',
+      'recon-*/**',
+    ],
   },
   prettierConfig,
 ];
