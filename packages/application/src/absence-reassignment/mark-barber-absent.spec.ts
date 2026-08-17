@@ -77,3 +77,54 @@ describe('MarkBarberAbsentUseCase', () => {
     expect(affected).toEqual([]);
   });
 });
+
+// 12.12 RED — derived from specs/barber-absence-reassignment/spec.md:
+//
+//   "Requirement: No interferencia con otros turnos"
+//   "El sistema MUST NOT modificar turnos ya agendados de otros clientes al
+//   generar o resolver ofertas de reasignación."
+//
+//   Scenario "Turnos de otros clientes permanecen intactos":
+//     GIVEN turnos `reservado` de otros clientes en la misma franja, con
+//     barberos no afectados
+//     WHEN se resuelve la ausencia de un barbero distinto
+//     THEN esos turnos permanecen sin cambios
+describe('MarkBarberAbsentUseCase — no interferencia con otros turnos (12.12)', () => {
+  it('never returns, and never mutates, another client turno on a non-absent barber in the exact same time window', async () => {
+    const appointments = new FakeAppointmentRepository();
+    const absentBarberTurno = anAppointment({ id: 'apt-absent-barber', barberId: 'barber-1' });
+    const otherClientTurno = anAppointment({
+      id: 'apt-other-client',
+      barberId: 'barber-2', // not affected by barber-1's absence
+      clientId: 'client-2',
+      timeRange: { start: at('10:00'), end: at('10:30') }, // exact same franja
+    });
+    appointments.seed(absentBarberTurno);
+    appointments.seed(otherClientTurno);
+    const useCase = new MarkBarberAbsentUseCase(appointments);
+
+    const affected = await useCase.execute({
+      barberId: 'barber-1',
+      timeRange: { start: at('09:00'), end: at('18:00') },
+    });
+
+    expect(affected.map((a) => a.id)).toEqual(['apt-absent-barber']);
+    // Detection is READ-ONLY by construction (MarkBarberAbsentUseCase never
+    // calls updateSchedule/updateStatus); this pins that the OTHER client's
+    // row is not just excluded from the result but genuinely byte-identical
+    // to what was seeded.
+    expect(appointments.updateScheduleCalls).toEqual([]);
+    expect(appointments.updateStatusCalls).toEqual([]);
+    await expect(appointments.findById('apt-other-client')).resolves.toEqual(otherClientTurno);
+  });
+});
+
+// 12.13 GREEN — "confirmar el alcance de la query de detección (12.1) y de
+// la generación de ofertas (12.3) contra 12.12": no new production code —
+// the detection query's `WHERE barber_id = :barberId` (12.1/12.2) already
+// makes the scope structural, and GenerateAbsenceReassignmentOffers
+// (12.3/12.4) never receives or holds an `AppointmentRepository` reference
+// at all, so it has no way to write to any appointment, another client's or
+// otherwise — it can only call `CreateHold`. This suite is the regression
+// lock proving both, the same "ya cubierto por" pattern Phase 8/11 already
+// used for a requirement satisfied by an existing shape rather than new code.
