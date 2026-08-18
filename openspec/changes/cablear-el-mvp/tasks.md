@@ -120,3 +120,50 @@ El cliente puede reservar y pagar, pero **no puede volver a entrar ni cancelar**
 `ActivateStaffUseCase` y `ResetPasswordUseCase` (alta y reseteo de personal) se
 dejan sin interfaz a propósito: el alta de personal la hace el seed, y en un
 local de tres barberos el reseteo se resuelve hablando. No son parte de la demo.
+
+---
+
+## Slice D: Las dos secciones de verdad
+
+La pantalla actual es un **arnés de verificación**, no la aplicación: un solo menú
+con los enlaces de cliente, dueño, barbero y secretaria mezclados, sin estilos.
+Se especificó así a propósito para comprobar el cableado, y no sirve para
+mostrarle el sistema a nadie.
+
+Son **dos aplicaciones distintas**, y así se construyen.
+
+### Qué ve cada uno — derivado de la matriz ya sembrada en la migración 0006
+
+**Cliente** (no tiene rol; no aparece en `role_permissions`): sitio público.
+Reservar, pagar la seña, pedir código de acceso, ver sus turnos, cancelar dentro
+de la ventana. **Nunca ve el panel ni sabe que existe.**
+
+**Barbero** — `agenda:read:own` · `appointment:mark-completed:own` ·
+`finance:read:own`: su agenda del día, resolver sus propios turnos, su
+facturación teórica. Nada de otros barberos, nada de la facturación del local.
+
+**Secretaria** — todo lo del dueño MENOS `finance:read:shop`, `barber:manage`,
+`pricing:configure` y `schedule:configure`: agenda completa, crear/editar/cancelar
+turnos, marcar realizado cualquiera, marcar barbero ausente, gestionar clientes,
+walk-ins. **Sin plata, sin alta de barberos, sin precios ni horarios.**
+
+**Dueño** — la matriz completa, incluida la facturación del local.
+
+- [ ] D.1 Separar en dos áreas: sitio público (`/`) y panel (`/panel`). El panel
+      exige sesión; sin ella redirige al login, nunca muestra la pantalla vacía.
+- [ ] D.2 Layout e identidad visual de barbería para el sitio público. Sin
+      framework de CSS pesado; prolijo, legible en celular, que parezca un
+      negocio real y no una lista de enlaces.
+- [ ] D.3 Layout del panel con navegación **construida desde los permisos del
+      actor**, no desde el rol hardcodeado: cada ítem aparece solo si el actor
+      tiene el permiso que la ruta exige. Un barbero no ve el ítem de facturación
+      del local; la secretaria no ve el de precios.
+- [ ] D.4 Sacar del sitio público todo rastro del panel: enlaces, rutas y textos.
+- [ ] D.5 Arreglar el estado inicial de `AvailabilityPicker`: hoy dice "No hay
+      horarios disponibles" **antes de que el visitante busque**, lo que hace
+      parecer que el local no tiene lugar nunca. Debe distinguir "todavía no
+      buscaste" de "buscaste y no hay".
+- [ ] D.6 **Evidencia en pantalla**: recorrer el sitio público como visitante sin
+      ver nada del panel; entrar al panel como dueño, como secretaria y como
+      barbero, y mostrar que la navegación de cada uno es distinta y coherente
+      con la matriz.
