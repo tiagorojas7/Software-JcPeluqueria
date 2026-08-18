@@ -30,3 +30,13 @@ export const AUTH_CHALLENGE_REPOSITORY = Symbol('AUTH_CHALLENGE_REPOSITORY');
  *  `ConsoleNotificationOutboxRepository` until Slice A's Drizzle adapter
  *  lands — see that class's own doc comment. */
 export const NOTIFICATION_OUTBOX_REPOSITORY = Symbol('NOTIFICATION_OUTBOX_REPOSITORY');
+
+/** DI token for the `AppointmentRepository` port (C.3/C.4: "Mi cuenta" reads
+ *  the client's own appointments; self-cancel writes back to the same
+ *  table). Its own token instance, not reused from any other module — the
+ *  one-token-per-module pattern every module in this app already follows. */
+export const APPOINTMENT_REPOSITORY = Symbol('APPOINTMENT_REPOSITORY');
+
+/** DI token for the `PaymentPort` port (C.4: `SelfCancelAppointmentUseCase`
+ *  refunds a settled seña as part of cancelling). */
+export const PAYMENT_PORT = Symbol('PAYMENT_PORT');
