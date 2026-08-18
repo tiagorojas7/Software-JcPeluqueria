@@ -14,6 +14,7 @@ import { apiGet, apiPost, describeError } from '../shared/api-client';
 import { DEMO_BARBERS, DEMO_SERVICES } from '../shared/demo-data';
 import { nowMs } from '../shared/now';
 import { utcIsoToShopLocalTime } from '../shared/shop-time';
+import './BookingPage.css';
 
 /**
  * Public booking flow's page-level composer (client-booking spec,
@@ -116,12 +117,16 @@ export function BookingPage() {
   }
 
   return (
-    <section>
-      <h2>Reservar turno</h2>
+    <div className="booking-page container">
+      <div className="booking-page__intro">
+        <h2>Reservar turno</h2>
+        <p>Elegí barbero, servicio y fecha para ver los horarios libres de hoy.</p>
+      </div>
+
       {error && <p role="alert">{error}</p>}
 
       {!hold && (
-        <form onSubmit={handleSearch}>
+        <form className="card booking-page__form" onSubmit={handleSearch}>
           <label htmlFor="booking-barber">Barbero</label>
           <select id="booking-barber" value={barberId} onChange={(e) => setBarberId(e.target.value)}>
             {DEMO_BARBERS.map((barber) => (
@@ -149,31 +154,35 @@ export function BookingPage() {
 
       {!clientId &&
         (hold || hasSearched ? (
-          <BookingFlowContainer
-            slots={slots}
-            hold={hold}
-            nowMs={tick}
-            onSelectSlot={handleSelectSlot}
-            onConfirmReservation={handleConfirmReservation}
-          />
+          <div className="card booking-page__results">
+            <BookingFlowContainer
+              slots={slots}
+              hold={hold}
+              nowMs={tick}
+              onSelectSlot={handleSelectSlot}
+              onConfirmReservation={handleConfirmReservation}
+            />
+          </div>
         ) : (
-          <p>Todavía no buscaste: elegí un barbero, un servicio y una fecha para ver los horarios disponibles.</p>
+          <p className="empty-state">
+            Todavía no buscaste: elegí un barbero, un servicio y una fecha para ver los horarios disponibles.
+          </p>
         ))}
 
       {hold && clientId && (
-        <div>
+        <div className="card booking-page__results">
           <HoldCountdown expiresAt={hold.expiresAt} nowMs={tick} />
           <CheckoutStep checkout={checkout} onStartCheckout={handleStartCheckout} />
         </div>
       )}
 
       {(hold || checkout) && (
-        <p>
-          <button type="button" onClick={startOver}>
+        <p className="booking-page__restart">
+          <button type="button" className="btn-ghost" onClick={startOver}>
             Empezar de nuevo
           </button>
         </p>
       )}
-    </section>
+    </div>
   );
 }
