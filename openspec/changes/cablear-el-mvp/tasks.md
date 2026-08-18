@@ -235,3 +235,33 @@ walk-ins. **Sin plata, sin alta de barberos, sin precios ni horarios.**
       ver nada del panel; entrar al panel como dueño, como secretaria y como
       barbero, y mostrar que la navegación de cada uno es distinta y coherente
       con la matriz.
+
+---
+
+## Slice E: Cerrar los productores que quedaron mudos
+
+Detectado al verificar el slice A contra Postgres real. Dos casos de uso
+existen, están probados y **nadie los invoca**, así que su funcionalidad está
+muerta desde la pantalla aunque el código esté escrito:
+
+- [ ] E.1 `MarkBarberAbsentController` detecta los turnos afectados pero
+      **nunca llama a `GenerateAbsenceReassignmentOffers`**. Su propio comentario
+      explica por qué: cuando se escribió no existía un
+      `NotificationOutboxRepository` de producción, así que componer el paso de
+      ofertas habría significado descartar en silencio el "MUST notificar al
+      cliente" o fabricar un adaptador falso. **El slice A ya cerró ese hueco**,
+      así que el bloqueo desapareció: marcar un barbero ausente tiene que generar
+      las ofertas y despacharlas.
+- [ ] E.2 (era A.6) `ScheduleAppointmentReminder` no se encola desde el camino de
+      confirmación, así que **ningún turno agenda su recordatorio de 2h**. Toca
+      `packages/application` y `apps/api`.
+- [ ] E.3 **Evidencia en pantalla**: marcar un barbero ausente desde el panel y
+      ver la oferta salir por el log del worker; confirmar un turno y ver el job
+      `appointment.reminder` encolado con su `start_after` correcto.
+
+**Bloqueado por credenciales, no por código** (era A.7): la cadena completa
+"vence el hold → reembolso real de MercadoPago → notificación" no se puede
+probar sin un `MERCADOPAGO_ACCESS_TOKEN` de prueba. El slice A lo comprobó en
+vivo: la llamada sale de verdad a `api.mercadopago.com` y vuelve 404 porque no
+hay token. `ExpireHold` solo notifica en la rama `refunded`, que exige un
+reembolso exitoso. Se cierra cuando el usuario cargue el token de prueba.
