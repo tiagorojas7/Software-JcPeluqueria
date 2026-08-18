@@ -75,6 +75,15 @@ const connectionString =
 
 async function main(): Promise<void> {
   const boss = new PgBoss(connectionString);
+  // Same reason as the producer's handler in `job-producer.ts`: pg-boss is an
+  // EventEmitter and an unhandled 'error' event crashes the Node process
+  // outright. The worker polls constantly, so it is the MORE exposed of the
+  // two — a single transient database blip would otherwise stop every
+  // background job (sweep, reminders, hold expiry, outbox delivery) until
+  // someone noticed the process was gone.
+  boss.on('error', (error) => {
+    console.error('[worker] pg-boss error (kept alive):', error);
+  });
   await boss.start();
 
   // 6.7 / 6.9 — the day-end sweep, wired for real. ShopClock resolves the

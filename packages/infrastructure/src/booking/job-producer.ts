@@ -22,6 +22,15 @@ let started: Promise<PgBoss> | undefined;
 export function jobSender(): Promise<JobSender> {
   started ??= (async () => {
     const boss = new PgBoss(connectionString);
+    // pg-boss is an EventEmitter, and an 'error' event with no listener is a
+    // hard process crash in Node — not a rejected promise. Its background
+    // poller emits one on any transient database hiccup, so without this the
+    // whole API dies whenever the queue's connection blips, taking down
+    // endpoints that never enqueue anything. Observed for real: a poll
+    // timeout killed the process mid-login.
+    boss.on('error', (error) => {
+      console.error('[pg-boss] producer error (kept alive):', error);
+    });
     await boss.start();
     return boss;
   })();
