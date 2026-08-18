@@ -28,8 +28,14 @@ async function parseBody(res: Response): Promise<unknown> {
   }
 }
 
+/** Every API route is served under this prefix (`app.setGlobalPrefix` in
+ *  `apps/api/src/main.ts`). Prepending it here, in the single place requests
+ *  are built, keeps every caller writing plain paths like `/agenda/day-board`
+ *  and keeps the proxy rule down to one entry. */
+const API_PREFIX = '/api';
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(`${API_PREFIX}${path}`, {
     credentials: 'include',
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },

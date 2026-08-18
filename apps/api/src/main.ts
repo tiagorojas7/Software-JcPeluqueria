@@ -37,6 +37,14 @@ async function bootstrap(): Promise<void> {
   // `*`, plus `credentials: true` so the session cookie can travel — for
   // anyone hitting the API directly from a page served on a different
   // origin/port than the proxy.
+  // Every API route lives under `/api`. Without a prefix the API's own
+  // `@Controller('panel')` collides with the web app's `/panel` SPA route:
+  // the dev proxy forwarded the page request to Nest and the browser got a
+  // 404 JSON body instead of the panel. A prefix makes that class of
+  // collision impossible rather than requiring the two route tables to stay
+  // manually disjoint forever.
+  app.setGlobalPrefix('api');
+
   app.enableCors({
     origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
     credentials: true,
