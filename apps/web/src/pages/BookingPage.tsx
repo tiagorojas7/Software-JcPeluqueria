@@ -14,6 +14,7 @@ import { apiGet, apiPost, describeError } from '../shared/api-client';
 import { DEMO_BARBERS, DEMO_SERVICES } from '../shared/demo-data';
 import { nowMs } from '../shared/now';
 import { utcIsoToShopLocalTime } from '../shared/shop-time';
+import './BookingPage.css';
 
 /**
  * Public booking flow's page-level composer (client-booking spec,
@@ -31,6 +32,13 @@ export function BookingPage() {
   const [serviceId, setServiceId] = useState<string>(DEMO_SERVICES[0].id);
   const [date, setDate] = useState('');
   const [slots, setSlots] = useState<readonly AvailabilitySlot[]>([]);
+  // D.5: distinguishes "todavía no buscaste" from "buscaste y no hay" —
+  // `AvailabilityPicker` (apps/web/src/booking/, outside this slice) shows
+  // "No hay horarios disponibles" for ANY empty `slots`, with no way to
+  // tell those two states apart from its own props. Fixed here, at the
+  // page level, by never mounting it (via `BookingFlowContainer`) until a
+  // search has actually happened — see the render below.
+  const [hasSearched, setHasSearched] = useState(false);
   const [hold, setHold] = useState<HoldResponse | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
   const [checkout, setCheckout] = useState<CheckoutResponseBody | null>(null);
@@ -55,6 +63,7 @@ export function BookingPage() {
       const params = new URLSearchParams({ barberId, serviceId, date });
       const response = await apiGet<AvailabilityResponse>(`/availability?${params.toString()}`);
       setSlots(response.slots);
+      setHasSearched(true);
     } catch (err) {
       setError(describeError(err));
     }
@@ -104,15 +113,20 @@ export function BookingPage() {
     setClientId(null);
     setCheckout(null);
     setSlots([]);
+    setHasSearched(false);
   }
 
   return (
-    <section>
-      <h2>Reservar turno</h2>
+    <div className="booking-page container">
+      <div className="booking-page__intro">
+        <h2>Reservar turno</h2>
+        <p>Elegí barbero, servicio y fecha para ver los horarios libres de hoy.</p>
+      </div>
+
       {error && <p role="alert">{error}</p>}
 
       {!hold && (
-        <form onSubmit={handleSearch}>
+        <form className="card booking-page__form" onSubmit={handleSearch}>
           <label htmlFor="booking-barber">Barbero</label>
           <select id="booking-barber" value={barberId} onChange={(e) => setBarberId(e.target.value)}>
             {DEMO_BARBERS.map((barber) => (
@@ -138,30 +152,37 @@ export function BookingPage() {
         </form>
       )}
 
-      {!clientId && (
-        <BookingFlowContainer
-          slots={slots}
-          hold={hold}
-          nowMs={tick}
-          onSelectSlot={handleSelectSlot}
-          onConfirmReservation={handleConfirmReservation}
-        />
-      )}
+      {!clientId &&
+        (hold || hasSearched ? (
+          <div className="card booking-page__results">
+            <BookingFlowContainer
+              slots={slots}
+              hold={hold}
+              nowMs={tick}
+              onSelectSlot={handleSelectSlot}
+              onConfirmReservation={handleConfirmReservation}
+            />
+          </div>
+        ) : (
+          <p className="empty-state">
+            Todavía no buscaste: elegí un barbero, un servicio y una fecha para ver los horarios disponibles.
+          </p>
+        ))}
 
       {hold && clientId && (
-        <div>
+        <div className="card booking-page__results">
           <HoldCountdown expiresAt={hold.expiresAt} nowMs={tick} />
           <CheckoutStep checkout={checkout} onStartCheckout={handleStartCheckout} />
         </div>
       )}
 
       {(hold || checkout) && (
-        <p>
-          <button type="button" onClick={startOver}>
+        <p className="booking-page__restart">
+          <button type="button" className="btn-ghost" onClick={startOver}>
             Empezar de nuevo
           </button>
         </p>
       )}
-    </section>
+    </div>
   );
 }

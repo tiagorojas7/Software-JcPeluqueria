@@ -69,6 +69,8 @@ export default [
         URLSearchParams: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
+        HTMLAnchorElement: 'readonly',
+        PopStateEvent: 'readonly',
       },
     },
   },

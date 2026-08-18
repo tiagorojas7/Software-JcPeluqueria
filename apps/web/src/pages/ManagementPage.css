@@ -1,0 +1,46 @@
+.management__section {
+  background: white;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.management__section h3 {
+  margin-top: 0;
+}
+
+.management__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.management__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.management__field input,
+.management__field select {
+  padding: 6px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+}
+
+.management__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.management__table th,
+.management__table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-line);
+}

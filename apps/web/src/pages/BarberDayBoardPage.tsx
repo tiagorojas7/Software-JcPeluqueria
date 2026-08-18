@@ -4,6 +4,7 @@ import type { DayBoardResponse } from '@jc-barberia/contracts';
 import { BarberDayBoardPanel } from '../agenda/BarberDayBoardPanel';
 import { apiGet, describeError } from '../shared/api-client';
 import type { Actor } from '../shared/actor';
+import './DayBoardPage.css';
 
 export interface BarberDayBoardPageProps {
   readonly actor: Actor | null;
@@ -32,27 +33,18 @@ export function BarberDayBoardPage({ actor }: BarberDayBoardPageProps) {
 
   if (!actor) {
     return (
-      <section>
-        <h2>Mi agenda (barbero)</h2>
-        <p>Iniciá sesión como barbero para ver esta pantalla.</p>
-      </section>
-    );
-  }
-
-  if (!actor.barberId) {
-    return (
-      <section>
-        <h2>Mi agenda (barbero)</h2>
-        <p>Esta cuenta no tiene un barbero asociado (rol actual: {actor.role}).</p>
+      <section className="panel-page">
+        <h2>Mi agenda</h2>
+        <p className="empty-state">Iniciá sesión como barbero para ver esta pantalla.</p>
       </section>
     );
   }
 
   return (
-    <section>
-      <h2>Mi agenda (barbero)</h2>
+    <section className="panel-page">
+      <h2>Mi agenda</h2>
       {error && <p role="alert">{error}</p>}
-      <form onSubmit={handleLoad}>
+      <form className="card panel-page__form" onSubmit={handleLoad}>
         <label htmlFor="barber-day-board-date">Fecha</label>
         <input
           id="barber-day-board-date"
@@ -61,9 +53,15 @@ export function BarberDayBoardPage({ actor }: BarberDayBoardPageProps) {
           value={date}
           onChange={(e) => setDate(e.target.value)}
         />
-        <button type="submit">Cargar mi agenda</button>
+        <button type="submit">Cargar agenda</button>
       </form>
-      {dayBoard && <BarberDayBoardPanel dayBoard={dayBoard} barberId={actor.barberId} />}
+      {dayBoard ? (
+        <div className="day-board">
+          <BarberDayBoardPanel dayBoard={dayBoard} barberId={actor.barberId} />
+        </div>
+      ) : (
+        <p className="empty-state">Elegí una fecha para ver tu agenda.</p>
+      )}
     </section>
   );
 }
