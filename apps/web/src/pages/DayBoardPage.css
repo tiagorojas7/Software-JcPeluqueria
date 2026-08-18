@@ -1,0 +1,83 @@
+/**
+ * D.2 continuation: shared visual treatment for both day-board screens
+ * (`AdminDayBoardPage`, `BarberDayBoardPage`). `DayBoard` itself
+ * (`apps/web/src/agenda/`, outside this slice's ownership) renders bare
+ * `<section>`/`<ul>`/`<li>` markup with no class hooks at all — the exact
+ * same constraint `styles/tokens.css` already documents for bare form
+ * tags rendered by other unowned components. Styled here through
+ * descendant selectors under `.day-board`, the wrapper div each page adds
+ * around the container it already renders, instead of editing agenda/.
+ */
+
+.day-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* `DayBoard`'s own render root is one bare <div> wrapping N <section>s.
+   Collapsing it from the box tree lets each <section> become a direct
+   grid item of `.day-board` without touching agenda/ at all. */
+.day-board > div {
+  display: contents;
+}
+
+.day-board section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4) var(--space-5);
+}
+
+.day-board section h3 {
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.day-board section > ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.day-board section > ul > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+}
+
+/* The slot's status is always the first <span>; styled as a small badge
+   so "libre"/"reservado"/etc. reads as a signal, not as plain text lost
+   among the client name and the action buttons. */
+.day-board section > ul > li > span:first-child {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-alt);
+  color: var(--color-ink-soft);
+  white-space: nowrap;
+}
+
+.day-board section > ul > li button {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: var(--text-xs);
+  margin-left: auto;
+}
+
+@media (max-width: 480px) {
+  .day-board section > ul > li button {
+    margin-left: 0;
+  }
+}

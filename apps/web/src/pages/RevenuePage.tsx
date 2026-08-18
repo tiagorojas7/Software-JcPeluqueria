@@ -4,6 +4,7 @@ import type { BarberRevenueResponse } from '@jc-barberia/contracts';
 import { RevenueSummary } from '../barbers/RevenueSummary';
 import { apiGet, describeError } from '../shared/api-client';
 import type { Actor } from '../shared/actor';
+import './RevenuePage.css';
 
 export interface RevenuePageProps {
   readonly actor: Actor | null;
@@ -66,7 +67,9 @@ export function RevenuePage({ actor }: RevenuePageProps) {
         <button type="submit">Ver facturación</button>
       </form>
       {revenue ? (
-        <RevenueSummary revenue={revenue} />
+        <div className="card revenue-page__summary">
+          <RevenueSummary revenue={revenue} />
+        </div>
       ) : (
         <p className="empty-state">Elegí un período para ver tu facturación teórica.</p>
       )}

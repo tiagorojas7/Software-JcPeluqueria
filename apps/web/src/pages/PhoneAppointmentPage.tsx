@@ -5,6 +5,7 @@ import { PhoneAppointmentForm } from '../appointments/PhoneAppointmentForm';
 import { apiPost, describeError } from '../shared/api-client';
 import { DEMO_BARBERS, DEMO_SERVICES } from '../shared/demo-data';
 import type { Actor } from '../shared/actor';
+import './PhoneAppointmentPage.css';
 
 export interface PhoneAppointmentPageProps {
   readonly actor: Actor | null;
@@ -77,7 +78,7 @@ export function PhoneAppointmentPage({ actor }: PhoneAppointmentPageProps) {
           Turno creado: {result.id} — estado {result.status}.
         </p>
       )}
-      <div className="card">
+      <div className="card phone-appointment-page__form-card">
         <PhoneAppointmentForm onSubmit={handleSubmit} />
       </div>
     </section>

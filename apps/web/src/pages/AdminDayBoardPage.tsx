@@ -4,6 +4,7 @@ import type { DayBoardResponse, SlotAction } from '@jc-barberia/contracts';
 import { AdminDayBoardContainer } from '../agenda/AdminDayBoardContainer';
 import { apiGet, describeError } from '../shared/api-client';
 import type { Actor } from '../shared/actor';
+import './DayBoardPage.css';
 
 export interface AdminDayBoardPageProps {
   readonly actor: Actor | null;
@@ -67,12 +68,14 @@ export function AdminDayBoardPage({ actor }: AdminDayBoardPageProps) {
         <button type="submit">Cargar agenda</button>
       </form>
       {dayBoard ? (
-        <AdminDayBoardContainer
-          dayBoard={dayBoard}
-          onSlotAction={(_slotId, action) =>
-            setNotice(`"${ACTION_NAMES[action]}" todavía no está disponible desde el panel.`)
-          }
-        />
+        <div className="day-board">
+          <AdminDayBoardContainer
+            dayBoard={dayBoard}
+            onSlotAction={(_slotId, action) =>
+              setNotice(`"${ACTION_NAMES[action]}" todavía no está disponible desde el panel.`)
+            }
+          />
+        </div>
       ) : (
         <p className="empty-state">Elegí una fecha para ver la agenda del día.</p>
       )}

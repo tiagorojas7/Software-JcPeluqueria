@@ -4,6 +4,7 @@ import type { DayBoardResponse, SlotAction } from '@jc-barberia/contracts';
 import { BarberDayBoardContainer } from '../agenda/BarberDayBoardContainer';
 import { apiGet, describeError } from '../shared/api-client';
 import type { Actor } from '../shared/actor';
+import './DayBoardPage.css';
 
 export interface BarberDayBoardPageProps {
   readonly actor: Actor | null;
@@ -70,13 +71,15 @@ export function BarberDayBoardPage({ actor }: BarberDayBoardPageProps) {
         <button type="submit">Cargar mi agenda</button>
       </form>
       {dayBoard ? (
-        <BarberDayBoardContainer
-          dayBoard={dayBoard}
-          barberId={actor.barberId}
-          onSlotAction={(_slotId, action) =>
-            setNotice(`"${ACTION_NAMES[action]}" todavía no está disponible desde el panel.`)
-          }
-        />
+        <div className="day-board">
+          <BarberDayBoardContainer
+            dayBoard={dayBoard}
+            barberId={actor.barberId}
+            onSlotAction={(_slotId, action) =>
+              setNotice(`"${ACTION_NAMES[action]}" todavía no está disponible desde el panel.`)
+            }
+          />
+        </div>
       ) : (
         <p className="empty-state">Elegí una fecha para ver tu agenda.</p>
       )}

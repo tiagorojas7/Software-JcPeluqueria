@@ -1,0 +1,24 @@
+/**
+ * D.2 continuation: `RevenueSummary` (apps/web/src/barbers/, outside this
+ * slice's ownership) renders a bare `<section>` with two `<p>` — the total
+ * and the legal disclaimer — with no visual weight of its own. Wrapped in
+ * a `.card` by this page (D.6 evidence: "estadísticas y facturación del
+ * barbero") and the amount styled through a descendant selector so the
+ * number a barber cares about most reads as the page's headline, and the
+ * disclaimer reads as a footnote, without touching barbers/.
+ */
+.revenue-page__summary {
+  max-width: 480px;
+}
+
+.revenue-page__summary section > p:first-child {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  margin-bottom: var(--space-2);
+}
+
+.revenue-page__summary section > p:last-child {
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+  margin-bottom: 0;
+}

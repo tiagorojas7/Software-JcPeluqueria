@@ -1,0 +1,12 @@
+/**
+ * D.2 continuation: `PhoneAppointmentForm` (apps/web/src/appointments/,
+ * outside this slice's ownership) renders nine bare label/input pairs with
+ * no width constraint of its own — inside the panel's 1200px content
+ * column that stretched every field edge-to-edge, which read as an
+ * unfinished form rather than a designed one. Capped here, from the page
+ * that owns the wrapping card, to the same width a single-column form
+ * reads comfortably at.
+ */
+.phone-appointment-page__form-card {
+  max-width: 480px;
+}
