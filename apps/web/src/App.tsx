@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { MyAccountPage } from './account/MyAccountPage';
 import { AccessCodePage } from './pages/AccessCodePage';
 import { AdminDayBoardPage } from './pages/AdminDayBoardPage';
 import { BarberDayBoardPage } from './pages/BarberDayBoardPage';
@@ -13,6 +14,7 @@ import type { Actor } from './shared/actor';
 const ROUTES = [
   { path: 'booking', label: 'Reservar turno (web pública)' },
   { path: 'access-code', label: 'Ingresar con código (cliente)' },
+  { path: 'my-account', label: 'Mi cuenta (cliente)' },
   { path: 'staff-login', label: 'Ingreso de personal' },
   { path: 'admin-day-board', label: 'Agenda del día (admin)' },
   { path: 'barber-day-board', label: 'Mi agenda (barbero)' },
@@ -85,6 +87,7 @@ export function App() {
       <main>
         {route === 'booking' && <BookingPage />}
         {route === 'access-code' && <AccessCodePage />}
+        {route === 'my-account' && <MyAccountPage />}
         {route === 'staff-login' && <StaffLoginPage onLoggedIn={setActor} />}
         {route === 'admin-day-board' && <AdminDayBoardPage actor={actor} />}
         {route === 'barber-day-board' && <BarberDayBoardPage actor={actor} />}

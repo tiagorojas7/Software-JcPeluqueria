@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import {
   ChallengeService,
   ClientLoginUseCase,
+  ListOwnAppointmentsUseCase,
   PasswordService,
   RequestClientAccessUseCase,
+  SelfCancelAppointmentUseCase,
   SessionService,
   StaffLoginUseCase,
 } from '@jc-barberia/application';
@@ -11,33 +13,40 @@ import {
   Argon2PasswordHasher,
   ConsoleNotificationOutboxRepository,
   db,
+  DrizzleAppointmentRepository,
   DrizzleAuthChallengeRepository,
   DrizzleClientAccountRepository,
   DrizzleClientRepository,
   DrizzleSessionRepository,
   DrizzleUserCredentialsRepository,
+  MercadoPagoPaymentAdapter,
   ShopClock,
 } from '@jc-barberia/infrastructure';
 import type {
+  AppointmentRepository,
   AuthChallengeRepository,
   Clock,
   ClientAccountRepository,
   ClientRepository,
   NotificationOutboxRepository,
   PasswordHasher,
+  PaymentPort,
   SessionRepository,
   UserCredentialsRepository,
 } from '@jc-barberia/domain';
 
 import { AccessControlModule } from '../access-control/access-control.module';
+import { AccountController } from './account.controller';
 import { AuthController } from './auth.controller';
 import {
+  APPOINTMENT_REPOSITORY,
   AUTH_CHALLENGE_REPOSITORY,
   CLIENT_ACCOUNT_REPOSITORY,
   CLIENT_REPOSITORY,
   CLOCK,
   NOTIFICATION_OUTBOX_REPOSITORY,
   PASSWORD_HASHER,
+  PAYMENT_PORT,
   SESSION_REPOSITORY,
   USER_CREDENTIALS_REPOSITORY,
 } from './tokens';
@@ -60,7 +69,7 @@ import {
  */
 @Module({
   imports: [AccessControlModule],
-  controllers: [AuthController],
+  controllers: [AuthController, AccountController],
   providers: [
     { provide: CLOCK, useFactory: () => new ShopClock() },
     { provide: PASSWORD_HASHER, useFactory: () => new Argon2PasswordHasher() },
@@ -72,6 +81,20 @@ import {
     {
       provide: NOTIFICATION_OUTBOX_REPOSITORY,
       useFactory: () => new ConsoleNotificationOutboxRepository(),
+    },
+    {
+      // C.3/C.4: "Mi cuenta" reads/writes the exact same `slot_occupancies`
+      // rows `AppointmentsModule`/`AgendaModule` do — its own token instance
+      // here, never a shared one, per this app's one-token-per-module rule.
+      provide: APPOINTMENT_REPOSITORY,
+      useFactory: () => new DrizzleAppointmentRepository(db),
+    },
+    {
+      // C.4: `SelfCancelAppointmentUseCase` refunds a settled seña as part of
+      // cancelling — same adapter/env var `BookingModule.PAYMENT_PORT`
+      // already binds, just this module's own token.
+      provide: PAYMENT_PORT,
+      useFactory: () => new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? ''),
     },
     {
       provide: PasswordService,
@@ -108,6 +131,17 @@ import {
       provide: ClientLoginUseCase,
       inject: [ChallengeService],
       useFactory: (challenges: ChallengeService) => new ClientLoginUseCase(challenges),
+    },
+    {
+      provide: ListOwnAppointmentsUseCase,
+      inject: [APPOINTMENT_REPOSITORY],
+      useFactory: (appointments: AppointmentRepository) => new ListOwnAppointmentsUseCase(appointments),
+    },
+    {
+      provide: SelfCancelAppointmentUseCase,
+      inject: [APPOINTMENT_REPOSITORY, PAYMENT_PORT, CLOCK],
+      useFactory: (appointments: AppointmentRepository, paymentPort: PaymentPort, clock: Clock) =>
+        new SelfCancelAppointmentUseCase(appointments, paymentPort, clock),
     },
   ],
 })

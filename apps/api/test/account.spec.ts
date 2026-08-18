@@ -165,7 +165,13 @@ describe('GET /account/appointments + POST /account/appointments/:id/cancel (C.3
         buildAppointment({
           id: appointmentId,
           clientId: owner.clientId,
-          timeRange: { start: at('12:30'), end: at('13:00') },
+          // `now` is fixed at UTC 12:00 (see `clock` above) — a Date
+          // comparison is an absolute-instant comparison, never a
+          // local-wall-clock one, so the fixture's start must be picked
+          // relative to THAT instant, not to a "12:30 looks late" intuition.
+          // Local 09:30 = UTC 12:30 (this shop's fixed -03:00 offset): only
+          // 30 minutes after `now`, inside the 60-minute cutoff.
+          timeRange: { start: at('09:30'), end: at('10:00') },
         }),
       );
       const refundsBefore = paymentPort.refundCalls.length;
@@ -176,7 +182,9 @@ describe('GET /account/appointments + POST /account/appointments/:id/cancel (C.3
       );
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ outcome: 'too-late', cutoff: at('11:30').toISOString() });
+      // Cutoff = start (local 09:30 = UTC 12:30) minus 60 minutes = local
+      // 08:30 = UTC 11:30.
+      expect(response.body).toEqual({ outcome: 'too-late', cutoff: at('08:30').toISOString() });
       expect(paymentPort.refundCalls.length).toBe(refundsBefore);
     });
 

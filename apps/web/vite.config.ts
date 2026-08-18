@@ -6,7 +6,17 @@ import { defineConfig } from 'vite';
 // prefix — to the API dev server, so the browser only ever talks to ONE
 // origin and CORS never has to engage for the demo itself (`apps/api/src/main.ts`'s
 // CORS config stays as the fallback for anyone hitting the API directly).
-const API_PROXY_PATHS = ['/availability', '/holds', '/agenda', '/appointments', '/barbers', '/panel', '/webhooks', '/auth'];
+const API_PROXY_PATHS = [
+  '/availability',
+  '/holds',
+  '/agenda',
+  '/appointments',
+  '/account',
+  '/barbers',
+  '/panel',
+  '/webhooks',
+  '/auth',
+];
 
 export default defineConfig({
   plugins: [react()],
