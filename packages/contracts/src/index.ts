@@ -8,8 +8,15 @@ export { SLOT_ACTIONS } from './agenda';
 export type { CreatePhoneAppointmentRequest, PhoneAppointmentResponse } from './appointments';
 export { CreatePhoneAppointmentRequestSchema } from './appointments';
 export type { BarberRevenueResponse, BarberStatsResponse } from './barbers';
-export type { StaffLoginRequest, StaffLoginResponseBody } from './identity';
-export { StaffLoginRequestSchema } from './identity';
+export type {
+  ClientLoginRequest,
+  ClientLoginResponseBody,
+  RequestClientAccessRequest,
+  RequestClientAccessResponseBody,
+  StaffLoginRequest,
+  StaffLoginResponseBody,
+} from './identity';
+export { ClientLoginRequestSchema, RequestClientAccessRequestSchema, StaffLoginRequestSchema } from './identity';
 export type {
   AvailabilityResponse,
   AvailabilitySlot,
