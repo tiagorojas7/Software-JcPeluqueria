@@ -138,6 +138,44 @@ export class DrizzleAppointmentRepository implements AppointmentRepository {
       }));
   }
 
+  /**
+   * cablear-el-mvp C.3 — "Mi cuenta" needs every appointment belonging to
+   * the client, any status, structural narrowing the same way
+   * `findReservedByBarberInRange` scopes to one barber: `WHERE client_id =
+   * :clientId` is the query's own shape, never a post-read filter.
+   */
+  async findByClientId(clientId: string): Promise<Appointment[]> {
+    const rows = await this.db
+      .select({
+        id: slotOccupancies.id,
+        barberId: slotOccupancies.barberId,
+        serviceId: slotOccupancies.serviceId,
+        clientId: slotOccupancies.clientId,
+        channel: slotOccupancies.channel,
+        status: slotOccupancies.status,
+        start: sql`lower(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
+        end: sql`upper(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
+        depositId: deposits.id,
+        depositState: deposits.state,
+        paymentId: deposits.paymentId,
+        amountCents: deposits.amountCents,
+      })
+      .from(slotOccupancies)
+      .leftJoin(deposits, eq(slotOccupancies.depositId, deposits.id))
+      .where(eq(slotOccupancies.clientId, clientId));
+
+    return rows.map((row) => ({
+      id: row.id,
+      barberId: row.barberId,
+      serviceId: row.serviceId,
+      clientId: row.clientId as string,
+      channel: row.channel as OccupancyChannel,
+      timeRange: { start: row.start, end: row.end },
+      status: row.status as AppointmentStatus,
+      deposit: toDepositState(row),
+    }));
+  }
+
   async updateSchedule(
     id: string,
     change: AppointmentScheduleChange,
