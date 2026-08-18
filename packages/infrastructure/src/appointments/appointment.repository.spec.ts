@@ -111,6 +111,23 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
     expect(appointment).toBeNull();
   });
 
+  // Discovered running cablear-el-mvp Slice C's own manual evidence (C.7)
+  // against a real database: `SelfCancelAppointmentUseCase` answers a
+  // missing appointment identically to someone else's ("no oracle" — see its
+  // own doc comment), but that guarantee silently broke against the REAL
+  // repository the moment the id was not UUID-shaped — Postgres rejects the
+  // cast BEFORE the `WHERE` clause ever runs, so `findById` threw instead of
+  // returning `null`. `FakeAppointmentRepository` (a plain `Map`) cannot
+  // reproduce this: it has no column type to violate, which is exactly why
+  // every application-layer test using it stayed green while this shipped.
+  it('returns null for a malformed (non-uuid) id — a bad param must never surface a raw Postgres cast error', async () => {
+    const repo = new DrizzleAppointmentRepository(db);
+
+    const appointment = await repo.findById('not-a-uuid-at-all');
+
+    expect(appointment).toBeNull();
+  });
+
   it('moves the appointment to a different barber, service and horario', async () => {
     const id = await insertAppointment(barberId, '11:00', '11:30');
     const repo = new DrizzleAppointmentRepository(db);
