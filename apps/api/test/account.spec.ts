@@ -28,7 +28,10 @@ import { AppModule } from '../src/app.module';
 const clientContexts = new FakeClientContextRepository();
 const appointments = new FakeAppointmentRepository();
 const paymentPort = new FakePaymentPort();
-const clock = new FakeClock(-180, new Date('2026-09-01T12:00:00.000Z'));
+// `new Date(...)` is off-limits outside `ShopClock`/`FakeClock` (the
+// repo-wide Clock-only ESLint rule) — `FakeClock.parseInstant` builds the
+// fixed `now` instant instead, so this file never constructs one directly.
+const clock = new FakeClock(-180, new FakeClock().parseInstant('2026-09-01T12:00:00.000Z'));
 const at = (time: string) => clock.localTimeToUtc('2026-09-01', time);
 
 let sessionCounter = 0;

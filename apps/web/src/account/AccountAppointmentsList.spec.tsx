@@ -72,8 +72,10 @@ describe('AccountAppointmentsList', () => {
     );
 
     const [, secondCancelButton] = screen.getAllByRole('button', { name: 'Cancelar' });
-    expect(secondCancelButton).toBeDefined();
-    fireEvent.click(secondCancelButton as HTMLElement);
+    if (!secondCancelButton) {
+      throw new Error('expected two "Cancelar" buttons');
+    }
+    fireEvent.click(secondCancelButton);
 
     expect(onCancel).toHaveBeenCalledWith('appt-b');
     expect(onCancel).toHaveBeenCalledTimes(1);
