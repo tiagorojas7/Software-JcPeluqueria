@@ -149,21 +149,62 @@ walk-ins. **Sin plata, sin alta de barberos, sin precios ni horarios.**
 
 **Dueño** — la matriz completa, incluida la facturación del local.
 
-- [ ] D.1 Separar en dos áreas: sitio público (`/`) y panel (`/panel`). El panel
+- [x] D.1 Separar en dos áreas: sitio público (`/`) y panel (`/panel`). El panel
       exige sesión; sin ella redirige al login, nunca muestra la pantalla vacía.
-- [ ] D.2 Layout e identidad visual de barbería para el sitio público. Sin
+      (`shared/router.tsx`, `layout/panel-guard.ts` + `.spec.ts`, `App.tsx`.)
+- [x] D.2 Layout e identidad visual de barbería para el sitio público. Sin
       framework de CSS pesado; prolijo, legible en celular, que parezca un
-      negocio real y no una lista de enlaces.
-- [ ] D.3 Layout del panel con navegación **construida desde los permisos del
+      negocio real y no una lista de enlaces. (`styles/tokens.css`,
+      `layout/PublicLayout.*`, `pages/HomePage.*`, `pages/BookingPage.*`,
+      `pages/StaffLoginPage.*`.) Continuado a las seis pantallas del panel que
+      todavía no tenían CSS propio — ver nota de esta vuelta más abajo.
+- [x] D.3 Layout del panel con navegación **construida desde los permisos del
       actor**, no desde el rol hardcodeado: cada ítem aparece solo si el actor
       tiene el permiso que la ruta exige. Un barbero no ve el ítem de facturación
-      del local; la secretaria no ve el de precios.
-- [ ] D.4 Sacar del sitio público todo rastro del panel: enlaces, rutas y textos.
-- [ ] D.5 Arreglar el estado inicial de `AvailabilityPicker`: hoy dice "No hay
+      del local; la secretaria no ve el de precios. (`layout/PanelLayout.*`,
+      `layout/nav-items.ts` + `.spec.ts` — matriz completa probada por rol.)
+- [x] D.4 Sacar del sitio público todo rastro del panel: enlaces, rutas y textos.
+      (`PublicLayout.spec.tsx` lo prueba explícitamente: sin enlaces a `/panel`,
+      sin la palabra "panel" en ningún texto visible.)
+- [x] D.5 Arreglar el estado inicial de `AvailabilityPicker`: hoy dice "No hay
       horarios disponibles" **antes de que el visitante busque**, lo que hace
       parecer que el local no tiene lugar nunca. Debe distinguir "todavía no
-      buscaste" de "buscaste y no hay".
-- [ ] D.6 **Evidencia en pantalla**: recorrer el sitio público como visitante sin
+      buscaste" de "buscaste y no hay". Resuelto en `pages/BookingPage.tsx`
+      (`hasSearched`), no en `AvailabilityPicker` mismo (`booking/`, fuera de
+      esta slice): la página no monta `BookingFlowContainer` hasta que hubo una
+      búsqueda real. `pages/BookingPage.spec.tsx` (D.5) prueba los tres casos.
+- [x] D.6 **Evidencia en pantalla**: recorrer el sitio público como visitante sin
       ver nada del panel; entrar al panel como dueño, como secretaria y como
       barbero, y mostrar que la navegación de cada uno es distinta y coherente
-      con la matriz.
+      con la matriz. Hecho contra Postgres real (puerto 5445), API real (3004)
+      y web real (5177) — ver el reporte de esta vuelta para el detalle
+      pantalla por pantalla y las llamadas HTTP reales de cada rol.
+
+### Esta vuelta (continuación tras corte de sesión)
+
+D.1-D.5 ya estaban resueltos y probados en los 6 commits previos de
+`d-secciones-cont`; lo que faltaba de verdad era: (a) las seis pantallas del
+panel sin CSS propio (`AdminDayBoardPage`, `BarberDayBoardPage`,
+`PhoneAppointmentPage`, `RevenuePage`, `ShopRevenuePage`, `AccessCodePage`) y
+(b) la evidencia en vivo (D.6). Hecho en esta vuelta:
+
+- `pages/DayBoardPage.css` (nueva, compartida por Admin/BarberDayBoardPage):
+  `DayBoard` (agenda/, fuera de esta slice) renderiza `<section>`/`<ul>`/`<li>`
+  sin ninguna clase propia — igual que los tags de formulario que
+  `tokens.css` ya documentaba — así que se estiliza por selector descendiente
+  bajo `.day-board`, el div que cada página agrega alrededor del contenedor.
+- `pages/PhoneAppointmentPage.css` (nueva): el formulario de 9 campos de
+  `PhoneAppointmentForm` (appointments/, fuera de esta slice) se estiraba
+  hasta el ancho completo del panel (1200px); acotado a 480px desde la
+  página.
+- `pages/RevenuePage.css` (nueva): `RevenueSummary` (barbers/, fuera de esta
+  slice) no tenía envoltorio visual; ahora vive dentro de `.card` con el
+  monto como titular.
+- `ShopRevenuePage`/`AccessCodePage` ya usaban `.panel-page`/`.empty-state`/
+  `.card`/`.container` (definidos en `tokens.css`) — se verificaron en vivo,
+  sin cambios de código.
+- D.6 ejecutado contra Postgres real en el puerto 5445 (nunca 5432), API en
+  3004, web en 5177 — login real de las tres cuentas de seed, llamadas HTTP
+  reales a endpoints protegidos por permiso, confirmando que la agenda del
+  barbero llega ya filtrada a una sola columna desde el servidor (no solo
+  desde el cliente).
