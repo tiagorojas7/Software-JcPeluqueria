@@ -10,6 +10,7 @@ const ACTION_LABELS: Record<SlotAction, string> = {
   edit: 'Editar',
   cancel: 'Cancelar',
   'mark-completed': 'Marcar realizado',
+  'confirm-absence': 'Confirmar ausencia',
 };
 
 /**
