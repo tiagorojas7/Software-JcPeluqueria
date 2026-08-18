@@ -60,21 +60,89 @@ Sin esto el sistema no entrega **ni un solo mensaje**: ni recordatorio, ni códi
 de acceso, ni aviso de cancelación con reembolso, ni oferta de reasignación.
 Todo escribe contra un puerto cuya única implementación es un doble de test.
 
-- [ ] A.1 Migración `0011`: tabla `notification_outbox` (`notification_type`,
+- [x] A.1 Migración `0011`: tabla `notification_outbox` (`notification_type`,
       `recipient_email`, `payload jsonb`, `attempts`, `status`, `last_error`,
       `created_at`). Aplicada y verificada contra Postgres real.
-- [ ] A.2 RED (Testcontainers): `pickPendingForDelivery` toma una fila pendiente
+      - Verificado 2026-08-18 contra el Postgres real de `cablear-a-pg` (puerto
+        5442): `DATABASE_URL=...5442... pnpm db:migrate` → "migrations applied
+        successfully"; `\dt` confirma la tabla con sus 9 columnas (incluye
+        `next_attempt_at`, el timestamp de backoff que el enunciado no lista
+        pero que la implementación necesita).
+- [x] A.2 RED (Testcontainers): `pickPendingForDelivery` toma una fila pendiente
       y no la vuelve a entregar en la misma tanda; `markDelivered`/`markFailed`
       dejan el estado correcto; el backoff respeta `attempts`.
-- [ ] A.3 GREEN: `DrizzleNotificationOutboxRepository`.
-- [ ] A.4 Cablear `NotificationOutboxConsumer` en `apps/worker` con el adaptador
+      - Verificado 2026-08-18: historia real RED→GREEN en el branch (commit
+        `964a314` RED, `93322a0` GREEN), re-ejecutada ahora en limpio —
+        `pnpm --filter @jc-barberia/infrastructure exec vitest run
+        src/notifications/notification-outbox.repository.spec.ts` → 6/6 tests
+        verdes contra un Postgres real levantado por Testcontainers (93.9s).
+- [x] A.3 GREEN: `DrizzleNotificationOutboxRepository`.
+      - Misma corrida que A.2 — GREEN real, no el fake de dominio.
+- [x] A.4 Cablear `NotificationOutboxConsumer` en `apps/worker` con el adaptador
       real y `createNotificationPort` (Gmail o console según config).
-- [ ] A.5 Cablear el handler `hold.expire` (`ExpireHold` + `RefundUseCase` +
+      - Verificado 2026-08-18 en vivo: worker real contra Postgres real
+        entregó un mensaje y lo marcó `delivered` en la tabla. Ver evidencia
+        completa de A.7 más abajo — misma corrida.
+- [x] A.5 Cablear el handler `hold.expire` (`ExpireHold` + `RefundUseCase` +
       notificación). Hoy la cola existe pero nadie la consume.
+      - Verificado 2026-08-18 en vivo, las 3 ramas alcanzables sin credenciales
+        reales de MercadoPago: hold simple sin origen → `no-op`; hold de oferta
+        con turno origen sin seña → `cancelled-no-refund` (el turno origen
+        pasa a `cancelado` de verdad en la base); hold de oferta con seña
+        `settled` simulada → el adaptador hace el POST real a
+        `api.mercadopago.com/v1/payments/.../refunds`, recibe un 404 real (sin
+        `MERCADOPAGO_ACCESS_TOKEN` no hay cuenta que consultar), y el error se
+        propaga fuerte tal como documenta `refund.ts` ("Lost payments must be
+        loud") — pg-boss reintenta y el job termina en `failed` tras agotar
+        `retry_limit`. La rama `refunded-and-notified` (la única que dispara
+        la notificación de cancelación) NECESITA un refund exitoso contra
+        MercadoPago real: bloqueo de credenciales de entorno, no un defecto de
+        este slice. Ver evidencia completa en A.7.
 - [ ] A.6 Cablear `appointment.reminder` y encolarlo desde el camino de
       confirmación, vía `ScheduleAppointmentReminder`.
+      - Consumidor cableado y verificado (worker registra y consume la cola —
+        ver A.7). El productor —encolar desde `CreatePhoneAppointmentUseCase`/
+        `ProcessPaymentUseCase`— sigue sin ningún llamador real: requiere
+        tocar constructores en `packages/application` y su wiring de DI en
+        `apps/api` (`appointments.module.ts`/`payments.module.ts`), ninguno de
+        los dos en la lista de archivos que este slice puede tocar. Gap
+        explícito, igual que lo dejó el commit anterior (`9bcace7`) — no se
+        repite el error de marcarlo hecho.
 - [ ] A.7 **Evidencia en pantalla**: reservar un turno, forzar el vencimiento del
       hold, y ver el mail salir por el canal `console` en el log del worker.
+      - **Verificado 2026-08-18, con un límite real y documentado — no se
+        cierra completo.** Stack real: `cablear-a-pg` (Postgres 16, puerto
+        5442, contenedor reusado de la sesión anterior), API real en :3001,
+        worker real, canal `console`. Secuencia real por HTTP: login
+        (`POST /auth/staff-login`) → `POST /holds` (hold simple) → forzado su
+        `start_after` → log real: `[worker] hold.expire <id> -> no-op`
+        (correcto: un hold sin turno origen no tiene nada que reembolsar).
+        `POST /appointments/phone` (turno origen real, sin seña) → `POST
+        /holds` (hold de oferta) → vinculado a ese origen (`UPDATE
+        origin_occupancy_id`, porque `GenerateAbsenceReassignmentOffers` —la
+        única pieza real que arma ese vínculo— no tiene endpoint en
+        `apps/api`, mismo gap que A.6) → forzado su `start_after` → log real:
+        `[worker] hold.expire <id> -> cancelled-no-refund`, turno origen
+        confirmado `cancelado` en la base. Para la rama que sí notifica
+        (`refunded-and-notified`) hace falta un refund `settled` exitoso
+        contra MercadoPago real — bloqueado por falta de
+        `MERCADOPAGO_ACCESS_TOKEN` en este entorno (ver A.5): el intento real
+        contra `api.mercadopago.com` devolvió 404 real, no una simulación.
+        Para probar el tramo de DESPACHO (A.3/A.4) igual, se insertó una fila
+        realista en `notification_outbox` (mismo payload que
+        `GenerateAbsenceReassignmentOffers.notifyClient` produciría, mismo gap
+        de endpoint) y el consumer real la entregó al minuto:
+        `[notifications] to=cliente-demo-slicea@jcbarberia.test
+        template=absence_reassignment_offer data={...}` seguido de
+        `[worker] notification_outbox.consume delivered=1 failed=0`; la fila
+        quedó `delivered` en Postgres. Conclusión: cada pieza individual
+        (booking real, expiración forzada real, consumer+adaptador real) está
+        probada en vivo; la única cadena causal que el enunciado pide entera
+        —expiración de hold → reembolso real → notificación— no se pudo cerrar
+        de punta a punta porque ese reembolso necesita una cuenta real de
+        MercadoPago que no existe en este entorno. No es un test verde
+        disfrazado de hecho: es exactamente lo que sí y lo que no funciona,
+        dicho en claro.
 
 ## Slice B: Panel — acciones sobre el turno
 
