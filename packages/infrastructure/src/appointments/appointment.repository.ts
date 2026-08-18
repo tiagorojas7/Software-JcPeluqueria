@@ -16,6 +16,18 @@ import { deposits } from '../db/schema/payments';
 import { slotOccupancies } from '../db/schema/slot-occupancy';
 
 /**
+ * `slot_occupancies.id` is a Postgres `uuid` column — a value that does not
+ * even parse as one makes the driver reject the whole query (`22P02
+ * invalid_text_representation`) BEFORE the `WHERE` clause ever runs, no
+ * different from a syntax error. `findById` feeds a client-supplied path
+ * param (`AccountController.cancel`'s `:id`, cablear-el-mvp Slice C) straight
+ * into this query, so a malformed id must resolve to "not found", the exact
+ * same answer a well-formed-but-missing one gets — never a distinguishable
+ * 500. Checked once, here, rather than in every caller.
+ */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * Reconstructs `DepositState` from the LEFT JOIN row shape both `findById`
  * and `findReservedByBarberInRange` share — mirrors
  * `DrizzleDepositRepository.findDepositForAppointment`'s exact switch (Phase
@@ -56,6 +68,9 @@ export class DrizzleAppointmentRepository implements AppointmentRepository {
   constructor(private readonly db: PostgresJsDatabase) {}
 
   async findById(id: string): Promise<Appointment | null> {
+    if (!UUID_PATTERN.test(id)) {
+      return null;
+    }
     const rows = await this.db
       .select({
         id: slotOccupancies.id,
