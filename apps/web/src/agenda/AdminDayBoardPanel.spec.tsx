@@ -1,4 +1,4 @@
-import type { CreateWalkInRequest, DayBoardResponse, EditAppointmentRequest } from '@jc-barberia/contracts';
+import type { CreateWalkInRequest, DayBoardResponse, DayBoardSlot, EditAppointmentRequest } from '@jc-barberia/contracts';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,25 +18,25 @@ vi.mock('../shared/api-client', async (importOriginal) => {
   return { ...actual, apiGet: vi.fn(), apiPost: vi.fn(), apiPut: vi.fn() };
 });
 
+const baseSlot: DayBoardSlot = {
+  id: 'slot-1',
+  barberId: 'barber-1',
+  serviceId: 'service-1',
+  status: 'reservado',
+  startsAt: '2026-09-01T13:00:00.000Z',
+  endsAt: '2026-09-01T13:30:00.000Z',
+  allowedActions: ['edit', 'cancel', 'mark-completed'],
+};
+
 const initialBoard: DayBoardResponse = {
   date: '2026-09-01',
   columns: [{ barberId: 'barber-1', barberName: 'Juan' }],
-  slots: [
-    {
-      id: 'slot-1',
-      barberId: 'barber-1',
-      serviceId: 'service-1',
-      status: 'reservado',
-      startsAt: '2026-09-01T13:00:00.000Z',
-      endsAt: '2026-09-01T13:30:00.000Z',
-      allowedActions: ['edit', 'cancel', 'mark-completed'],
-    },
-  ],
+  slots: [baseSlot],
 };
 
 const reloadedBoard: DayBoardResponse = {
   ...initialBoard,
-  slots: [{ ...initialBoard.slots[0], status: 'realizado', allowedActions: [] }],
+  slots: [{ ...baseSlot, status: 'realizado', allowedActions: [] }],
 };
 
 describe('AdminDayBoardPanel', () => {
@@ -72,7 +72,7 @@ describe('AdminDayBoardPanel', () => {
   it('confirms an absence through the endpoint', async () => {
     const boardWithAbsence: DayBoardResponse = {
       ...initialBoard,
-      slots: [{ ...initialBoard.slots[0], status: 'sin_registrado', allowedActions: ['mark-completed', 'confirm-absence'] }],
+      slots: [{ ...baseSlot, status: 'sin_registrado', allowedActions: ['mark-completed', 'confirm-absence'] }],
     };
     vi.mocked(apiPost).mockResolvedValue({ appointment: { id: 'slot-1', status: 'ausente' } });
     vi.mocked(apiGet).mockResolvedValue(reloadedBoard);

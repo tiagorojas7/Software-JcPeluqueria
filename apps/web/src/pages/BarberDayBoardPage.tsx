@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { DayBoardResponse } from '@jc-barberia/contracts';
 
-import { BarberDayBoardContainer } from '../agenda/BarberDayBoardContainer';
+import { BarberDayBoardPanel } from '../agenda/BarberDayBoardPanel';
 import { apiGet, describeError } from '../shared/api-client';
 import type { Actor } from '../shared/actor';
 
@@ -10,13 +10,14 @@ export interface BarberDayBoardPageProps {
 }
 
 /** Barber-facing day board (barber-profile spec, "Agenda propia filtrada").
- *  Same honest "not wired" behavior as `AdminDayBoardPage` for slot actions —
- *  see that page's doc comment. */
+ *  `mark-completed`/`confirm-absence` on the barber's own turnos are wired
+ *  end to end (cablear-el-mvp, B.2/B.6) — see `AdminDayBoardPage`'s doc
+ *  comment for the same split between "this page fetches" and "the panel
+ *  acts". */
 export function BarberDayBoardPage({ actor }: BarberDayBoardPageProps) {
   const [date, setDate] = useState('');
   const [dayBoard, setDayBoard] = useState<DayBoardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   async function handleLoad(event: FormEvent) {
     event.preventDefault();
@@ -51,7 +52,6 @@ export function BarberDayBoardPage({ actor }: BarberDayBoardPageProps) {
     <section>
       <h2>Mi agenda (barbero)</h2>
       {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
       <form onSubmit={handleLoad}>
         <label htmlFor="barber-day-board-date">Fecha</label>
         <input
@@ -63,15 +63,7 @@ export function BarberDayBoardPage({ actor }: BarberDayBoardPageProps) {
         />
         <button type="submit">Cargar mi agenda</button>
       </form>
-      {dayBoard && (
-        <BarberDayBoardContainer
-          dayBoard={dayBoard}
-          barberId={actor.barberId}
-          onSlotAction={(_slotId, action) =>
-            setNotice(`Acción "${action}" todavía no tiene endpoint conectado en esta demo.`)
-          }
-        />
-      )}
+      {dayBoard && <BarberDayBoardPanel dayBoard={dayBoard} barberId={actor.barberId} />}
     </section>
   );
 }

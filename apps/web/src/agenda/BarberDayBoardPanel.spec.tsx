@@ -1,4 +1,4 @@
-import type { DayBoardResponse } from '@jc-barberia/contracts';
+import type { DayBoardResponse, DayBoardSlot } from '@jc-barberia/contracts';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,25 +18,25 @@ vi.mock('../shared/api-client', async (importOriginal) => {
   return { ...actual, apiGet: vi.fn(), apiPost: vi.fn() };
 });
 
+const baseSlot: DayBoardSlot = {
+  id: 'slot-1',
+  barberId: 'barber-1',
+  serviceId: 'service-1',
+  status: 'reservado',
+  startsAt: '2026-09-01T13:00:00.000Z',
+  endsAt: '2026-09-01T13:30:00.000Z',
+  allowedActions: ['mark-completed'],
+};
+
 const initialBoard: DayBoardResponse = {
   date: '2026-09-01',
   columns: [{ barberId: 'barber-1', barberName: 'Juan' }],
-  slots: [
-    {
-      id: 'slot-1',
-      barberId: 'barber-1',
-      serviceId: 'service-1',
-      status: 'reservado',
-      startsAt: '2026-09-01T13:00:00.000Z',
-      endsAt: '2026-09-01T13:30:00.000Z',
-      allowedActions: ['mark-completed'],
-    },
-  ],
+  slots: [baseSlot],
 };
 
 const reloadedBoard: DayBoardResponse = {
   ...initialBoard,
-  slots: [{ ...initialBoard.slots[0], status: 'realizado', allowedActions: [] }],
+  slots: [{ ...baseSlot, status: 'realizado', allowedActions: [] }],
 };
 
 describe('BarberDayBoardPanel', () => {
@@ -65,7 +65,7 @@ describe('BarberDayBoardPanel', () => {
         { barberId: 'barber-1', barberName: 'Juan' },
         { barberId: 'barber-2', barberName: 'Ana' },
       ],
-      slots: [{ ...initialBoard.slots[0], id: 'slot-2', barberId: 'barber-2', allowedActions: ['mark-completed'] }],
+      slots: [{ ...baseSlot, id: 'slot-2', barberId: 'barber-2', allowedActions: ['mark-completed'] }],
     };
 
     render(<BarberDayBoardPanel dayBoard={colleagueBoard} barberId="barber-1" />);
