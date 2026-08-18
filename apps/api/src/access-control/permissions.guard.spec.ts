@@ -1,11 +1,19 @@
 import type { ExecutionContext } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { FakeRolePermissionRepository, type ActorContext, type Permission } from '@jc-barberia/domain';
+import {
+  FakeClientContextRepository,
+  FakeRolePermissionRepository,
+  type ActorContext,
+  type ClientContext,
+  type Permission,
+} from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
+import { RequiresClientSession } from './decorators/requires-client-session.decorator';
 import { RequiresPermission } from './decorators/requires-permission.decorator';
 import { PermissionsGuard } from './permissions.guard';
+import { SESSION_COOKIE_NAME } from './session-cookie';
 
 // Test-only handlers — exercise the guard's actor-resolution and DB-backed
 // permission-check branches in isolation, without needing any real
@@ -18,6 +26,9 @@ class DummyController {
 
   @RequiresPermission('agenda:read:any', 'agenda:read:own')
   eitherPermissionHandler(): void {}
+
+  @RequiresClientSession()
+  clientHandler(): void {}
 }
 
 const buildContext = (actor?: ActorContext, handler = DummyController.prototype.protectedHandler): ExecutionContext => {
@@ -29,10 +40,24 @@ const buildContext = (actor?: ActorContext, handler = DummyController.prototype.
   } as unknown as ExecutionContext;
 };
 
+/** Same shape `buildContext` builds, but with a real, mutable `request`
+ *  object (so a test can assert `request.client` was attached by the guard)
+ *  and a raw `Cookie` header — the input `@RequiresClientSession()`'s branch
+ *  reads instead of a pre-attached `actor`. */
+const buildClientSessionContext = (cookieHeader?: string): { context: ExecutionContext; request: { client?: ClientContext } } => {
+  const request: { headers: { cookie?: string }; client?: ClientContext } = { headers: { cookie: cookieHeader } };
+  const context = {
+    getHandler: () => DummyController.prototype.clientHandler,
+    getClass: () => DummyController,
+    switchToHttp: () => ({ getRequest: () => request }),
+  } as unknown as ExecutionContext;
+  return { context, request };
+};
+
 describe('PermissionsGuard — permission-check branch', () => {
   it('denies when no actor is attached to the request — no identity, no access', async () => {
     const repo = new FakeRolePermissionRepository();
-    const guard = new PermissionsGuard(new Reflector(), repo);
+    const guard = new PermissionsGuard(new Reflector(), repo, new FakeClientContextRepository());
 
     await expect(guard.canActivate(buildContext(undefined))).rejects.toBeInstanceOf(ForbiddenException);
     expect(repo.hasPermissionCalls).toHaveLength(0);
@@ -40,7 +65,7 @@ describe('PermissionsGuard — permission-check branch', () => {
 
   it('denies when the actor role lacks the required permission, after consulting the repository', async () => {
     const repo = new FakeRolePermissionRepository(new Map([['barber', new Set<Permission>()]]));
-    const guard = new PermissionsGuard(new Reflector(), repo);
+    const guard = new PermissionsGuard(new Reflector(), repo, new FakeClientContextRepository());
 
     await expect(
       guard.canActivate(buildContext({ userId: 'u1', role: 'barber' })),
@@ -52,7 +77,7 @@ describe('PermissionsGuard — permission-check branch', () => {
     const repo = new FakeRolePermissionRepository(
       new Map([['owner', new Set<Permission>(['finance:read:shop'])]]),
     );
-    const guard = new PermissionsGuard(new Reflector(), repo);
+    const guard = new PermissionsGuard(new Reflector(), repo, new FakeClientContextRepository());
 
     const result = await guard.canActivate(buildContext({ userId: 'u1', role: 'owner' }));
 
@@ -64,7 +89,7 @@ describe('PermissionsGuard — permission-check branch', () => {
     const repo = new FakeRolePermissionRepository(
       new Map([['barber', new Set<Permission>(['agenda:read:own'])]]),
     );
-    const guard = new PermissionsGuard(new Reflector(), repo);
+    const guard = new PermissionsGuard(new Reflector(), repo, new FakeClientContextRepository());
 
     const result = await guard.canActivate(
       buildContext({ userId: 'u1', role: 'barber' }, DummyController.prototype.eitherPermissionHandler),
@@ -79,7 +104,7 @@ describe('PermissionsGuard — permission-check branch', () => {
 
   it('denies when the actor holds NEITHER of several declared permissions', async () => {
     const repo = new FakeRolePermissionRepository();
-    const guard = new PermissionsGuard(new Reflector(), repo);
+    const guard = new PermissionsGuard(new Reflector(), repo, new FakeClientContextRepository());
 
     await expect(
       guard.canActivate(buildContext({ userId: 'u1', role: 'barber' }, DummyController.prototype.eitherPermissionHandler)),
@@ -96,7 +121,7 @@ describe('PermissionsGuard — permission-check branch', () => {
   // between.
   it('reflects a permission granted to the repository after construction, on the guard’s very next check', async () => {
     const repo = new FakeRolePermissionRepository();
-    const guard = new PermissionsGuard(new Reflector(), repo);
+    const guard = new PermissionsGuard(new Reflector(), repo, new FakeClientContextRepository());
     const context = buildContext({ userId: 'u1', role: 'secretary' });
 
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(ForbiddenException);
@@ -105,5 +130,53 @@ describe('PermissionsGuard — permission-check branch', () => {
 
     const result = await guard.canActivate(context);
     expect(result).toBe(true);
+  });
+});
+
+// cablear-el-mvp Slice C (C.4): the client counterpart of the permission-check
+// branch above. A client has no `role` (access-control spec, "Autenticación
+// diferenciada según tipo de usuario"), so `@RequiresClientSession()` cannot
+// reuse `RolePermissionRepository` — it resolves the session cookie straight
+// through `ClientContextRepository` instead, still inside the SAME
+// deny-by-default guard (never a second, bypassable one).
+describe('PermissionsGuard — @RequiresClientSession() branch', () => {
+  it('denies when the request carries no session cookie at all', async () => {
+    const clientContexts = new FakeClientContextRepository();
+    const guard = new PermissionsGuard(new Reflector(), new FakeRolePermissionRepository(), clientContexts);
+    const { context } = buildClientSessionContext(undefined);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('denies when the session cookie does not resolve to a client (expired, revoked, or a staff session)', async () => {
+    const clientContexts = new FakeClientContextRepository();
+    const guard = new PermissionsGuard(new Reflector(), new FakeRolePermissionRepository(), clientContexts);
+    const { context } = buildClientSessionContext(`${SESSION_COOKIE_NAME}=not-a-client-session`);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('allows and attaches request.client when the session cookie resolves to a client', async () => {
+    const clientContexts = new FakeClientContextRepository();
+    clientContexts.seed('client-session-1', { userId: 'user-1', clientId: 'client-1' });
+    const guard = new PermissionsGuard(new Reflector(), new FakeRolePermissionRepository(), clientContexts);
+    const { context, request } = buildClientSessionContext(`${SESSION_COOKIE_NAME}=client-session-1`);
+
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(true);
+    expect(request.client).toEqual({ userId: 'user-1', clientId: 'client-1' });
+  });
+
+  it('never consults RolePermissionRepository for a @RequiresClientSession() route — the two checks are independent', async () => {
+    const rolePermissions = new FakeRolePermissionRepository();
+    const clientContexts = new FakeClientContextRepository();
+    clientContexts.seed('client-session-1', { userId: 'user-1', clientId: 'client-1' });
+    const guard = new PermissionsGuard(new Reflector(), rolePermissions, clientContexts);
+    const { context } = buildClientSessionContext(`${SESSION_COOKIE_NAME}=client-session-1`);
+
+    await guard.canActivate(context);
+
+    expect(rolePermissions.hasPermissionCalls).toHaveLength(0);
   });
 });
