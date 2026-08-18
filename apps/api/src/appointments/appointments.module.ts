@@ -1,26 +1,59 @@
 import { Module, type OnApplicationShutdown } from '@nestjs/common';
-import { CreateHold, CreatePhoneAppointmentUseCase } from '@jc-barberia/application';
+import {
+  AdminCancelAppointmentUseCase,
+  AdminConfirmAbsenceUseCase,
+  AdminMarkCompletedUseCase,
+  BarberConfirmAbsenceUseCase,
+  BarberMarkCompletedUseCase,
+  CreateHold,
+  CreatePhoneAppointmentUseCase,
+  CreateWalkInUseCase,
+  EditAppointmentUseCase,
+} from '@jc-barberia/application';
 import {
   db,
+  DrizzleAbsenceRecordRepository,
+  DrizzleAppointmentRepository,
   DrizzleClientRepository,
   DrizzleHoldRepository,
+  DrizzleWalkInRepository,
   lazyJobSender,
+  MercadoPagoPaymentAdapter,
   PgBossHoldExpireScheduler,
   ShopClock,
   stopJobSender,
 } from '@jc-barberia/infrastructure';
-import type { ClientRepository, Clock, HoldExpireScheduler, HoldRepository } from '@jc-barberia/domain';
+import type {
+  AbsenceRecordRepository,
+  AppointmentRepository,
+  ClientRepository,
+  Clock,
+  HoldExpireScheduler,
+  HoldRepository,
+  PaymentPort,
+  WalkInRepository,
+} from '@jc-barberia/domain';
 
 import { AccessControlModule } from '../access-control/access-control.module';
+import { AppointmentActionsController } from './appointment-actions.controller';
 import { PhoneAppointmentController } from './phone-appointment.controller';
-import { CLIENT_REPOSITORY, CLOCK, HOLD_EXPIRE_SCHEDULER, HOLD_REPOSITORY } from './tokens';
+import {
+  ABSENCE_RECORD_REPOSITORY,
+  APPOINTMENT_REPOSITORY,
+  CLIENT_REPOSITORY,
+  CLOCK,
+  HOLD_EXPIRE_SCHEDULER,
+  HOLD_REPOSITORY,
+  PAYMENT_PORT,
+  WALK_IN_REPOSITORY,
+} from './tokens';
 
 /** Wires task 10.1/10.2's real endpoint. `HoldRepository` is bound to its own
  *  token here rather than reused across modules — `AgendaModule` follows the
  *  same one-token-per-module pattern for `RolePermissionRepository`. */
 @Module({
   imports: [AccessControlModule],
-  controllers: [PhoneAppointmentController],
+  controllers: [PhoneAppointmentController, AppointmentActionsController],
   providers: [
     { provide: CLOCK, useFactory: () => new ShopClock() },
     { provide: CLIENT_REPOSITORY, useFactory: () => new DrizzleClientRepository(db) },
@@ -48,6 +81,54 @@ import { CLIENT_REPOSITORY, CLOCK, HOLD_EXPIRE_SCHEDULER, HOLD_REPOSITORY } from
       inject: [CLIENT_REPOSITORY, HOLD_REPOSITORY, CreateHold],
       useFactory: (clients: ClientRepository, holds: HoldRepository, createHold: CreateHold) =>
         new CreatePhoneAppointmentUseCase(clients, holds, createHold),
+    },
+    // Slice B (cablear-el-mvp, B.1-B.5): bound to their own tokens here
+    // rather than reused across modules — same one-token-per-module pattern
+    // this file already follows for HOLD_REPOSITORY/CLIENT_REPOSITORY.
+    { provide: APPOINTMENT_REPOSITORY, useFactory: () => new DrizzleAppointmentRepository(db) },
+    { provide: ABSENCE_RECORD_REPOSITORY, useFactory: () => new DrizzleAbsenceRecordRepository(db) },
+    {
+      provide: PAYMENT_PORT,
+      useFactory: () => new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? ''),
+    },
+    { provide: WALK_IN_REPOSITORY, useFactory: () => new DrizzleWalkInRepository(db) },
+    {
+      provide: AdminMarkCompletedUseCase,
+      inject: [APPOINTMENT_REPOSITORY],
+      useFactory: (appointments: AppointmentRepository) => new AdminMarkCompletedUseCase(appointments),
+    },
+    {
+      provide: AdminConfirmAbsenceUseCase,
+      inject: [APPOINTMENT_REPOSITORY, ABSENCE_RECORD_REPOSITORY, CLOCK],
+      useFactory: (appointments: AppointmentRepository, absences: AbsenceRecordRepository, clock: Clock) =>
+        new AdminConfirmAbsenceUseCase(appointments, absences, clock),
+    },
+    {
+      provide: BarberMarkCompletedUseCase,
+      inject: [APPOINTMENT_REPOSITORY],
+      useFactory: (appointments: AppointmentRepository) => new BarberMarkCompletedUseCase(appointments),
+    },
+    {
+      provide: BarberConfirmAbsenceUseCase,
+      inject: [APPOINTMENT_REPOSITORY, ABSENCE_RECORD_REPOSITORY, CLOCK],
+      useFactory: (appointments: AppointmentRepository, absences: AbsenceRecordRepository, clock: Clock) =>
+        new BarberConfirmAbsenceUseCase(appointments, absences, clock),
+    },
+    {
+      provide: EditAppointmentUseCase,
+      inject: [APPOINTMENT_REPOSITORY],
+      useFactory: (appointments: AppointmentRepository) => new EditAppointmentUseCase(appointments),
+    },
+    {
+      provide: AdminCancelAppointmentUseCase,
+      inject: [APPOINTMENT_REPOSITORY, PAYMENT_PORT],
+      useFactory: (appointments: AppointmentRepository, paymentPort: PaymentPort) =>
+        new AdminCancelAppointmentUseCase(appointments, paymentPort),
+    },
+    {
+      provide: CreateWalkInUseCase,
+      inject: [WALK_IN_REPOSITORY],
+      useFactory: (walkIns: WalkInRepository) => new CreateWalkInUseCase(walkIns),
     },
   ],
 })

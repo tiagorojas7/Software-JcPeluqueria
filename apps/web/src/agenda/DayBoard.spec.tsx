@@ -67,4 +67,20 @@ describe('DayBoard', () => {
 
     expect(onSlotAction).toHaveBeenCalledWith('slot-1', 'mark-completed');
   });
+
+  // Slice B (cablear-el-mvp, B.6): admin-operations spec, "resolución de
+  // pendientes" — a sin_registrado slot's allowedActions now carries
+  // confirm-absence alongside mark-completed (GetDayBoardUseCase, B.1/B.2).
+  it('renders a "Confirmar ausencia" button for confirm-absence and reports it back with the slot id', () => {
+    const onSlotAction = vi.fn();
+    const slots = [
+      buildSlot({ id: 'slot-1', status: 'sin_registrado', allowedActions: ['mark-completed', 'confirm-absence'] }),
+    ];
+
+    render(<DayBoard columns={columns} slots={slots} onSlotAction={onSlotAction} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar ausencia' }));
+
+    expect(onSlotAction).toHaveBeenCalledWith('slot-1', 'confirm-absence');
+  });
 });

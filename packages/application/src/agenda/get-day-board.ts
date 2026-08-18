@@ -49,7 +49,11 @@ export class GetDayBoardUseCase {
    *  /`appointment:cancel`); `mark-completed` additionally opens through
    *  `:own` when the slot belongs to the acting barber, matching "Marcar
    *  realizado / resolver pendientes ... Solo los propios" for the barber
-   *  row of that matrix. */
+   *  row of that matrix. `confirm-absence` reuses the exact same
+   *  `mark-completed:any`/`:own` grant (no separate permission exists for
+   *  it) but additionally requires `status === 'sin_registrado'` —
+   *  `AppointmentStateMachine` only allows the `ausente` edge from there,
+   *  never from `reservado` (packages/domain's five-state lifecycle). */
   private async allowedActionsFor(slot: DayBoardSlotRecord, actor: ActorContext): Promise<SlotAction[]> {
     const actions: SlotAction[] = [];
 
@@ -68,6 +72,9 @@ export class GetDayBoardUseCase {
       (await this.rolePermissions.hasPermission(actor.role, 'appointment:mark-completed:own'));
     if (canMarkAny || canMarkOwn) {
       actions.push('mark-completed');
+      if (slot.status === 'sin_registrado') {
+        actions.push('confirm-absence');
+      }
     }
 
     return actions;

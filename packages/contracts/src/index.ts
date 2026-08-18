@@ -5,8 +5,20 @@ export type { MarkBarberAbsentRequest, MarkBarberAbsentResponse } from './absenc
 export { MarkBarberAbsentRequestSchema } from './absence-reassignment';
 export type { DayBoardColumn, DayBoardResponse, DayBoardSlot, SlotAction } from './agenda';
 export { SLOT_ACTIONS } from './agenda';
-export type { CreatePhoneAppointmentRequest, PhoneAppointmentResponse } from './appointments';
-export { CreatePhoneAppointmentRequestSchema } from './appointments';
+export type {
+  AppointmentResponse,
+  ConfirmAbsenceResponseBody,
+  CreatePhoneAppointmentRequest,
+  CreateWalkInRequest,
+  EditAppointmentRequest,
+  PhoneAppointmentResponse,
+  WalkInResponse,
+} from './appointments';
+export {
+  CreatePhoneAppointmentRequestSchema,
+  CreateWalkInRequestSchema,
+  EditAppointmentRequestSchema,
+} from './appointments';
 export type { BarberRevenueResponse, BarberStatsResponse } from './barbers';
 export type { StaffLoginRequest, StaffLoginResponseBody } from './identity';
 export { StaffLoginRequestSchema } from './identity';
