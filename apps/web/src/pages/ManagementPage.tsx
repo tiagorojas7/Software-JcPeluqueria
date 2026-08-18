@@ -28,13 +28,22 @@ export interface ManagementPageProps {
  * there is nothing to list it from.
  */
 export function ManagementPage({ actor }: ManagementPageProps) {
+  const canClients = hasPermission(actor.role, 'client:manage');
+  const canBarbers = hasPermission(actor.role, 'barber:manage');
+  const canSchedules = hasPermission(actor.role, 'schedule:configure');
+  const canPricing = hasPermission(actor.role, 'pricing:configure');
+  const hasAnySection = canClients || canBarbers || canSchedules || canPricing;
+
   return (
-    <section>
+    <section className="management">
       <h2>Gestión</h2>
-      {hasPermission(actor.role, 'client:manage') && <ClientsSection />}
-      {hasPermission(actor.role, 'barber:manage') && <BarbersSection />}
-      {hasPermission(actor.role, 'schedule:configure') && <SchedulesSection />}
-      {hasPermission(actor.role, 'pricing:configure') && <PricingSection />}
+      {!hasAnySection && (
+        <p className="empty-state">Tu cuenta no tiene acceso a ninguna sección de gestión.</p>
+      )}
+      {canClients && <ClientsSection />}
+      {canBarbers && <BarbersSection />}
+      {canSchedules && <SchedulesSection />}
+      {canPricing && <PricingSection />}
     </section>
   );
 }
@@ -60,7 +69,8 @@ function ClientsSection() {
       <button type="button" onClick={handleLoad}>
         Cargar clientes
       </button>
-      {clients && (
+      {clients && clients.length === 0 && <p className="empty-state">Todavía no hay clientes cargados.</p>}
+      {clients && clients.length > 0 && (
         <table className="management__table">
           <thead>
             <tr>
@@ -91,7 +101,7 @@ function BarbersSection() {
   const [dayOfWeek, setDayOfWeek] = useState('1');
   const [opensAt, setOpensAt] = useState('09:00');
   const [closesAt, setClosesAt] = useState('18:00');
-  const [barberToDeactivate, setBarberToDeactivate] = useState(DEMO_BARBERS[0].id);
+  const [barberToDeactivate, setBarberToDeactivate] = useState<string>(DEMO_BARBERS[0].id);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -194,7 +204,7 @@ function BarbersSection() {
 }
 
 function SchedulesSection() {
-  const [barberId, setBarberId] = useState(DEMO_BARBERS[0].id);
+  const [barberId, setBarberId] = useState<string>(DEMO_BARBERS[0].id);
   const [dayOfWeek, setDayOfWeek] = useState('1');
   const [opensAt, setOpensAt] = useState('09:00');
   const [closesAt, setClosesAt] = useState('18:00');
@@ -270,7 +280,7 @@ function SchedulesSection() {
 }
 
 function PricingSection() {
-  const [serviceId, setServiceId] = useState(DEMO_SERVICES[0].id);
+  const [serviceId, setServiceId] = useState<string>(DEMO_SERVICES[0].id);
   const [priceArs, setPriceArs] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

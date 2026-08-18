@@ -63,7 +63,7 @@ describe('ManagementPage (D.3)', () => {
     render(<ManagementPage actor={OWNER} />);
 
     fireEvent.change(screen.getByLabelText(/nombre del barbero/i), { target: { value: 'Nuevo Barbero' } });
-    fireEvent.change(screen.getByLabelText(/dia \(alta\)/i), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText(/d.a \(alta\)/i), { target: { value: '1' } });
     fireEvent.change(screen.getByLabelText(/abre \(alta\)/i), { target: { value: '09:00' } });
     fireEvent.change(screen.getByLabelText(/cierra \(alta\)/i), { target: { value: '18:00' } });
     fireEvent.click(screen.getByRole('button', { name: /dar de alta/i }));
@@ -91,7 +91,7 @@ describe('ManagementPage (D.3)', () => {
     vi.mocked(apiPut).mockResolvedValueOnce({ configured: true });
     render(<ManagementPage actor={OWNER} />);
 
-    fireEvent.change(screen.getByLabelText(/dia \(horario\)/i), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText(/d.a \(horario\)/i), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText(/abre \(horario\)/i), { target: { value: '10:00' } });
     fireEvent.change(screen.getByLabelText(/cierra \(horario\)/i), { target: { value: '19:00' } });
     fireEvent.click(screen.getByRole('button', { name: /guardar horario/i }));

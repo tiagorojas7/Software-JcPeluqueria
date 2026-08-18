@@ -1,34 +1,84 @@
 /**
- * Design tokens + a minimal reset for the whole SPA (D.2). Plain CSS, no
- * framework: imported exactly once, from `main.tsx`, before anything else.
- * Warm, "real barbershop" palette — charcoal + brass on cream — used by
- * both the public site and the panel so the two areas read as one brand
- * even though their layouts differ.
+ * Design tokens + global element base styles for the whole SPA (D.2).
+ * Plain CSS, no framework: imported exactly once, from `main.tsx`, before
+ * anything else, so every screen — including components this slice does not
+ * own (booking/, agenda/, appointments/, barbers/) — inherits a consistent,
+ * designed look from bare HTML elements alone. Nothing here is ad-hoc: every
+ * colour, size and gap used anywhere in the app should trace back to one of
+ * the custom properties declared below.
+ *
+ * Brand: black, white and grey only. No blue, no purple, no invented accent
+ * — including the browser's own defaults (link colour, visited links, focus
+ * rings), which are overridden explicitly below. Near-black rather than pure
+ * #000 for large areas; a small grey ramp carries hierarchy instead of
+ * colour, matching a real barbershop's signage rather than a dashboard
+ * template.
  */
 
 :root {
-  --color-ink: #211d1a;
-  --color-ink-soft: #4a423b;
-  --color-paper: #faf6f0;
-  --color-paper-alt: #f1e9dd;
-  --color-accent: #b3702e;
-  --color-accent-dark: #8a5622;
-  --color-accent-contrast: #fff8ee;
-  --color-line: #e2d6c3;
-  --color-muted: #766c60;
-  --color-danger: #a3312a;
-  --color-danger-bg: #fbeceb;
-  --color-success-bg: #ecf5ea;
-  --color-success-text: #2f5c2a;
+  /* Palette — black, white, grey. No hue anywhere in this list. */
+  --color-ink: #17140f;
+  --color-ink-soft: #4a453e;
+  --color-paper: #f7f5f1;
+  --color-paper-alt: #ece8e1;
+  --color-surface: #ffffff;
+  --color-line: #d8d3c8;
+  --color-line-strong: #b6b0a2;
+  --color-muted: #756f64;
+  --color-on-ink: #f7f5f1;
 
-  --font-body: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-display: Georgia, 'Times New Roman', serif;
+  /* Functional colours (status only, never brand) — desaturated so they
+     read as signals, not as decoration on top of the black/white identity. */
+  --color-danger: #7a2b24;
+  --color-danger-bg: #f5e9e7;
+  --color-success-text: #2c4a2a;
+  --color-success-bg: #eaf0e6;
 
-  --radius-sm: 4px;
-  --radius-md: 10px;
-  --shadow-card: 0 1px 3px rgba(33, 29, 26, 0.12);
-  --max-width: 1080px;
+  /* Type: one system stack, no serif/display swap — weight, size, spacing
+     and case carry hierarchy instead. */
+  --font-body:
+    -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-xl: clamp(1.5rem, 1.1rem + 1.5vw, 2rem);
+  --text-2xl: clamp(1.875rem, 1.3rem + 2.2vw, 2.75rem);
+  --text-3xl: clamp(2.25rem, 1.5rem + 3.2vw, 3.5rem);
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.6;
+
+  /* Spacing scale — every margin/padding/gap in this app is one of these. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(23, 20, 15, 0.06), 0 8px 24px rgba(23, 20, 15, 0.08);
+  --shadow-header: 0 1px 0 rgba(23, 20, 15, 0.08);
+
+  --focus-ring: 0 0 0 3px rgba(23, 20, 15, 0.18);
+
+  /* Two content widths: the public storefront reads open and airy; the
+     panel is a denser work tool. */
+  --max-width-public: 1140px;
+  --max-width-panel: 1200px;
 }
+
+/* ---------- Reset ---------- */
 
 *,
 *::before,
@@ -47,49 +97,361 @@ body {
   font-family: var(--font-body);
   background: var(--color-paper);
   color: var(--color-ink);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
+  font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
 h2,
-h3 {
-  font-family: var(--font-display);
-  line-height: 1.2;
+h3,
+h4,
+h5,
+h6 {
   margin: 0 0 0.5em;
+  font-family: inherit;
+  font-weight: 800;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+
+h1 {
+  font-size: var(--text-3xl);
+}
+h2 {
+  font-size: var(--text-2xl);
+}
+h3 {
+  font-size: var(--text-lg);
+}
+h4,
+h5,
+h6 {
+  font-size: var(--text-md);
 }
 
 p {
   margin: 0 0 1em;
+  color: var(--color-ink-soft);
 }
 
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+img,
+svg {
+  max-width: 100%;
+  display: block;
+}
+
+/* Links: explicitly overridden, including :visited, so the browser default
+   blue/purple never appears anywhere in the app. */
 a {
-  color: var(--color-accent-dark);
+  color: var(--color-ink);
+  text-decoration-color: var(--color-line-strong);
+  text-underline-offset: 3px;
+}
+a:visited {
+  color: var(--color-ink);
+}
+a:hover {
+  color: var(--color-ink);
+  text-decoration-color: var(--color-ink);
 }
 
-button {
-  font-family: inherit;
-  font-size: 1rem;
-  cursor: pointer;
+/* Focus is always visible and always neutral (ink), never the platform's
+   default blue outline. */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- Form controls ----------
+ * Applied to bare tags on purpose: several components this slice does not
+ * own (booking/, appointments/, agenda/) render plain <input>/<select>/
+ * <button> with no class hooks. Styling the element types here is the only
+ * way the whole app reads as one consistent, designed product without
+ * editing files outside this slice's ownership. */
+
+label {
+  display: block;
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
 }
 
 input,
 select,
 textarea {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 0 var(--space-4);
+  padding: 10px 14px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
   font-family: inherit;
-  font-size: 1rem;
+  font-size: var(--text-base);
+  line-height: 1.4;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--color-ink-soft);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-ink);
+  box-shadow: var(--focus-ring);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--color-paper-alt);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  display: inline-block;
+  width: auto;
+  max-width: none;
+  margin: 0 var(--space-2) 0 0;
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+/* ---------- Buttons ----------
+ * One consistent, pressable shape everywhere. `[type="submit"]` (a
+ * screen's main action) gets the solid ink treatment; anything else reads
+ * as a secondary/ghost action — the same primary/secondary split a form's
+ * own semantics already express, so no component needs a class added to
+ * get it. Files this slice owns may opt out with `.btn-ghost` where a
+ * `type="button"` action is still the primary one on its screen. */
+
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-on-ink);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.05s ease;
+}
+
+button:hover {
+  background: var(--color-ink-soft);
+  border-color: var(--color-ink-soft);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  background: var(--color-line);
+  border-color: var(--color-line);
+  color: var(--color-muted);
+  cursor: not-allowed;
+  transform: none;
+}
+
+button[type='button'],
+button.btn-ghost {
+  background: transparent;
+  color: var(--color-ink);
+}
+button[type='button']:hover,
+button.btn-ghost:hover {
+  background: var(--color-paper-alt);
+  border-color: var(--color-ink);
+}
+button[type='button']:disabled,
+button.btn-ghost:disabled {
+  background: transparent;
+  color: var(--color-muted);
+  border-color: var(--color-line);
+}
+
+button.btn-primary {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-on-ink);
+}
+button.btn-primary:hover {
+  background: var(--color-ink-soft);
+  border-color: var(--color-ink-soft);
+}
+
+/* ---------- Status ---------- */
+
 [role='alert'] {
+  display: block;
   color: var(--color-danger);
   background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
   border-radius: var(--radius-sm);
-  padding: 0.5em 0.75em;
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 [role='status'] {
+  display: block;
   color: var(--color-success-text);
   background: var(--color-success-bg);
+  border: 1px solid var(--color-success-text);
   border-radius: var(--radius-sm);
-  padding: 0.5em 0.75em;
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* ---------- Shared layout utilities ---------- */
+
+.container {
+  width: 100%;
+  max-width: var(--max-width-public);
+  margin: 0 auto;
+  padding: 0 var(--space-5);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-5);
+}
+
+.empty-state {
+  padding: var(--space-6) var(--space-5);
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-paper-alt);
+  color: var(--color-ink-soft);
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0 var(--space-4);
+  }
+}
+
+/* ---------- Shared panel-page shell ----------
+ * Reused by every simple panel screen this slice owns (day boards, phone
+ * appointment, revenue, shop revenue): a heading, an optional form card,
+ * and content below — the same shape repeated instead of styled ad-hoc
+ * per page. */
+
+.panel-page > h2 {
+  margin-bottom: var(--space-4);
+}
+
+.panel-page__form {
+  max-width: 360px;
+  margin-bottom: var(--space-5);
+}
+
+.panel-page__form button[type='submit'] {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+.panel-page__reference {
+  margin-bottom: var(--space-5);
+}
+
+.panel-page__reference h3 {
+  margin-bottom: var(--space-3);
+}
+
+.panel-page__reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-5);
+}
+
+.panel-page__reference-grid strong {
+  display: block;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-2);
+}
+
+.panel-page__reference-grid ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.panel-page__reference-grid li {
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.panel-page__reference-grid code {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.access-code-page {
+  padding: var(--space-7) 0 var(--space-8);
+  display: flex;
+  justify-content: center;
+}
+
+.access-code-page__card {
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+
+.access-code-page__card form {
+  text-align: left;
+}
+
+.access-code-page__card button[type='submit'] {
+  width: 100%;
 }
