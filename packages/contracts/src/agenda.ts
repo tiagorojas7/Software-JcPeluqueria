@@ -11,9 +11,12 @@
  * The only actions a day-board slot currently exposes, each tied to one
  * appointment permission from packages/domain's access-control catalog:
  * `edit` → `appointment:update`, `cancel` → `appointment:cancel`,
- * `mark-completed` → `appointment:mark-completed:any` / `:own`.
+ * `mark-completed` / `confirm-absence` → `appointment:mark-completed:any` /
+ * `:own` (there is no separate confirm-absence permission — admin-operations
+ * spec, "Marcado de realizados y resolución de pendientes" ties both
+ * resolutions of a `sin_registrado` turno to the SAME permission).
  */
-export const SLOT_ACTIONS = ['edit', 'cancel', 'mark-completed'] as const;
+export const SLOT_ACTIONS = ['edit', 'cancel', 'mark-completed', 'confirm-absence'] as const;
 export type SlotAction = (typeof SLOT_ACTIONS)[number];
 
 export interface DayBoardColumn {
