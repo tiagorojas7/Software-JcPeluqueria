@@ -29,7 +29,7 @@ function realisticRolePermissions(): FakeRolePermissionRepository {
   );
 }
 
-function seedOneSlot(repository: FakeDayBoardRepository): void {
+function seedOneSlot(repository: FakeDayBoardRepository, status = 'reservado'): void {
   repository.seed('2026-08-20', {
     columns: [{ barberId: 'barber-a', barberName: 'Juan' }],
     slots: [
@@ -38,7 +38,7 @@ function seedOneSlot(repository: FakeDayBoardRepository): void {
         barberId: 'barber-a',
         serviceId: 'service-1',
         clientId: null,
-        status: 'reservado',
+        status,
         startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
         endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
       },
@@ -85,5 +85,52 @@ describe('GetDayBoardUseCase', () => {
     expect(repository.calls).toEqual([{ calendarDate: '2026-08-20', actor: BARBER_A }]);
     expect(result.columns).toEqual([{ barberId: 'barber-a', barberName: 'Juan' }]);
     expect(result.date).toBe('2026-08-20');
+  });
+
+  // Slice B (cablear-el-mvp, B.1/B.2/B.6): admin-operations spec, "Marcado de
+  // realizados y resolución de pendientes" — a `sin_registrado` turno resolves
+  // to EITHER `realizado` OR `ausente`, so the day board MUST offer both
+  // actions there, gated by the exact same `appointment:mark-completed:*`
+  // permission (there is no separate confirm-absence permission — see
+  // packages/domain's 15-entry Permission catalog). `AppointmentStateMachine`
+  // only allows the `ausente` edge FROM `sin_registrado` (never `reservado`),
+  // so this stays a status-gated action, not an unconditional one.
+  it('grants confirm-absence alongside mark-completed on a sin_registrado slot for an owner', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'sin_registrado');
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const result = await useCase.execute('2026-08-20', OWNER);
+
+    expect(result.slots).toEqual([
+      expect.objectContaining({
+        id: 'slot-1',
+        allowedActions: ['edit', 'cancel', 'mark-completed', 'confirm-absence'],
+      }),
+    ]);
+  });
+
+  it('grants confirm-absence to a barber on their own sin_registrado slot', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'sin_registrado');
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const result = await useCase.execute('2026-08-20', BARBER_A);
+
+    expect(result.slots).toEqual([
+      expect.objectContaining({ id: 'slot-1', allowedActions: ['mark-completed', 'confirm-absence'] }),
+    ]);
+  });
+
+  it('does NOT grant confirm-absence on a reservado slot — the state machine has no reservado-to-ausente edge', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'reservado');
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const result = await useCase.execute('2026-08-20', OWNER);
+
+    expect(result.slots).toEqual([
+      expect.objectContaining({ id: 'slot-1', allowedActions: ['edit', 'cancel', 'mark-completed'] }),
+    ]);
   });
 });
