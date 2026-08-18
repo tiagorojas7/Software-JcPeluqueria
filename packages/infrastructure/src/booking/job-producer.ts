@@ -17,6 +17,11 @@ const connectionString =
  * Starting pg-boss is asynchronous and must happen once per process, so the
  * promise itself is the singleton — concurrent callers await the same start.
  */
+/** Every queue this process ENQUEUES to. The worker owns the consuming side
+ *  and declares them too; whichever starts first wins and the other is a
+ *  no-op. */
+const PRODUCED_QUEUES = ['hold.expire', 'payment.process'] as const;
+
 let started: Promise<PgBoss> | undefined;
 
 export function jobSender(): Promise<JobSender> {
@@ -32,6 +37,15 @@ export function jobSender(): Promise<JobSender> {
       console.error('[pg-boss] producer error (kept alive):', error);
     });
     await boss.start();
+    // pg-boss v12 requires a queue to exist before anything can be sent to it,
+    // and only the WORKER declared these. That made every booking depend on
+    // the worker having run against this same database first: without it,
+    // `POST /holds` died with "Queue hold.expire does not exist" and the
+    // customer got a 500 with no way to book at all. The API produces to these
+    // two, so the API makes sure they exist. `createQueue` is
+    // `ON CONFLICT DO NOTHING` internally, so both processes declaring them is
+    // safe and order between them stops mattering.
+    await Promise.all(PRODUCED_QUEUES.map((queue) => boss.createQueue(queue)));
     return boss;
   })();
   return started;

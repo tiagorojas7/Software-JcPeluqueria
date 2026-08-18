@@ -28,7 +28,7 @@ describe('BookingFlowContainer', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: '12:00 - 12:30' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '09:00 - 09:30' })).toBeInTheDocument();
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
   });
 
@@ -44,7 +44,7 @@ describe('BookingFlowContainer', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '12:00 - 12:30' }));
+    fireEvent.click(screen.getByRole('button', { name: '09:00 - 09:30' }));
 
     expect(onSelectSlot).toHaveBeenCalledWith(slots[0]);
   });

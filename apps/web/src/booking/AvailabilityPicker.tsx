@@ -1,15 +1,19 @@
 import type { AvailabilitySlot } from '@jc-barberia/contracts';
 
+import { utcIsoToShopLocalTime } from '../shared/shop-time';
+
 export interface AvailabilityPickerProps {
   readonly slots: readonly AvailabilitySlot[];
   readonly onSelectSlot: (slot: AvailabilitySlot) => void;
 }
 
-/** `startsAt`/`endsAt` are ISO instants; the visible label is only the
- *  `HH:mm` portion — nothing here re-derives a `Date` or a time zone, the
- *  slice is purely textual on an already-server-computed ISO string. */
+/** `startsAt`/`endsAt` are UTC ISO instants. Slicing `HH:mm` straight out of
+ *  the string showed the UTC time to the customer: the shop opens 09:00 and
+ *  the page advertised 12:00, because Argentina is UTC-3. The label goes
+ *  through the shared shop-offset helper, the same one this flow already uses
+ *  when it sends the chosen time back. */
 function timeLabel(iso: string): string {
-  return iso.slice(11, 16);
+  return utcIsoToShopLocalTime(iso);
 }
 
 /**

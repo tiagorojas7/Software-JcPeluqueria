@@ -27,7 +27,7 @@ describe('AvailabilityPicker', () => {
     const onSelectSlot = vi.fn();
     render(<AvailabilityPicker slots={slots} onSelectSlot={onSelectSlot} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '12:30 - 13:00' }));
+    fireEvent.click(screen.getByRole('button', { name: '09:30 - 10:00' }));
 
     expect(onSelectSlot).toHaveBeenCalledWith(slots[1]);
   });

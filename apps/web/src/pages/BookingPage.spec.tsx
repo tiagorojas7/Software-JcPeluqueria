@@ -52,7 +52,9 @@ describe('BookingPage (D.5)', () => {
     fireEvent.change(screen.getByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
     fireEvent.click(screen.getByRole('button', { name: /ver horarios disponibles/i }));
 
-    expect(await screen.findByRole('button', { name: /12:00 - 12:30/i })).toBeInTheDocument();
+    // 12:00Z es 09:00 en el local (UTC-3): el visitante lee la hora a la que
+    // realmente lo atienden, nunca UTC.
+    expect(await screen.findByRole('button', { name: /09:00 - 09:30/i })).toBeInTheDocument();
     expect(screen.queryByText(/todav.a no buscaste/i)).toBeNull();
     expect(screen.queryByText(/no hay horarios disponibles/i)).toBeNull();
   });
