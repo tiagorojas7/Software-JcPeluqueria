@@ -36,27 +36,27 @@ export function RevenuePage({ actor }: RevenuePageProps) {
 
   if (!actor) {
     return (
-      <section>
-        <h2>Mi facturación (barbero)</h2>
-        <p>Iniciá sesión como barbero para ver esta pantalla.</p>
+      <section className="panel-page">
+        <h2>Mi facturación</h2>
+        <p className="empty-state">Iniciá sesión como barbero para ver esta pantalla.</p>
       </section>
     );
   }
 
   if (!actor.barberId) {
     return (
-      <section>
-        <h2>Mi facturación (barbero)</h2>
-        <p>Esta cuenta no tiene un barbero asociado (rol actual: {actor.role}).</p>
+      <section className="panel-page">
+        <h2>Mi facturación</h2>
+        <p className="empty-state">Esta cuenta no tiene un barbero asociado.</p>
       </section>
     );
   }
 
   return (
-    <section>
-      <h2>Mi facturación (barbero)</h2>
+    <section className="panel-page">
+      <h2>Mi facturación</h2>
       {error && <p role="alert">{error}</p>}
-      <form onSubmit={handleLoad}>
+      <form className="card panel-page__form" onSubmit={handleLoad}>
         <label htmlFor="revenue-from">Desde</label>
         <input id="revenue-from" type="date" required value={from} onChange={(e) => setFrom(e.target.value)} />
 
@@ -65,7 +65,11 @@ export function RevenuePage({ actor }: RevenuePageProps) {
 
         <button type="submit">Ver facturación</button>
       </form>
-      {revenue && <RevenueSummary revenue={revenue} />}
+      {revenue ? (
+        <RevenueSummary revenue={revenue} />
+      ) : (
+        <p className="empty-state">Elegí un período para ver tu facturación teórica.</p>
+      )}
     </section>
   );
 }
