@@ -31,11 +31,18 @@ export function BarberDayBoardPage({ actor }: BarberDayBoardPageProps) {
     }
   }
 
-  if (!actor) {
+  // `barberId` is null for the owner and the secretary: they have staff
+  // accounts but no barber of their own, so "mi agenda" has no subject for
+  // them. Guarding here rather than casting keeps the panel's `barberId`
+  // non-nullable, which is what makes its own-vs-colleague narrowing sound.
+  if (!actor || actor.barberId === null) {
     return (
       <section className="panel-page">
         <h2>Mi agenda</h2>
-        <p className="empty-state">Iniciá sesión como barbero para ver esta pantalla.</p>
+        <p className="empty-state">
+          Esta pantalla es para los barberos: muestra los turnos propios del día. Si sos dueño o
+          secretaria, entrá a la agenda del día para ver todas las columnas.
+        </p>
       </section>
     );
   }
