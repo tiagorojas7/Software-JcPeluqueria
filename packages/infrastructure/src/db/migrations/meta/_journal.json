@@ -78,6 +78,13 @@
       "when": 1786660100000,
       "tag": "0010_users_client_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786660200000,
+      "tag": "0011_notification_outbox",
+      "breakpoints": true
     }
   ]
 }
