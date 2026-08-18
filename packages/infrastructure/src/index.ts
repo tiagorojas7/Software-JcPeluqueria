@@ -23,6 +23,17 @@ export type {
   NotificationChannelConfig,
   NotificationChannelDeps,
 } from './notifications/notification-adapter';
+export { createTemplateRegistry } from './notifications/templates';
+export {
+  DrizzleNotificationOutboxRepository,
+  MAX_DELIVERY_ATTEMPTS,
+} from './notifications/notification-outbox.repository';
+export {
+  APPOINTMENT_REMINDER_QUEUE,
+  PgBossAppointmentReminderScheduler,
+} from './notifications/appointment-reminder-scheduler.adapter';
+export type { AppointmentReminderJob } from './notifications/appointment-reminder-scheduler.adapter';
+export { DrizzleHoldExpireViewRepository } from './booking/hold-expire-view.repository';
 export { DrizzleDayBoardRepository } from './agenda/day-board.repository';
 export { DrizzleHoldRepository } from './booking/hold.repository';
 export { HOLD_EXPIRE_QUEUE, PgBossHoldExpireScheduler } from './booking/pg-boss-hold-expire-scheduler';
