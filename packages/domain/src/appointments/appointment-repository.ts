@@ -51,4 +51,15 @@ export interface AppointmentRepository {
    * shape, not a filter applied after the fact.
    */
   findReservedByBarberInRange(barberId: string, range: TimeWindow): Promise<Appointment[]>;
+
+  /**
+   * Every appointment — any status, not only `reservado` — belonging to
+   * `clientId`. Backs "Mi cuenta" (client-booking spec is silent on status
+   * filtering; a cancelled or completed turno is still part of the client's
+   * own history) and `ListOwnAppointmentsUseCase`. Scoped to exactly one
+   * client by construction (`WHERE client_id = :clientId`), the same
+   * structural-narrowing shape `findReservedByBarberInRange` already uses for
+   * a barber — never a filter applied after a wider read.
+   */
+  findByClientId(clientId: string): Promise<Appointment[]>;
 }
