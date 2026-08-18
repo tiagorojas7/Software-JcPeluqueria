@@ -31,6 +31,13 @@ export function BookingPage() {
   const [serviceId, setServiceId] = useState<string>(DEMO_SERVICES[0].id);
   const [date, setDate] = useState('');
   const [slots, setSlots] = useState<readonly AvailabilitySlot[]>([]);
+  // D.5: distinguishes "todavía no buscaste" from "buscaste y no hay" —
+  // `AvailabilityPicker` (apps/web/src/booking/, outside this slice) shows
+  // "No hay horarios disponibles" for ANY empty `slots`, with no way to
+  // tell those two states apart from its own props. Fixed here, at the
+  // page level, by never mounting it (via `BookingFlowContainer`) until a
+  // search has actually happened — see the render below.
+  const [hasSearched, setHasSearched] = useState(false);
   const [hold, setHold] = useState<HoldResponse | null>(null);
   const [clientId, setClientId] = useState<string | null>(null);
   const [checkout, setCheckout] = useState<CheckoutResponseBody | null>(null);
@@ -55,6 +62,7 @@ export function BookingPage() {
       const params = new URLSearchParams({ barberId, serviceId, date });
       const response = await apiGet<AvailabilityResponse>(`/availability?${params.toString()}`);
       setSlots(response.slots);
+      setHasSearched(true);
     } catch (err) {
       setError(describeError(err));
     }
@@ -104,6 +112,7 @@ export function BookingPage() {
     setClientId(null);
     setCheckout(null);
     setSlots([]);
+    setHasSearched(false);
   }
 
   return (
@@ -138,15 +147,18 @@ export function BookingPage() {
         </form>
       )}
 
-      {!clientId && (
-        <BookingFlowContainer
-          slots={slots}
-          hold={hold}
-          nowMs={tick}
-          onSelectSlot={handleSelectSlot}
-          onConfirmReservation={handleConfirmReservation}
-        />
-      )}
+      {!clientId &&
+        (hold || hasSearched ? (
+          <BookingFlowContainer
+            slots={slots}
+            hold={hold}
+            nowMs={tick}
+            onSelectSlot={handleSelectSlot}
+            onConfirmReservation={handleConfirmReservation}
+          />
+        ) : (
+          <p>Todavía no buscaste: elegí un barbero, un servicio y una fecha para ver los horarios disponibles.</p>
+        ))}
 
       {hold && clientId && (
         <div>

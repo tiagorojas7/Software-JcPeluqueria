@@ -1,0 +1,95 @@
+/**
+ * Design tokens + a minimal reset for the whole SPA (D.2). Plain CSS, no
+ * framework: imported exactly once, from `main.tsx`, before anything else.
+ * Warm, "real barbershop" palette — charcoal + brass on cream — used by
+ * both the public site and the panel so the two areas read as one brand
+ * even though their layouts differ.
+ */
+
+:root {
+  --color-ink: #211d1a;
+  --color-ink-soft: #4a423b;
+  --color-paper: #faf6f0;
+  --color-paper-alt: #f1e9dd;
+  --color-accent: #b3702e;
+  --color-accent-dark: #8a5622;
+  --color-accent-contrast: #fff8ee;
+  --color-line: #e2d6c3;
+  --color-muted: #766c60;
+  --color-danger: #a3312a;
+  --color-danger-bg: #fbeceb;
+  --color-success-bg: #ecf5ea;
+  --color-success-text: #2f5c2a;
+
+  --font-body: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: Georgia, 'Times New Roman', serif;
+
+  --radius-sm: 4px;
+  --radius-md: 10px;
+  --shadow-card: 0 1px 3px rgba(33, 29, 26, 0.12);
+  --max-width: 1080px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  line-height: 1.2;
+  margin: 0 0 0.5em;
+}
+
+p {
+  margin: 0 0 1em;
+}
+
+a {
+  color: var(--color-accent-dark);
+}
+
+button {
+  font-family: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+[role='alert'] {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-radius: var(--radius-sm);
+  padding: 0.5em 0.75em;
+}
+
+[role='status'] {
+  color: var(--color-success-text);
+  background: var(--color-success-bg);
+  border-radius: var(--radius-sm);
+  padding: 0.5em 0.75em;
+}
