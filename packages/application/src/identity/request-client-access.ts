@@ -69,11 +69,16 @@ export class RequestClientAccessUseCase {
 
     // The intent goes to the outbox, never straight to a transport: delivery
     // and its retries belong to the outbox consumer (6.12/6.13), exactly like
-    // `AppointmentReminder` does it.
+    // `AppointmentReminder` does it. `challengeId` travels here (never in
+    // this use case's own return value, which must stay outcome-identical
+    // across every branch) because `ClientLoginUseCase.execute` needs it to
+    // scope a guess to ONE specific challenge — the same id the legitimate
+    // recipient of this notification is the only one who ever sees.
     await this.outbox.enqueue({
       notificationType: 'client_access_code',
       recipientEmail: account.email,
       payload: {
+        challengeId: issued.challengeId,
         code: issued.code,
         token: issued.token,
         expiresAt: issued.expiresAt.toISOString(),
