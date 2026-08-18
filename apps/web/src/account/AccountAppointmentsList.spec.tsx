@@ -71,7 +71,9 @@ describe('AccountAppointmentsList', () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Cancelar' })[1]);
+    const [, secondCancelButton] = screen.getAllByRole('button', { name: 'Cancelar' });
+    expect(secondCancelButton).toBeDefined();
+    fireEvent.click(secondCancelButton as HTMLElement);
 
     expect(onCancel).toHaveBeenCalledWith('appt-b');
     expect(onCancel).toHaveBeenCalledTimes(1);
