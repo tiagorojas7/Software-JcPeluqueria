@@ -1,10 +1,13 @@
 import type {
+  AppointmentRepository,
   DepositRepository,
   PaymentPort,
   PaymentStatus,
   RecordSettledPaymentResult,
   ReleaseRejectedPaymentResult,
 } from '@jc-barberia/domain';
+
+import type { ScheduleAppointmentReminder } from '../booking/appointment-reminder';
 
 export type ProcessPaymentResult =
   | { readonly outcome: RecordSettledPaymentResult }
@@ -27,11 +30,23 @@ export type ProcessPaymentResult =
  *     `in_process`   → not terminal: the payment can still flip to approved,
  *                      so the hold stays put (the 5.18 fix keeps the timer off
  *                      it) and this is a plain no-op.
+ *
+ * E.2 (cablear-el-mvp Slice E): a web booking's appointment only becomes
+ * `reservado` on the FIRST `'confirmed'` outcome — this is the other
+ * producer `ScheduleAppointmentReminder` needs (`CreatePhoneAppointmentUseCase`
+ * is the other, for the no-deposit phone path). Scheduled only on
+ * `'confirmed'`, never on `'already-processed'`: a retried webhook must not
+ * enqueue a second reminder job for the same appointment. The appointment is
+ * re-read here rather than trusted from the payment payload, the same
+ * "re-read, don't trust a snapshot" discipline `appointment.reminder`'s own
+ * handler already applies at fire time.
  */
 export class ProcessPaymentUseCase {
   constructor(
     private readonly paymentPort: PaymentPort,
     private readonly deposits: DepositRepository,
+    private readonly appointments: AppointmentRepository,
+    private readonly scheduleReminder: ScheduleAppointmentReminder,
   ) {}
 
   async execute(paymentId: string): Promise<ProcessPaymentResult> {
@@ -42,6 +57,15 @@ export class ProcessPaymentUseCase {
         paymentId: payment.paymentId,
         amountCents: payment.amountCents,
       });
+      if (outcome === 'confirmed') {
+        const appointment = await this.appointments.findById(payment.externalReference);
+        if (appointment) {
+          await this.scheduleReminder.execute({
+            appointmentId: appointment.id,
+            appointmentStart: appointment.timeRange.start,
+          });
+        }
+      }
       return { outcome };
     }
 
