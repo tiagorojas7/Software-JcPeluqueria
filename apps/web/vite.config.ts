@@ -9,6 +9,12 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Bind every interface, not just loopback. The barbershop's clients book
+    // from their phones, so the dev server has to be reachable from another
+    // device on the same network to test the real thing. `/api` still proxies
+    // to the API over loopback from THIS machine, so the phone only ever
+    // talks to one origin and CORS never engages.
+    host: true,
     proxy: {
       '/api': { target: process.env.VITE_API_ORIGIN ?? 'http://localhost:3000', changeOrigin: true },
     },
