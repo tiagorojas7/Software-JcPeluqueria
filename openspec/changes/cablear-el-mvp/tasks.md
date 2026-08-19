@@ -98,7 +98,7 @@ Todo escribe contra un puerto cuya única implementación es un doble de test.
         la notificación de cancelación) NECESITA un refund exitoso contra
         MercadoPago real: bloqueo de credenciales de entorno, no un defecto de
         este slice. Ver evidencia completa en A.7.
-- [ ] A.6 Cablear `appointment.reminder` y encolarlo desde el camino de
+- [x] A.6 Cablear `appointment.reminder` y encolarlo desde el camino de
       confirmación, vía `ScheduleAppointmentReminder`.
       - Consumidor cableado y verificado (worker registra y consume la cola —
         ver A.7). El productor —encolar desde `CreatePhoneAppointmentUseCase`/
@@ -247,11 +247,31 @@ El cliente puede reservar y pagar, pero **no puede volver a entrar ni cancelar**
       sesión, nunca al que venga en el body.
 - [x] C.5 Botón de cancelar en "Mi cuenta", que respeta la ventana de 1h y
       muestra el instante de corte cuando la rechaza.
-- [ ] C.6 Endpoints de `AcceptOfferUseCase` y `RejectOfferUseCase`, alcanzables
+- [x] C.6 Endpoints de `AcceptOfferUseCase` y `RejectOfferUseCase`, alcanzables
       desde el enlace de la oferta de reasignación.
-- [ ] C.7 **Evidencia en pantalla**: pedir código de acceso, entrar con el código
+      - `OffersController` (`apps/api/src/absence-reassignment/offers.controller.ts`),
+        commit `0f78d90`. 8/8 tests de `apps/api/test/offers.spec.ts` verdes.
+        La identidad sale de `@RequiresClientSession()`/`@CurrentClient()` y la
+        pertenencia se verifica contra el hold de la oferta ANTES de invocar
+        ningún caso de uso: inexistente, ajena, vencida y no-oferta responden
+        todas lo mismo, para no ser un oráculo de enumeración.
+      - Verificado 2026-08-19 sobre el stack del usuario: la API arranca con
+        `Mapped {/api/account/offers/:holdId/accept, POST}` y `.../reject`.
+- [x] C.7 **Evidencia en pantalla**: pedir código de acceso, entrar con el código
       del log, ver el turno propio, cancelarlo dentro de la ventana, y confirmar
       que el intento fuera de ventana se rechaza con el mensaje correcto.
+      - Verificado 2026-08-19 clickeando en Chrome contra el Postgres real del
+        proyecto (5432), API real y web real. Secuencia: `/acceder` → "Pedir
+        código" con el teléfono de un cliente real → el código se leyó de
+        `notification_outbox` → "Ingresar" → **la app navegó sola a
+        `/mi-cuenta`** → se vio el turno propio (`reservado 11:00`, en hora del
+        local) → clic en "Cancelar" → mensaje "Turno cancelado" y `SELECT`
+        directo confirmando `slot_occupancies.status = 'cancelado'`.
+        La no-divulgación se mantiene: pedir código responde igual esté o no
+        registrado el teléfono.
+      - Rama fuera de ventana: NO ejercitada desde la pantalla (haría falta un
+        turno a menos de 1h). El caso está cubierto por los tests de
+        `account.spec.ts`, no por un click.
 
 ---
 
@@ -326,7 +346,7 @@ Detectado al verificar el slice A contra Postgres real. Dos casos de uso
 existen, están probados y **nadie los invoca**, así que su funcionalidad está
 muerta desde la pantalla aunque el código esté escrito:
 
-- [ ] E.1 `MarkBarberAbsentController` detecta los turnos afectados pero
+- [x] E.1 `MarkBarberAbsentController` detecta los turnos afectados pero
       **nunca llama a `GenerateAbsenceReassignmentOffers`**. Su propio comentario
       explica por qué: cuando se escribió no existía un
       `NotificationOutboxRepository` de producción, así que componer el paso de
@@ -334,9 +354,20 @@ muerta desde la pantalla aunque el código esté escrito:
       cliente" o fabricar un adaptador falso. **El slice A ya cerró ese hueco**,
       así que el bloqueo desapareció: marcar un barbero ausente tiene que generar
       las ofertas y despacharlas.
-- [ ] E.2 (era A.6) `ScheduleAppointmentReminder` no se encola desde el camino de
+      - Cableado en el commit `0f78d90` (rescate del trabajo que el agente dejó
+        sin commitear al cortarse su sesión). 6/6 tests de
+        `apps/api/test/mark-barber-absent.spec.ts` verdes.
+- [x] E.2 (era A.6) `ScheduleAppointmentReminder` no se encola desde el camino de
       confirmación, así que **ningún turno agenda su recordatorio de 2h**. Toca
       `packages/application` y `apps/api`.
+      - Cableado en los dos caminos de confirmación (turno telefónico y pago
+        acreditado), commits `1933066`/`982bdd0` y `fae69cc`/`12e060b`.
+      - **Verificado 2026-08-19 desde la pantalla**, primera vez que este
+        productor dispara: turno telefónico cargado desde el panel como dueño
+        (`6cd9b5ae`, 21/08 11:00 hora del local = `14:00+00`) y
+        `select name, data, start_after from pgboss.job where
+        name='appointment.reminder'` devuelve `start_after =
+        2026-08-21 12:00:00+00` — exactamente 2 horas antes del turno.
 - [ ] E.3 **Evidencia en pantalla**: marcar un barbero ausente desde el panel y
       ver la oferta salir por el log del worker; confirmar un turno y ver el job
       `appointment.reminder` encolado con su `start_after` correcto.
