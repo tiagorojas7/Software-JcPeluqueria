@@ -1,9 +1,13 @@
 import {
   FakeAppointmentRepository,
   FakeAppointmentReminderScheduler,
+  FakeBarberRepository,
+  FakeClientRepository,
   FakeClock,
   FakeDepositRepository,
+  FakeNotificationOutboxRepository,
   FakePaymentPort,
+  FakeServiceRepository,
   REMINDER_LEAD_MINUTES,
   type Appointment,
 } from '@jc-barberia/domain';
@@ -34,8 +38,21 @@ function buildUseCase(paymentPort: FakePaymentPort) {
   const appointments = new FakeAppointmentRepository();
   const reminderScheduler = new FakeAppointmentReminderScheduler();
   const scheduleReminder = new ScheduleAppointmentReminder(clock, reminderScheduler);
-  const useCase = new ProcessPaymentUseCase(paymentPort, deposits, appointments, scheduleReminder);
-  return { useCase, deposits, appointments, reminderScheduler };
+  const outbox = new FakeNotificationOutboxRepository();
+  const clients = new FakeClientRepository();
+  const barbers = new FakeBarberRepository();
+  const services = new FakeServiceRepository();
+  const useCase = new ProcessPaymentUseCase(
+    paymentPort,
+    deposits,
+    appointments,
+    scheduleReminder,
+    outbox,
+    clients,
+    barbers,
+    services,
+  );
+  return { useCase, deposits, appointments, reminderScheduler, outbox, clients, barbers, services };
 }
 
 describe('ProcessPaymentUseCase', () => {
@@ -81,6 +98,82 @@ describe('ProcessPaymentUseCase', () => {
         startAfter: clock.addMinutes(appointment.timeRange.start, -REMINDER_LEAD_MINUTES),
       },
     ]);
+  });
+
+  // Slice cablear-el-mvp, item 1: a client who pays hears nothing today.
+  // `booking_confirmed` is written to the SAME outbox `GenerateAbsenceReassignmentOffers`
+  // already writes to (never a direct `NotificationPort.send`), on the exact
+  // same 'confirmed' branch that schedules the reminder — a retried webhook
+  // must never enqueue a second confirmation email.
+  it('enqueues a booking_confirmed notification with the barber, service and shop-local time', async () => {
+    const paymentPort = new FakePaymentPort({
+      paymentId: 'payment-1',
+      status: 'approved',
+      amountCents: 250000,
+      externalReference: 'hold-1',
+    });
+    const { useCase, appointments, outbox, clients, barbers, services } = buildUseCase(paymentPort);
+    const appointment = anAppointment({ id: 'hold-1' });
+    appointments.seed(appointment);
+    clients.seed({ id: 'client-1', name: 'Juana', phone: '+5493511112222', email: 'juana@example.com', age: null });
+    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true });
+    await services.create({ id: 'service-1', name: 'Corte clasico', durationMinutes: 30, priceCents: 500000 });
+
+    await useCase.execute('payment-1');
+
+    expect(outbox.enqueued).toEqual([
+      {
+        notificationType: 'booking_confirmed',
+        recipientEmail: 'juana@example.com',
+        payload: {
+          appointmentId: 'hold-1',
+          barberName: 'Cristian',
+          serviceName: 'Corte clasico',
+          appointmentTime: appointment.timeRange.start.toISOString(),
+        },
+      },
+    ]);
+  });
+
+  // notification-port spec's own gate, same one `AppointmentReminder` already
+  // established: no email registrado, no dispatch, never a crash.
+  it('does not enqueue booking_confirmed when the client has no email', async () => {
+    const paymentPort = new FakePaymentPort({
+      paymentId: 'payment-1',
+      status: 'approved',
+      amountCents: 250000,
+      externalReference: 'hold-1',
+    });
+    const { useCase, appointments, outbox, clients, barbers, services } = buildUseCase(paymentPort);
+    appointments.seed(anAppointment({ id: 'hold-1' }));
+    clients.seed({ id: 'client-1', name: 'Juana', phone: '+5493511112222', email: null, age: null });
+    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true });
+    await services.create({ id: 'service-1', name: 'Corte clasico', durationMinutes: 30, priceCents: 500000 });
+
+    await useCase.execute('payment-1');
+
+    expect(outbox.enqueued).toEqual([]);
+  });
+
+  // Same idempotency discipline as the reminder job right above: a retried
+  // webhook must not double-email the client.
+  it('does not enqueue a second booking_confirmed on a retried webhook', async () => {
+    const paymentPort = new FakePaymentPort({
+      paymentId: 'payment-1',
+      status: 'approved',
+      amountCents: 250000,
+      externalReference: 'hold-1',
+    });
+    const { useCase, appointments, outbox, clients, barbers, services } = buildUseCase(paymentPort);
+    appointments.seed(anAppointment({ id: 'hold-1' }));
+    clients.seed({ id: 'client-1', name: 'Juana', phone: '+5493511112222', email: 'juana@example.com', age: null });
+    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true });
+    await services.create({ id: 'service-1', name: 'Corte clasico', durationMinutes: 30, priceCents: 500000 });
+
+    await useCase.execute('payment-1');
+    await useCase.execute('payment-1');
+
+    expect(outbox.enqueued).toHaveLength(1);
   });
 
   // Threat matrix: "reintento del mismo payment_id → cero filas afectadas".

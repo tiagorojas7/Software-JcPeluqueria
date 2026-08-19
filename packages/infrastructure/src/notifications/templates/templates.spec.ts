@@ -53,4 +53,19 @@ describe('createTemplateRegistry (7.7) — una plantilla por evento existente', 
     expect(rendered.subject.length).toBeGreaterThan(0);
     expect(rendered.body.length).toBeGreaterThan(0);
   });
+
+  // cablear-el-mvp item 1 — a client who pays hears nothing today. This
+  // template is what `ProcessPaymentUseCase` enqueues on the FIRST
+  // 'confirmed' outcome: barber, service and shop-local time, plus the
+  // reminder that the rest is paid at the shop.
+  it('booking_confirmed: turno confirmado, con barbero, servicio y hora local', () => {
+    const rendered = registry['booking_confirmed']({
+      barberName: 'Cristian',
+      serviceName: 'Corte clasico',
+      appointmentTime: '2026-09-01T17:00:00.000Z',
+    });
+    expect(rendered.subject.length).toBeGreaterThan(0);
+    expect(rendered.body).toContain('Cristian');
+    expect(rendered.body).toContain('Corte clasico');
+  });
 });
