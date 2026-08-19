@@ -8,6 +8,7 @@ import {
   NotificationOutboxConsumer,
   ProcessPaymentUseCase,
   RefundUseCase,
+  ScheduleAppointmentReminder,
 } from '@jc-barberia/application';
 import {
   APPOINTMENT_REMINDER_QUEUE,
@@ -20,6 +21,7 @@ import {
   HOLD_EXPIRE_QUEUE,
   MercadoPagoPaymentAdapter,
   PAYMENT_PROCESS_QUEUE,
+  PgBossAppointmentReminderScheduler,
   ShopClock,
   createNotificationPort,
   createTemplateRegistry,
@@ -54,18 +56,15 @@ const OUTBOX_CONSUME_QUEUE = 'notification_outbox.consume';
  *  - `payment.process` (9.11/9.12): unchanged, already wired.
  *  - `hold.expire` (6.5/A.5): now consumed — `ExpireHold` + `RefundUseCase` +
  *    the real `NotificationPort` + the new `DrizzleHoldExpireViewRepository`.
- *  - `appointment.reminder` (6.11/A.6): now consumed — re-reads the
- *    appointment's CURRENT state at fire time via the existing
- *    `DrizzleAppointmentRepository`/`DrizzleClientRepository` (never trusts a
- *    schedule-time snapshot, same "re-read, don't trust the payload"
- *    philosophy `ProcessPaymentUseCase` already uses for payments). KNOWN GAP:
- *    nothing enqueues into this queue yet — `ScheduleAppointmentReminder` is
- *    not called from any confirmation path (`CreatePhoneAppointmentUseCase` /
- *    `ProcessPaymentUseCase`). Wiring that producer call touches
- *    `packages/application` use-case constructors and their NestJS DI wiring
- *    in `apps/api` — both outside this slice's file ownership
- *    (`packages/infrastructure`, `apps/worker`, `packages/domain/notifications`
- *    only). Left as an explicit follow-up rather than silently claimed done.
+ *  - `appointment.reminder` (6.11/A.6, producer closed by E.2): now consumed
+ *    — re-reads the appointment's CURRENT state at fire time via the
+ *    existing `DrizzleAppointmentRepository`/`DrizzleClientRepository` (never
+ *    trusts a schedule-time snapshot, same "re-read, don't trust the payload"
+ *    philosophy `ProcessPaymentUseCase` already uses for payments). The
+ *    former KNOWN GAP — nothing enqueued into this queue — is closed: E.2
+ *    wired `ScheduleAppointmentReminder` into BOTH confirmation paths,
+ *    `CreatePhoneAppointmentUseCase` (`apps/api`, immediately on booking) and
+ *    `ProcessPaymentUseCase` (this file, right below, on a settled deposit).
  *  - `notification_outbox` consumer (6.13/A.4): now consumed — drains
  *    `pending` rows once a minute via the real `DrizzleNotificationOutboxRepository`
  *    and dispatches through `createNotificationPort` (channel picked by
@@ -109,13 +108,36 @@ async function main(): Promise<void> {
     console.log(`[worker] daily.sweep transitioned ${swept} reservados to sin_registrado`);
   });
 
+  // E.2 (cablear-el-mvp Slice E): registered HERE, before `payment.process`'s
+  // own `work()` below, because `ProcessPaymentUseCase` is now a PRODUCER for
+  // this queue too (see its own doc comment) — `boss.work()` can start
+  // dispatching already-queued jobs the instant it is called, so the queue
+  // this handler might immediately try to `send()` into must exist BEFORE
+  // that registration, not after it. Same "createQueue before anything can
+  // send" rule as every other queue in this file; `createQueue` is `ON
+  // CONFLICT DO NOTHING`, so registering it again down at the consumer's own
+  // section (A.6) is harmless.
+  await boss.createQueue(APPOINTMENT_REMINDER_QUEUE);
+
   // 9.11/9.12 — the webhook's consuming half. `getPayment()` is the only
   // source of truth (design.md: "el redirect del navegador no es fuente de
   // verdad"), never the enqueued payload — `ProcessPaymentUseCase` re-reads
   // the payment id against MercadoPago itself before deciding anything.
+  //
+  // E.2 — also the web-booking half of `ScheduleAppointmentReminder`'s two
+  // producers (`CreatePhoneAppointmentUseCase` in `apps/api` is the other):
+  // a web appointment only becomes `reservado` once its deposit settles,
+  // which happens HERE, so this is where its 2h reminder gets scheduled.
+  // `boss` itself satisfies `JobSender` (same `.send(name, data, options)`
+  // shape) — no `lazyJobSender()` wrapper needed: unlike the Nest DI
+  // composition roots in `apps/api`, this file only constructs use cases
+  // AFTER `await boss.start()` above already resolved, so there is no eager
+  // "connects during module-graph construction" trap to defend against here.
   const processPayment = new ProcessPaymentUseCase(
     new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? ''),
     new DrizzleDepositRepository(db),
+    new DrizzleAppointmentRepository(db),
+    new ScheduleAppointmentReminder(new ShopClock(), new PgBossAppointmentReminderScheduler(boss)),
   );
   // pg-boss v12's `work()` handler always receives a batch (`Job<T>[]`), even
   // for a single enqueue — never a lone job object. Same `createQueue`
@@ -200,13 +222,12 @@ async function main(): Promise<void> {
   // since, seña refunded since). A missing appointment (cancelled since
   // scheduling) is a silent no-op — nothing left to remind about.
   //
-  // KNOWN GAP: no production caller enqueues into this queue yet.
-  // `ScheduleAppointmentReminder` is proven at the application layer
-  // (appointment-reminder.spec.ts) but nothing calls `.execute()` from
-  // `CreatePhoneAppointmentUseCase` or `ProcessPaymentUseCase` — wiring that
-  // touches `packages/application` + `apps/api` DI, outside this slice's file
-  // ownership. This handler is real and tested by being wired below; it is
-  // just not triggered by anything yet.
+  // Producer closed by E.2 — both `CreatePhoneAppointmentUseCase` (`apps/api`)
+  // and `ProcessPaymentUseCase` (above, this file) now call
+  // `ScheduleAppointmentReminder.execute()` from their own confirmation path.
+  // `createQueue` here is a second, harmless `ON CONFLICT DO NOTHING` call —
+  // the queue already exists by this point (registered early, before
+  // `payment.process`'s producer could ever race a send against it).
   const appointmentReminder = new AppointmentReminder(new DrizzleNotificationOutboxRepository(db));
   const appointmentsForReminder = new DrizzleAppointmentRepository(db);
   const clientsForReminder = new DrizzleClientRepository(db);

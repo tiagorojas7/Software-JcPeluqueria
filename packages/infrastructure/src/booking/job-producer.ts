@@ -19,8 +19,14 @@ const connectionString =
  */
 /** Every queue this process ENQUEUES to. The worker owns the consuming side
  *  and declares them too; whichever starts first wins and the other is a
- *  no-op. */
-const PRODUCED_QUEUES = ['hold.expire', 'payment.process'] as const;
+ *  no-op.
+ *
+ *  E.2 (cablear-el-mvp Slice E): `appointment.reminder` joins this list once
+ *  `CreatePhoneAppointmentUseCase` becomes a real producer for it — without
+ *  this, the very first phone booking would die with "Queue
+ *  appointment.reminder does not exist", the exact failure mode the comment
+ *  above already documents for `hold.expire`. */
+const PRODUCED_QUEUES = ['hold.expire', 'payment.process', 'appointment.reminder'] as const;
 
 let started: Promise<PgBoss> | undefined;
 

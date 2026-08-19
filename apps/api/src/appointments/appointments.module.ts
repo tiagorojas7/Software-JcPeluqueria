@@ -9,6 +9,7 @@ import {
   CreatePhoneAppointmentUseCase,
   CreateWalkInUseCase,
   EditAppointmentUseCase,
+  ScheduleAppointmentReminder,
 } from '@jc-barberia/application';
 import {
   db,
@@ -19,12 +20,14 @@ import {
   DrizzleWalkInRepository,
   lazyJobSender,
   MercadoPagoPaymentAdapter,
+  PgBossAppointmentReminderScheduler,
   PgBossHoldExpireScheduler,
   ShopClock,
   stopJobSender,
 } from '@jc-barberia/infrastructure';
 import type {
   AbsenceRecordRepository,
+  AppointmentReminderScheduler,
   AppointmentRepository,
   ClientRepository,
   Clock,
@@ -39,6 +42,7 @@ import { AppointmentActionsController } from './appointment-actions.controller';
 import { PhoneAppointmentController } from './phone-appointment.controller';
 import {
   ABSENCE_RECORD_REPOSITORY,
+  APPOINTMENT_REMINDER_SCHEDULER,
   APPOINTMENT_REPOSITORY,
   CLIENT_REPOSITORY,
   CLOCK,
@@ -77,10 +81,30 @@ import {
         new CreateHold(holds, clock, holdExpire),
     },
     {
+      // E.2 (cablear-el-mvp Slice E): the same lazy-connect discipline as
+      // HOLD_EXPIRE_SCHEDULER above — a synchronous factory, `lazyJobSender()`
+      // defers the pg-boss connection to the first enqueue. An eager
+      // `await jobSender()` here would open a connection while Nest is still
+      // building the module graph and kill every test suite, exactly the
+      // trap this file's own HOLD_EXPIRE_SCHEDULER comment already documents.
+      provide: APPOINTMENT_REMINDER_SCHEDULER,
+      useFactory: () => new PgBossAppointmentReminderScheduler(lazyJobSender()),
+    },
+    {
+      provide: ScheduleAppointmentReminder,
+      inject: [CLOCK, APPOINTMENT_REMINDER_SCHEDULER],
+      useFactory: (clock: Clock, scheduler: AppointmentReminderScheduler) =>
+        new ScheduleAppointmentReminder(clock, scheduler),
+    },
+    {
       provide: CreatePhoneAppointmentUseCase,
-      inject: [CLIENT_REPOSITORY, HOLD_REPOSITORY, CreateHold],
-      useFactory: (clients: ClientRepository, holds: HoldRepository, createHold: CreateHold) =>
-        new CreatePhoneAppointmentUseCase(clients, holds, createHold),
+      inject: [CLIENT_REPOSITORY, HOLD_REPOSITORY, CreateHold, ScheduleAppointmentReminder],
+      useFactory: (
+        clients: ClientRepository,
+        holds: HoldRepository,
+        createHold: CreateHold,
+        scheduleReminder: ScheduleAppointmentReminder,
+      ) => new CreatePhoneAppointmentUseCase(clients, holds, createHold, scheduleReminder),
     },
     // Slice B (cablear-el-mvp, B.1-B.5): bound to their own tokens here
     // rather than reused across modules — same one-token-per-module pattern

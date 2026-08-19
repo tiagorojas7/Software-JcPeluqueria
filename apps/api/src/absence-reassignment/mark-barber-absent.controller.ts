@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, HttpCode, Inject, Param, Post } from '@nestjs/common';
-import { MarkBarberAbsentUseCase } from '@jc-barberia/application';
+import { GenerateAbsenceReassignmentOffers, MarkBarberAbsentUseCase } from '@jc-barberia/application';
 import { MarkBarberAbsentRequestSchema, type MarkBarberAbsentResponse } from '@jc-barberia/contracts';
 import type { Clock } from '@jc-barberia/domain';
 
@@ -14,17 +14,16 @@ import { CLOCK } from './tokens';
  * `PermissionsGuard`/`@RequiresPermission`), already seeded to owner and
  * secretary by migration 0006.
  *
- * Deliberately wires ONLY `MarkBarberAbsentUseCase` (detection) for a real
- * endpoint, not `GenerateAbsenceReassignmentOffers` in the same request:
- * this codebase has no production `NotificationOutboxRepository`
- * implementation yet (Phase 6 deferred it to Phase 7, "hasta Fase 7";
- * Phase 7 never built it — see apply-progress). Composing the offer step
- * here today would either silently drop the "MUST notificar al cliente"
- * requirement or fabricate a fake adapter — this response's
- * `affectedAppointmentIds` is already actionable on its own (staff can work
- * the list by phone) while that gap is closed for real, the same
- * "wiring is a direct next step" deferral Phase 11 already used for
- * `BarberMarkCompletedUseCase`/`BarberConfirmAbsenceUseCase`.
+ * E.1 (cablear-el-mvp Slice E): now composes `GenerateAbsenceReassignmentOffers`
+ * right after detection, in the SAME request — the historical reason this
+ * used to stop at detection only (no production `NotificationOutboxRepository`,
+ * so composing the offer step would have silently dropped the "MUST
+ * notificar al cliente" requirement) is gone: Slice A shipped
+ * `DrizzleNotificationOutboxRepository`. `affectedAppointmentIds` on the
+ * response is unchanged — every affected turno, whether or not an offer
+ * could be generated for it (`GenerateAbsenceReassignmentOffers`'s own
+ * `'no-availability'` outcome is a legitimate result, not an error: staff
+ * still has the actionable list to work by phone).
  */
 @Controller('barbers')
 export class MarkBarberAbsentController {
@@ -39,6 +38,7 @@ export class MarkBarberAbsentController {
     // there. Cost real debugging time once; named `markBarberAbsent` here
     // specifically so it can never collide with a method again.
     private readonly markBarberAbsent: MarkBarberAbsentUseCase,
+    private readonly generateAbsenceOffers: GenerateAbsenceReassignmentOffers,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -62,6 +62,13 @@ export class MarkBarberAbsentController {
         end: this.clock.localTimeToUtc(calendarDate, endTime),
       },
     });
+
+    // Sequential inside the use case itself (its own doc comment explains
+    // why: each offer's hold must be visible to the NEXT affected
+    // appointment's own availability search) — this handler just awaits the
+    // whole batch before responding, same "the write finishes before the
+    // response does" posture every other mutating endpoint in this app takes.
+    await this.generateAbsenceOffers.execute(affected);
 
     return { affectedAppointmentIds: affected.map((appointment) => appointment.id) };
   }
