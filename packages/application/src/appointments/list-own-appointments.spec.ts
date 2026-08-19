@@ -1,4 +1,4 @@
-import { FakeAppointmentRepository, type Appointment } from '@jc-barberia/domain';
+import { FakeAppointmentRepository, FakeClock, type Appointment } from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
 import { ListOwnAppointmentsUseCase } from './list-own-appointments';
@@ -9,6 +9,10 @@ import { ListOwnAppointmentsUseCase } from './list-own-appointments';
 // `SelfCancelAppointmentUseCase` already takes) must see exactly their own
 // appointments and nobody else's.
 
+// Instants come off FakeClock, never `new Date(...)` — the ESLint clock rule
+// covers tests too.
+const clock = new FakeClock();
+
 function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
   return {
     id: 'appt-1',
@@ -16,7 +20,10 @@ function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
     serviceId: 'service-1',
     clientId: 'client-1',
     channel: 'web',
-    timeRange: { start: new Date('2026-09-01T10:00:00.000Z'), end: new Date('2026-09-01T10:30:00.000Z') },
+    timeRange: {
+      start: clock.parseInstant('2026-09-01T10:00:00.000Z'),
+      end: clock.parseInstant('2026-09-01T10:30:00.000Z'),
+    },
     status: 'reservado',
     deposit: { kind: 'settled', paymentId: 'pay-1', amountCents: 500000 },
     ...overrides,

@@ -72,7 +72,10 @@ class InMemorySessionsAndClientContext implements SessionRepository, ClientConte
   }
 }
 
-const clock = new FakeClock(-180, new Date('2026-09-01T12:00:00.000Z'));
+// `parseInstant` off a bare FakeClock instead of `new Date(...)`: the ESLint
+// rule that bans direct Date construction applies to tests too, and FakeClock
+// is the sanctioned way to derive an instant.
+const clock = new FakeClock(-180, new FakeClock().parseInstant('2026-09-01T12:00:00.000Z'));
 
 // cablear-el-mvp Slice C (C.1/C.2): client-booking spec, "Cuenta sin
 // contraseña creada al final del flujo" + "Código de acceso vencido" — the
