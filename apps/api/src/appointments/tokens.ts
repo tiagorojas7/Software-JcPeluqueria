@@ -5,6 +5,10 @@ export const CLOCK = Symbol('CLOCK');
 export const CLIENT_REPOSITORY = Symbol('CLIENT_REPOSITORY');
 export const HOLD_REPOSITORY = Symbol('HOLD_REPOSITORY');
 export const HOLD_EXPIRE_SCHEDULER = Symbol('HOLD_EXPIRE_SCHEDULER');
+/** E.2 (cablear-el-mvp Slice E): `CreatePhoneAppointmentUseCase`'s own
+ *  `ScheduleAppointmentReminder` producer — same one-token-per-module pattern
+ *  as `HOLD_EXPIRE_SCHEDULER` above. */
+export const APPOINTMENT_REMINDER_SCHEDULER = Symbol('APPOINTMENT_REMINDER_SCHEDULER');
 /** Slice B (cablear-el-mvp): bound to its own token here rather than reused
  *  across modules — same one-token-per-module pattern every other module in
  *  this app already follows (see e.g. absence-reassignment/tokens.ts). */

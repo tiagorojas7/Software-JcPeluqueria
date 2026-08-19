@@ -6,7 +6,13 @@ export type {
   ListOwnAppointmentsResponse,
   SelfCancelAppointmentResponseBody,
 } from './account';
-export type { MarkBarberAbsentRequest, MarkBarberAbsentResponse } from './absence-reassignment';
+export type {
+  AcceptOfferResponseBody,
+  MarkBarberAbsentRequest,
+  MarkBarberAbsentResponse,
+  OfferAlternativeWindow,
+  RejectOfferResponseBody,
+} from './absence-reassignment';
 export { MarkBarberAbsentRequestSchema } from './absence-reassignment';
 export type { DayBoardColumn, DayBoardResponse, DayBoardSlot, SlotAction } from './agenda';
 export { SLOT_ACTIONS } from './agenda';

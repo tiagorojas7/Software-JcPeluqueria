@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { AccountAppointmentResponse } from './account';
+
 /**
  * barber-absence-reassignment spec, "Detección de turnos afectados": the
  * franja the barber is unavailable for. Time travels as `calendarDate` +
@@ -20,3 +22,30 @@ export interface MarkBarberAbsentResponse {
    *  staff's immediate, actionable list even before any offer resolves. */
   readonly affectedAppointmentIds: readonly string[];
 }
+
+/**
+ * C.6 (cablear-el-mvp Slice C): the client's own accept/reject routes,
+ * reached from the offer notification — never a request body, same
+ * "identity from the session, nothing else" idiom `account.ts` already
+ * established for `SelfCancelAppointmentResponseBody`. Both routes take no
+ * body at all: `:holdId` plus the session are everything either handler
+ * needs.
+ *
+ * Mirrors `AcceptOfferResult`/`RejectOfferResult`
+ * (`packages/application/src/absence-reassignment/`) exactly, adding only
+ * the wire-safe representation of what does not survive JSON as-is:
+ * `TimeWindow` travels as ISO `start`/`end` strings.
+ */
+export interface OfferAlternativeWindow {
+  readonly start: string;
+  readonly end: string;
+}
+
+export type AcceptOfferResponseBody =
+  | { readonly outcome: 'reassigned' }
+  | { readonly outcome: 'offer-expired' }
+  | { readonly outcome: 'slot-taken'; readonly alternatives: readonly OfferAlternativeWindow[] };
+
+export type RejectOfferResponseBody =
+  | { readonly outcome: 'cancelled'; readonly appointment: AccountAppointmentResponse }
+  | { readonly outcome: 'not-cancellable' };

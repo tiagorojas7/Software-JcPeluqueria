@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
   FakeActorContextRepository,
+  FakeAppointmentReminderScheduler,
   FakeClientRepository,
   FakeClock,
   FakeHoldExpireScheduler,
@@ -16,6 +17,7 @@ import { ACTOR_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from '../src/acc
 import { SESSION_COOKIE_NAME } from '../src/access-control/session-cookie';
 import { AppModule } from '../src/app.module';
 import {
+  APPOINTMENT_REMINDER_SCHEDULER,
   CLIENT_REPOSITORY,
   CLOCK,
   HOLD_EXPIRE_SCHEDULER,
@@ -69,6 +71,11 @@ describe('POST /appointments/phone (App Nest levantada en memoria)', () => {
       // unit test, and the worker owns the consuming half.
       .overrideProvider(HOLD_EXPIRE_SCHEDULER)
       .useValue(new FakeHoldExpireScheduler())
+      // E.2: `CreatePhoneAppointmentUseCase` now schedules `appointment.reminder`
+      // too (Slice E) — same reasoning as `HOLD_EXPIRE_SCHEDULER` above, this
+      // suite is about the HTTP wiring, not the queue.
+      .overrideProvider(APPOINTMENT_REMINDER_SCHEDULER)
+      .useValue(new FakeAppointmentReminderScheduler())
       .compile();
 
     app = moduleRef.createNestApplication();

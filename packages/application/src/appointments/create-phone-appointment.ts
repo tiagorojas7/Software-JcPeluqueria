@@ -6,6 +6,7 @@ import {
 } from '@jc-barberia/domain';
 
 import type { CreateHold } from '../booking/create-hold';
+import type { ScheduleAppointmentReminder } from '../booking/appointment-reminder';
 
 export class PhoneAppointmentConfirmationFailedError extends Error {
   constructor(readonly holdId: string) {
@@ -41,12 +42,19 @@ export interface CreatePhoneAppointmentInput {
  * primitive rather than a separate direct-insert path: a hold immediately
  * confirmed by the same request is exactly what a phone booking is — there
  * is no payment step to wait for, so the two steps collapse into one call.
+ *
+ * E.2 (cablear-el-mvp Slice E): this IS a confirmation path — the appointment
+ * is `reservado` from the instant this method returns, never a later async
+ * step — so it is one of the two producers `ScheduleAppointmentReminder`
+ * needs (`ProcessPaymentUseCase` is the other, for web bookings whose
+ * confirmation waits on a settled deposit instead).
  */
 export class CreatePhoneAppointmentUseCase {
   constructor(
     private readonly clients: ClientRepository,
     private readonly holds: HoldRepository,
     private readonly createHold: CreateHold,
+    private readonly scheduleReminder: ScheduleAppointmentReminder,
   ) {}
 
   async execute(input: CreatePhoneAppointmentInput): Promise<Appointment> {
@@ -73,6 +81,11 @@ export class CreatePhoneAppointmentUseCase {
     if (!confirmed) {
       throw new PhoneAppointmentConfirmationFailedError(hold.id);
     }
+
+    await this.scheduleReminder.execute({
+      appointmentId: hold.id,
+      appointmentStart: hold.timeRange.start,
+    });
 
     return {
       id: hold.id,

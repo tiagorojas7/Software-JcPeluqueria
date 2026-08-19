@@ -1,7 +1,42 @@
-import { FakeDepositRepository, FakePaymentPort } from '@jc-barberia/domain';
+import {
+  FakeAppointmentRepository,
+  FakeAppointmentReminderScheduler,
+  FakeClock,
+  FakeDepositRepository,
+  FakePaymentPort,
+  REMINDER_LEAD_MINUTES,
+  type Appointment,
+} from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
+import { ScheduleAppointmentReminder } from '../booking/appointment-reminder';
 import { ProcessPaymentUseCase } from './process-payment';
+
+const clock = new FakeClock();
+const at = (time: string) => clock.localTimeToUtc('2026-09-01', time);
+
+function anAppointment(overrides: Partial<Appointment> = {}): Appointment {
+  return {
+    id: 'hold-1',
+    barberId: 'barber-1',
+    serviceId: 'service-1',
+    clientId: 'client-1',
+    channel: 'web',
+    timeRange: { start: at('14:00'), end: at('14:30') },
+    status: 'reservado',
+    deposit: { kind: 'settled', paymentId: 'payment-1', amountCents: 250000 },
+    ...overrides,
+  };
+}
+
+function buildUseCase(paymentPort: FakePaymentPort) {
+  const deposits = new FakeDepositRepository();
+  const appointments = new FakeAppointmentRepository();
+  const reminderScheduler = new FakeAppointmentReminderScheduler();
+  const scheduleReminder = new ScheduleAppointmentReminder(clock, reminderScheduler);
+  const useCase = new ProcessPaymentUseCase(paymentPort, deposits, appointments, scheduleReminder);
+  return { useCase, deposits, appointments, reminderScheduler };
+}
 
 describe('ProcessPaymentUseCase', () => {
   // design.md: "El redirect del navegador no es fuente de verdad. El worker
@@ -13,14 +48,39 @@ describe('ProcessPaymentUseCase', () => {
       amountCents: 250000,
       externalReference: 'hold-1',
     });
-    const deposits = new FakeDepositRepository();
-    const useCase = new ProcessPaymentUseCase(paymentPort, deposits);
+    const { useCase, deposits, appointments } = buildUseCase(paymentPort);
+    appointments.seed(anAppointment({ id: 'hold-1' }));
 
     const result = await useCase.execute('payment-1');
 
     expect(result).toEqual({ outcome: 'confirmed' });
     expect(paymentPort.getPaymentCalls).toEqual(['payment-1']);
     expect(deposits.calls).toEqual([{ holdId: 'hold-1', paymentId: 'payment-1', amountCents: 250000 }]);
+  });
+
+  // E.2 (cablear-el-mvp Slice E): a web booking's appointment only becomes
+  // `reservado` HERE, when the deposit settles — this is the second (and
+  // last) producer `ScheduleAppointmentReminder` needs, the confirmation
+  // path for the deposit-gated half of booking.
+  it('schedules the 2h appointment.reminder job right after confirming a settled deposit', async () => {
+    const paymentPort = new FakePaymentPort({
+      paymentId: 'payment-1',
+      status: 'approved',
+      amountCents: 250000,
+      externalReference: 'hold-1',
+    });
+    const { useCase, appointments, reminderScheduler } = buildUseCase(paymentPort);
+    const appointment = anAppointment({ id: 'hold-1' });
+    appointments.seed(appointment);
+
+    await useCase.execute('payment-1');
+
+    expect(reminderScheduler.scheduleCalls).toEqual([
+      {
+        appointmentId: 'hold-1',
+        startAfter: clock.addMinutes(appointment.timeRange.start, -REMINDER_LEAD_MINUTES),
+      },
+    ]);
   });
 
   // Threat matrix: "reintento del mismo payment_id → cero filas afectadas".
@@ -33,13 +93,16 @@ describe('ProcessPaymentUseCase', () => {
       amountCents: 250000,
       externalReference: 'hold-3',
     });
-    const deposits = new FakeDepositRepository();
-    const useCase = new ProcessPaymentUseCase(paymentPort, deposits);
+    const { useCase, appointments, reminderScheduler } = buildUseCase(paymentPort);
+    appointments.seed(anAppointment({ id: 'hold-3' }));
 
     await useCase.execute('payment-3');
     const retry = await useCase.execute('payment-3');
 
     expect(retry).toEqual({ outcome: 'already-processed' });
+    // The retry is a no-op on the deposit — it must be a no-op on the
+    // reminder too, never a SECOND job for the same appointment.
+    expect(reminderScheduler.scheduleCalls).toHaveLength(1);
   });
 
   // Task 5.15 — client-booking spec: "Falla el cobro de la seña". design.md
@@ -54,14 +117,14 @@ describe('ProcessPaymentUseCase', () => {
       amountCents: 250000,
       externalReference: 'hold-4',
     });
-    const deposits = new FakeDepositRepository();
-    const useCase = new ProcessPaymentUseCase(paymentPort, deposits);
+    const { useCase, deposits, reminderScheduler } = buildUseCase(paymentPort);
 
     const result = await useCase.execute('payment-4');
 
-    expect(deposits.calls).toEqual([]); // MUST NOT create the reservado
+    expect(deposits.calls).toEqual([]); // MUST NOT create el turno reservado
     expect(deposits.releaseCalls).toEqual([{ holdId: 'hold-4' }]);
     expect(result).toEqual({ outcome: 'released', status: 'rejected' });
+    expect(reminderScheduler.scheduleCalls).toEqual([]); // nothing to remind about
   });
 
   // `cancelled` is the other terminal-failure status design.md calls out by
@@ -73,8 +136,7 @@ describe('ProcessPaymentUseCase', () => {
       amountCents: 250000,
       externalReference: 'hold-5',
     });
-    const deposits = new FakeDepositRepository();
-    const useCase = new ProcessPaymentUseCase(paymentPort, deposits);
+    const { useCase, deposits } = buildUseCase(paymentPort);
 
     const result = await useCase.execute('payment-5');
 
@@ -94,8 +156,7 @@ describe('ProcessPaymentUseCase', () => {
       amountCents: 250000,
       externalReference: 'hold-6',
     });
-    const deposits = new FakeDepositRepository();
-    const useCase = new ProcessPaymentUseCase(paymentPort, deposits);
+    const { useCase, deposits } = buildUseCase(paymentPort);
 
     const result = await useCase.execute('payment-6');
 
@@ -114,8 +175,7 @@ describe('ProcessPaymentUseCase', () => {
       amountCents: 250000,
       externalReference: 'hold-7',
     });
-    const deposits = new FakeDepositRepository();
-    const useCase = new ProcessPaymentUseCase(paymentPort, deposits);
+    const { useCase, deposits } = buildUseCase(paymentPort);
 
     const first = await useCase.execute('payment-7');
     const retry = await useCase.execute('payment-7');
