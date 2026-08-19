@@ -111,6 +111,23 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
     expect(appointment).toBeNull();
   });
 
+  // Discovered running cablear-el-mvp Slice C's own manual evidence (C.7)
+  // against a real database: `SelfCancelAppointmentUseCase` answers a
+  // missing appointment identically to someone else's ("no oracle" — see its
+  // own doc comment), but that guarantee silently broke against the REAL
+  // repository the moment the id was not UUID-shaped — Postgres rejects the
+  // cast BEFORE the `WHERE` clause ever runs, so `findById` threw instead of
+  // returning `null`. `FakeAppointmentRepository` (a plain `Map`) cannot
+  // reproduce this: it has no column type to violate, which is exactly why
+  // every application-layer test using it stayed green while this shipped.
+  it('returns null for a malformed (non-uuid) id — a bad param must never surface a raw Postgres cast error', async () => {
+    const repo = new DrizzleAppointmentRepository(db);
+
+    const appointment = await repo.findById('not-a-uuid-at-all');
+
+    expect(appointment).toBeNull();
+  });
+
   it('moves the appointment to a different barber, service and horario', async () => {
     const id = await insertAppointment(barberId, '11:00', '11:30');
     const repo = new DrizzleAppointmentRepository(db);
@@ -225,6 +242,54 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
         start: at('09:00'),
         end: at('18:00'),
       });
+
+      expect(found).toEqual([]);
+    });
+  });
+
+  // cablear-el-mvp C.3 — "Mi cuenta" needs every one of the client's OWN
+  // appointments, any status, and structurally none of anybody else's.
+  describe('findByClientId (C.3)', () => {
+    const newClientRecord = async (): Promise<string> => {
+      const id = crypto.randomUUID();
+      await client`insert into clients (id, name, phone) values (${id}, 'Cliente aislado', '3510000001')`;
+      return id;
+    };
+
+    const insertAppointmentFor = async (
+      client_: string,
+      barber: string,
+      from: string,
+      to: string,
+      status = 'reservado',
+    ) => {
+      const id = crypto.randomUUID();
+      await client`insert into slot_occupancies (id, barber_id, service_id, client_id, channel, status, time_range)
+                   values (${id}, ${barber}, ${serviceId}, ${client_}, 'telefonico', ${status}, ${range(from, to)}::tstzrange)`;
+      return id;
+    };
+
+    it("returns every one of the client's own appointments, any status, and none of another client's", async () => {
+      const own = await newClientRecord();
+      const other = await newClientRecord();
+      // Deliberately BEFORE 07:00 — every other test in this file's shared
+      // `barberId` fixture books from 08:00 onward, and rows accumulate
+      // across the whole suite's run (no per-test reset).
+      const reservado = await insertAppointmentFor(own, barberId, '05:00', '05:30', 'reservado');
+      const cancelado = await insertAppointmentFor(own, barberId, '05:30', '06:00', 'cancelado');
+      await insertAppointmentFor(other, barberId, '06:00', '06:30');
+      const repo = new DrizzleAppointmentRepository(db);
+
+      const found = await repo.findByClientId(own);
+
+      expect(found.map((a) => a.id).sort()).toEqual([cancelado, reservado].sort());
+    });
+
+    it('returns an empty list for a client with no appointments, never an error', async () => {
+      const lonely = await newClientRecord();
+      const repo = new DrizzleAppointmentRepository(db);
+
+      const found = await repo.findByClientId(lonely);
 
       expect(found).toEqual([]);
     });

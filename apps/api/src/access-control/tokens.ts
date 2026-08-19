@@ -6,3 +6,7 @@ export const ROLE_PERMISSION_REPOSITORY = Symbol('ROLE_PERMISSION_REPOSITORY');
 /** DI token for the `ActorContextRepository` port (see
  *  `ActorContextMiddleware`'s constructor) — same reason as above. */
 export const ACTOR_CONTEXT_REPOSITORY = Symbol('ACTOR_CONTEXT_REPOSITORY');
+
+/** DI token for the `ClientContextRepository` port (see `PermissionsGuard`'s
+ *  `@RequiresClientSession()` branch) — same reason as above. */
+export const CLIENT_CONTEXT_REPOSITORY = Symbol('CLIENT_CONTEXT_REPOSITORY');

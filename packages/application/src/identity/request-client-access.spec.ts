@@ -80,6 +80,15 @@ describe('RequestClientAccessUseCase (10.4/10.5)', () => {
       notificationType: 'client_access_code',
       recipientEmail: 'sofia@example.com',
     });
+    // cablear-el-mvp C.1/C.2 — ClientLoginUseCase.execute needs a
+    // `challengeId` to scope its guess to one specific challenge (never a
+    // bare code alone, which would turn a 6-digit code into a bulk-guessable
+    // secret). The HTTP response to "request access" cannot carry it — its
+    // shape must stay outcome-identical across all four branches (see the
+    // last test in this file) — so the ONLY legitimate channel left is the
+    // same one the code and token already travel through: the outbox
+    // notification a real client actually receives.
+    expect(outbox.enqueued[0]?.payload).toMatchObject({ challengeId: challenges.createCalls[0]?.id });
   });
 
   it('no emite nada para un cliente con email pero sin cuenta web todavia', async () => {

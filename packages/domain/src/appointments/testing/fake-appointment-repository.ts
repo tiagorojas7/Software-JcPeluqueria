@@ -58,4 +58,8 @@ export class FakeAppointmentRepository implements AppointmentRepository {
         overlaps(appointment.timeRange, range),
     );
   }
+
+  async findByClientId(clientId: string): Promise<Appointment[]> {
+    return [...this.byId.values()].filter((appointment) => appointment.clientId === clientId);
+  }
 }

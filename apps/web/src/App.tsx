@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { MyAccountPage } from './account/MyAccountPage';
 import { PanelLayout } from './layout/PanelLayout';
 import { PublicLayout } from './layout/PublicLayout';
 import { resolvePanelRedirect } from './layout/panel-guard';
@@ -37,6 +38,8 @@ function renderPublicRoute(pathname: string) {
       return <BookingPage />;
     case '/acceder':
       return <AccessCodePage />;
+    case '/mi-cuenta':
+      return <MyAccountPage />;
     default:
       return <NotFound />;
   }

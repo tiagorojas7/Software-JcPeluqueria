@@ -239,13 +239,13 @@ Hoy la agenda del día se ve, pero **no se puede hacer nada sobre un turno**.
 
 El cliente puede reservar y pagar, pero **no puede volver a entrar ni cancelar**.
 
-- [ ] C.1 Endpoint de `RequestClientAccessUseCase` (`@Public()`).
-- [ ] C.2 Endpoint de `ClientLoginUseCase` (`@Public()`), que emite la sesión de
+- [x] C.1 Endpoint de `RequestClientAccessUseCase` (`@Public()`).
+- [x] C.2 Endpoint de `ClientLoginUseCase` (`@Public()`), que emite la sesión de
       cliente vía `SessionService` con el TTL de 30 días de la tarea 3a.19.
-- [ ] C.3 Página "Mi cuenta": el cliente autenticado ve sus turnos.
-- [ ] C.4 Endpoint de `SelfCancelAppointmentUseCase`, acotado al `clientId` de la
+- [x] C.3 Página "Mi cuenta": el cliente autenticado ve sus turnos.
+- [x] C.4 Endpoint de `SelfCancelAppointmentUseCase`, acotado al `clientId` de la
       sesión, nunca al que venga en el body.
-- [ ] C.5 Botón de cancelar en "Mi cuenta", que respeta la ventana de 1h y
+- [x] C.5 Botón de cancelar en "Mi cuenta", que respeta la ventana de 1h y
       muestra el instante de corte cuando la rechaza.
 - [ ] C.6 Endpoints de `AcceptOfferUseCase` y `RejectOfferUseCase`, alcanzables
       desde el enlace de la oferta de reasignación.
