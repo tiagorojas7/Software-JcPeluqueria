@@ -33,9 +33,17 @@ GMAIL_FROM=JC Barberia <tu-cuenta@gmail.com>
 # Introduced by this arranque slice.
 PORT=3000
 WEB_ORIGIN=http://localhost:5173
+
+# Introduced by cablear-el-mvp (client-flow slice). The publicly reachable
+# URL a phone can actually open — an ngrok/tunnel host, never localhost.
+# Unset, MercadoPago's back_urls/auto_return/notification_url are omitted
+# entirely (localhost would be REJECTED by MercadoPago outright), so
+# checkout still works exactly as before, just without the redirect-back or
+# the webhook call.
+PUBLIC_BASE_URL=https://your-tunnel-host.ngrok-free.dev
 ```
 
-Every variable's origin (which file reads it): `DATABASE_URL` — `packages/infrastructure` (db connection, migrations, seed) and `apps/worker` (pg-boss shares this database). `SHOP_UTC_OFFSET` — `ShopClock`. `MERCADOPAGO_ACCESS_TOKEN` — `apps/api` (BookingModule, AppointmentsModule, IdentityModule) and `apps/worker` (payment processing). `MERCADOPAGO_WEBHOOK_SECRET` — `apps/api` (webhook signature check). `NOTIFICATION_CHANNEL` / `GMAIL_USER` / `GMAIL_APP_PASSWORD` / `GMAIL_FROM` — `createNotificationPort` in `apps/worker`. `PORT`/`WEB_ORIGIN` — `apps/api/src/main.ts`.
+Every variable's origin (which file reads it): `DATABASE_URL` — `packages/infrastructure` (db connection, migrations, seed) and `apps/worker` (pg-boss shares this database). `SHOP_UTC_OFFSET` — `ShopClock`. `MERCADOPAGO_ACCESS_TOKEN` — `apps/api` (BookingModule, AppointmentsModule, IdentityModule) and `apps/worker` (payment processing). `MERCADOPAGO_WEBHOOK_SECRET` — `apps/api` (webhook signature check). `NOTIFICATION_CHANNEL` / `GMAIL_USER` / `GMAIL_APP_PASSWORD` / `GMAIL_FROM` — `createNotificationPort` in `apps/worker`. `PORT`/`WEB_ORIGIN` — `apps/api/src/main.ts`. `PUBLIC_BASE_URL` — `apps/api` (`BookingModule`'s `PAYMENT_PORT` factory, passed into `MercadoPagoPaymentAdapter.createPreference`) and `apps/web` (`vite.config.ts`'s `allowedHosts`, so the dev server accepts the tunnel's Host header).
 
 A real environment variable always wins over the file (`dotenv` runs with `override: false`), so `DATABASE_URL=...:5442 pnpm db:migrate` still points wherever the caller said — the way each isolated agent database has been driven.
 

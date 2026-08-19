@@ -351,6 +351,124 @@ reembolso exitoso. Se cierra cuando el usuario cargue el token de prueba.
       y web real (5177) — ver el reporte de esta vuelta para el detalle
       pantalla por pantalla y las llamadas HTTP reales de cada rol.
 
+---
+
+## Slice F: El viaje real del cliente — pagar, volver, recibir el mail
+
+Detectado al auditar el flujo completo desde el teléfono (dueño): el cliente
+paga y no pasa nada. Tres huecos independientes, todos en el mismo camino:
+
+- [x] F.1 Plantilla y disparo de `booking_confirmed`. `NotificationTemplate`
+      no tenía ningún evento para "tu turno quedó confirmado" — un cliente que
+      pagaba no recibía nada. Agregado a `packages/domain/src/notifications/notification-port.ts`,
+      con su plantilla (`packages/infrastructure/src/notifications/templates/booking-confirmed.template.ts`,
+      cableada en el registry) y su disparo en `ProcessPaymentUseCase`
+      (`packages/application/src/payments/process-payment.ts`), en la MISMA
+      rama `outcome === 'confirmed'` y por la MISMA razón que ya agenda el
+      recordatorio de 2h: un webhook reintentado (`already-processed`) nunca
+      dispara un segundo mail. Escribe al outbox real vía
+      `NotificationOutboxRepository`, igual que `GenerateAbsenceReassignmentOffers`
+      — nunca `NotificationPort` directo. TDD real: RED en `27fd48d` (tests
+      contra fakes: barbero/servicio/hora, sin email no encola, retry no
+      duplica), GREEN en `1e20150`.
+      - Verificado 2026-08-19 contra Postgres real (`cablear-a-pg`, puerto
+        5442): reservé un hold real (`POST /holds`, `POST /holds/confirm`)
+        con cliente y email reales, y corrí `ProcessPaymentUseCase` con los
+        repos Drizzle reales (deposits/appointments/outbox/clients/barbers/services)
+        contra esa base — el único componente sustituido fue el propio
+        `PaymentPort.getPayment` (ver F.2 para por qué: no hay credencial de
+        MercadoPago en este entorno). `SELECT` directo confirma
+        `slot_occupancies.status = 'reservado'` y una fila real en
+        `notification_outbox`: `{"barberName":"Cristian Gómez","serviceName":"Corte
+        clásico","appointmentId":"7e1950b8-...","appointmentTime":"2026-08-20T12:00:00.000Z"}`.
+        El worker REAL (ya corriendo, canal `console`) la recogió en su
+        siguiente tick y la marcó `delivered` — confirmado de nuevo con
+        `SELECT`. Cuerpo renderizado (vía la plantilla real, `ShopClock`
+        real): hora mostrada **09:00** para un turno a las 12:00 UTC (offset
+        -03:00 correcto, nunca la hora UTC cruda):
+        ```
+        Confirmamos tu turno en JC Barberia.
+
+        Barbero: Cristian Gómez
+        Servicio: Corte clásico
+        Fecha: 2026-08-20
+        Hora: 09:00
+
+        Ya pagaste la seña. El resto del precio se paga en el local, el dia del turno.
+        ```
+- [x] F.2 `back_urls` / `auto_return` / `notification_url` en la preferencia de
+      MercadoPago. Sin esto MercadoPago nunca redirige al cliente de vuelta ni
+      llama a nuestro webhook — el turno queda `held` para siempre aunque el
+      pago se haya acreditado. `MercadoPagoPaymentAdapter` (`packages/infrastructure/src/payments/mercadopago-payment.adapter.ts`)
+      toma un tercer parámetro opcional `publicBaseUrl` (default `undefined`,
+      cero cambio de comportamiento sin configurar); `BookingModule`
+      (`apps/api/src/booking/booking.module.ts`, el único módulo cuyo
+      `PAYMENT_PORT` llega a `createPreference` vía `CheckoutUseCase`) lo
+      pasa desde `process.env.PUBLIC_BASE_URL`. TDD real: RED en `10ae8ec`,
+      GREEN en `43cda87`.
+      - Verificado 2026-08-19 con tests reales (no simulados): con
+        `PUBLIC_BASE_URL` configurado, el body de `createPreference` lleva
+        `back_urls` apuntando a `/pago/retorno?estado=success|pending|failure`,
+        `auto_return:"approved"` y `notification_url` a
+        `/api/webhooks/mercadopago`; sin configurar, los tres campos se
+        omiten — nunca se manda una URL localhost (MercadoPago la rechaza,
+        confirmado contra la documentación oficial vía Context7:
+        "Do not use local domains like localhost... these will cause
+        errors").
+      - Verificado 2026-08-19 contra el flujo real: `POST /holds/checkout`
+        real (sin `PUBLIC_BASE_URL` ni `MERCADOPAGO_ACCESS_TOKEN` en este
+        entorno) devuelve `500`, y el log de la API real muestra la llamada
+        HTTP real a `api.mercadopago.com` volviendo `403
+        PA_UNAUTHORIZED_RESULT_FROM_POLICIES` — el mismo bloqueo de
+        credenciales que A.5/A.7 ya documentaron, no un defecto de este
+        slice. `beginCheckout` sí deja el estado real en la base
+        (`held`/`payment_pending=true`), confirmado con `SELECT`.
+- [x] F.3 Página pública `/pago/retorno`, adonde apuntan los `back_urls`.
+      Nueva (`apps/web/src/pages/PaymentReturnPage.tsx`, ruteada en
+      `apps/web/src/App.tsx`'s `renderPublicRoute`). Honesta a propósito: con
+      `estado=success` NUNCA dice "turno confirmado" (design.md: "el redirect
+      del navegador no es fuente de verdad" — el webhook puede llegar
+      después), solo que el pago se recibió y que el mail de confirmación
+      (F.1) llega en unos minutos; con `pending`/`failure`/desconocido cada
+      uno con su propio mensaje, nunca inventando un resultado. Ofrece un
+      enlace real a "Mi cuenta". TDD real: RED en `dd704c9`, GREEN en
+      `652dff0`.
+      - Verificado 2026-08-19 en un navegador real (Chrome, pestaña propia en
+        el puerto 5175, nunca la 5173 del dueño): `/pago/retorno?estado=success`
+        renderiza dentro del layout público real ("Recibimos tu pago" +
+        el texto honesto); `estado=failure` renderiza "El pago no se pudo
+        completar"; el enlace "Entrar a Mi cuenta" navega de verdad a
+        `/acceder` (confirmado por la URL de la pestaña tras el click, no
+        solo por el `href` en el DOM).
+- [x] F.4 **Evidencia en pantalla — la cadena completa que se puede probar sin
+      credenciales de MercadoPago real**: login no aplica (ruta pública) →
+      `POST /holds` real → `POST /holds/confirm` real (cliente con email
+      real) → `POST /holds/checkout` real (falla con 500, `403
+      PA_UNAUTHORIZED_RESULT_FROM_POLICIES` real de MercadoPago, sin
+      credenciales) → `beginCheckout` deja el hold real en
+      `held`+`payment_pending` (SQL) → el pago aprobado se simula SOLO en el
+      punto donde no hay alternativa (`PaymentPort.getPayment`, ver F.1) →
+      `reservado` real + `booking_confirmed` real `pending` → worker real lo
+      entrega → `delivered` real. Aparte, el webhook HTTP se probó de punta a
+      punta por su cuenta, con un `payment_id` inventado (ya que no hay
+      credencial real para generar uno de verdad): firma HMAC real calculada
+      (`ts=...,v1=...`) → `POST /api/webhooks/mercadopago` real → `200
+      {"received":true}` → job real encolado en `pgboss.job` → worker real lo
+      toma → `getPayment` real contra `api.mercadopago.com` → `404 resource
+      not found` real, job `failed` con el stack real guardado en
+      `pgboss.job.output`. Firma inválida sigue rechazada con `401` (la
+      validación no se debilitó). `/pago/retorno` verificada en Chrome (ver
+      F.3).
+      - **No se pudo probar, y no se fingió**: el round-trip real
+        "MercadoPago aprueba el pago → redirige al navegador → llama al
+        webhook con datos reales" necesita una cuenta de prueba real de
+        MercadoPago (`MERCADOPAGO_ACCESS_TOKEN`/`MERCADOPAGO_WEBHOOK_SECRET`
+        de un panel real) que no existe en este entorno — igual que A.5/A.7.
+        Ninguna fila de `notification_outbox` ni de `slot_occupancies` fue
+        insertada a mano: todo lo verificado arriba salió de correr el código
+        de producción real contra Postgres real, sustituyendo únicamente la
+        llamada de red a MercadoPago donde no había forma de evitarlo.
+
 ### Esta vuelta (continuación tras corte de sesión)
 
 D.1-D.5 ya estaban resueltos y probados en los 6 commits previos de
