@@ -11,6 +11,7 @@ const PUBLIC_NAV_ITEMS = [
   { path: '/', label: 'Inicio' },
   { path: '/reservar', label: 'Reservar turno' },
   { path: '/acceder', label: 'Ingresar' },
+  { path: '/mi-cuenta', label: 'Mi cuenta' },
 ] as const;
 
 /**
