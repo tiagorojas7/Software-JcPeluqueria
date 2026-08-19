@@ -4,6 +4,8 @@ Sistema de gestión de turnos para **JC Barbería**, una barbería real de Córd
 
 Este documento es la fuente de verdad de la **lógica de negocio** del proyecto. Todo cambio o decisión que se tome queda reflejado acá, para que cualquier persona del equipo entienda **qué problema resolvemos, con qué reglas y por qué**.
 
+> Para levantar el proyecto y ver una demo funcionando, ver [`docs/DEMO.md`](docs/DEMO.md).
+
 ---
 
 ## Índice
@@ -26,7 +28,12 @@ Este documento es la fuente de verdad de la **lógica de negocio** del proyecto.
 - [7. Trabajo futuro](#7-trabajo-futuro)
 - [8. Decisiones abiertas](#8-decisiones-abiertas)
 - [9. Estado del proyecto](#9-estado-del-proyecto)
-- [10. Plan de construcción](#10-plan-de-construcción)
+  - [Por qué hay un segundo tracker](#por-qué-hay-un-segundo-tracker)
+  - [Lo que funciona hoy](#lo-que-funciona-hoy-verificado-desde-la-pantalla)
+  - [Lo que falta](#lo-que-falta)
+- [10. Cómo se construyó](#10-cómo-se-construyó)
+  - [Sobre el tamaño de los PRs](#sobre-el-tamaño-de-los-prs)
+  - [La lección del proyecto](#la-lección-del-proyecto)
 - [11. Cómo trabajamos](#11-cómo-trabajamos)
 
 ---
@@ -201,10 +208,12 @@ Al día siguiente, el local resuelve esos turnos desde el panel: **realizado** o
 | Barberos | Varios, **cada uno con su propio horario y días libres** |
 | Servicios | **Todos los barberos hacen todos los servicios** (sin especialidades) |
 | Walk-ins | **Conviven** con los turnos digitales. Se cargan con **servicio y barbero**, sin seña, y quedan directamente como *realizados*. Ocupan el hueco para que no se pise con una reserva online |
-| Horario del local | Fijo en general, pero **modificable** desde el panel admin |
+| Horario del local | **Corrido**: abre y cierra una sola vez por día, sin cierre al mediodía. Fijo en general, pero **modificable** desde el panel admin |
 | Configurable desde el panel | Horarios del local, horarios de cada barbero, precios de los servicios, alta y baja de barberos, gestión de clientes |
 
 **Por qué el walk-in registra servicio y barbero.** Si fuera solo un bloque de "ocupado", los cortes sin turno no contarían para las estadísticas de nadie y los números de cada barbero quedarían siempre por debajo de la realidad. Un barbero que desconfía de sus propios números deja de mirarlos.
+
+> **Horario corrido, decidido a propósito.** El modelo admite **un solo tramo por día** para el local y para cada barbero. No es una limitación que se coló: JC no cierra al mediodía y ningún barbero trabaja en turnos partidos. Si eso cambiara, hay que rehacer el modelo de disponibilidad — no alcanza con cargar dos filas para el mismo día.
 
 ### 3.7 Cuenta del cliente
 
@@ -245,6 +254,11 @@ Con los barberos entrando al sistema, aparecen **tres roles con límites reales 
 | Alta/baja de barberos, horarios base, precios | ✅ | — | — |
 | Plata del local (facturación, señas) | ✅ | — | — |
 | Su propio perfil y agenda | ✅ | — | ✅ |
+| Ver la agenda del día de todos los barberos | ✅ | ✅ | Solo la suya |
+
+**La última fila es una consecuencia, no una decisión nueva.** No se puede crear un turno, cargar un walk-in ni marcar la ausencia de alguien sin ver antes la agenda del día. Negarle esa lectura a la secretaria dejaría inutilizables los tres permisos que sí tiene. Se hizo explícita al implementar la fase 3b, donde la matriz pasó de ser una tabla en este documento a filas en la base de datos.
+
+**Pendiente de confirmar con el dueño el día de la entrega:** si la secretaria debe ver la agenda del día completa —que es lo implementado— o si tiene que ver los horarios pero no las estadísticas ni los números individuales de cada barbero. Es una fila más en `role_permissions`, sin tocar código.
 
 **Un barbero solo ve lo suyo.** No accede a la facturación del local ni a los números de sus compañeros. Esa frontera es de autorización, no de pantalla: se sostiene en el backend, no escondiendo botones.
 
@@ -325,8 +339,9 @@ Inventario de productos · **Modelo de comisiones y liquidación de sueldos** ·
 | Pasarela de pago | **MercadoPago** | Medio de pago dominante en Argentina; cobra la seña y procesa los reembolsos automáticos |
 | Identidad del cliente | **Cuenta obligatoria sin contraseña**, creada al final del flujo | Habilita historial y seguimiento de ausencias sin la fricción del password, que es lo que realmente frena al público mayor |
 | Canal de notificación (objetivo) | **WhatsApp Business API** | Mejor adopción en Argentina y más barato por mensaje |
-| Canal de notificación (MVP) | **Email vía Gmail** — provisorio | WhatsApp requiere verificación de Meta Business + proveedor pago (BSP) con tiempo de alta real, que bloquearía la demo |
-| Stack | **Sin definir** | Se decide en la fase de diseño |
+| Canal de notificación (MVP) | **Email vía Gmail** — provisorio, ya conectado y probado con envíos reales | WhatsApp requiere verificación de Meta Business + proveedor pago (BSP) con tiempo de alta real, que bloquearía la demo |
+| Stack | **NestJS + React/Vite + PostgreSQL + Drizzle + pg-boss** | Elegido en la fase de diseño. Monorepo pnpm con arquitectura hexagonal. El fundamento está en `design.md` |
+| Exclusividad del horario | **Constraint `EXCLUDE USING gist` de PostgreSQL** | La base de datos garantiza que dos turnos no se solapen. Probado con 20 transacciones simultáneas: gana exactamente una, sin reintentos ni aislamiento `SERIALIZABLE` |
 
 ### El puerto de notificaciones
 
@@ -350,7 +365,13 @@ El sistema necesita **ejecución programada confiable**. No es un detalle: son t
 
 1. **Vencimiento del hold** — cada 15 minutos por hold, libera el horario y dispara el reembolso
 2. **Barrido de ausencias** — todos los días a las 23:59 hora Argentina
-3. **Recordatorios de turno** — antes de cada turno
+3. **Recordatorios de turno** — 2 horas antes de cada turno
+4. **Despacho del outbox** — toma las notificaciones pendientes y las entrega por el canal configurado, con reintentos y backoff
+
+El cuarto no estaba en el diseño original. Apareció al conectar las
+notificaciones de verdad: escribir el mensaje y entregarlo tienen que ser dos
+pasos separados, porque el caso de uso no puede quedar colgado esperando a un
+servidor de correo ni perder el aviso si ese servidor está caído.
 
 Esto es un **requisito de arquitectura** que el stack elegido tiene que soportar bien.
 
@@ -368,7 +389,8 @@ Esto es un **requisito de arquitectura** que el stack elegido tiene que soportar
 | **Turno telefónico vs cuenta obligatoria + seña online** | Un cliente que llama no tiene cuenta ni puede pagar online en medio de la llamada | Propuesta: la secretaria crea o busca un registro mínimo del cliente y marca la seña como cobrada en persona. **Requiere confirmación del dueño** |
 | **Límites de Gmail** | ~500 envíos/día en cuentas gratuitas, requiere App Password, mala entregabilidad desde casilla personal | Aceptado conscientemente para la demo. El puerto hace que migrar sea barato |
 | **Email tiene la peor tasa de apertura** para cambios del mismo día | Un cliente puede no enterarse a tiempo de que su barbero faltó | Aceptado como tradeoff temporal hasta migrar a WhatsApp |
-| **Zona horaria del barrido de las 23:59** | Si corre en hora del servidor o UTC, marca ausencias en el momento equivocado | Debe usar offset fijo de Argentina (UTC-3, sin horario de verano). Restricción para la fase de diseño |
+| **Zona horaria del barrido de las 23:59** | Si corre en hora del servidor o UTC, marca ausencias en el momento equivocado | ✅ Resuelto: todo el manejo de tiempo pasa por el puerto `Clock`, con offset fijo UTC-3. Una regla de lint prohíbe `new Date()` fuera de `ShopClock` |
+| **Enumeración de emails del personal por tiempo de respuesta** | Pedir un restablecimiento de contraseña con un email real hace más trabajo que con uno inexistente: genera un token, lo guarda y envía la notificación. Midiendo cuánto tarda la respuesta se puede descubrir qué emails tienen cuenta. El riesgo era que al conectar el email real la diferencia pasara de milisegundos a cientos de milisegundos | ✅ Resuelto. El envío salió del camino de la petición: el caso de uso solo escribe una fila en `notification_outbox` y el worker la despacha en su propio tick. La petición HTTP hace el mismo trabajo exista o no la cuenta, así que no queda señal de tiempo que medir — y de paso una petición nunca espera al servidor de correo |
 
 ---
 
@@ -382,13 +404,13 @@ Documentado para que no se pierda:
 - **Resolución definitiva del turno telefónico** (cómo se cobra la seña de un cliente que llama)
 - **Corregir un turno mal marcado** como ausente o realizado después de resuelto
 - **Registrar el 50% restante** cobrado en el mostrador, para que el sistema tenga la foto completa del ingreso
-- **Activar TDD estricto** una vez que haya stack y test runner
+- **Búsqueda de huecos en varios días** dentro de `ConfirmHold`. Sigue recibiendo la ventana de búsqueda ya calculada por quien lo llama (`reofferedSearchWindow`). La fase 9 construyó el endpoint pero no el motor multi-día: cuando el horario elegido se pierde, hoy se ofrecen alternativas del mismo día, no de los siguientes
 
 ---
 
 ## 8. Decisiones abiertas
 
-**No queda ninguna decisión bloqueante.** El proyecto está listo para avanzar a la fase de especificación.
+**No queda ninguna decisión bloqueante.** La planificación está cerrada y la implementación está en curso.
 
 Resueltas:
 
@@ -408,32 +430,96 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 
 ## 9. Estado del proyecto
 
+Última actualización: **2026-08-19**.
+
 | Fase | Estado |
 |------|--------|
 | Inicialización (SDD) | ✅ Completa |
 | Exploración del problema | ✅ Completa |
 | Decisiones de negocio | ✅ Cerradas |
 | Propuesta | ✅ Completa |
-| Especificación | ✅ Completa — 8 dominios, 38 requisitos, 58 escenarios |
-| Diseño técnico | ✅ Completo — stack elegido y arquitectura definida |
-| Desglose en tareas | ✅ Completo — 191 tareas en 14 fases |
-| Implementación | ⬜ Sin empezar — arranca por la fase 0 |
+| Especificación | ✅ Completa — 8 dominios, 48 requisitos, 65 escenarios |
+| Diseño técnico | ✅ Completo |
+| Desglose en tareas | ✅ Completo |
+| Implementación (dominio y aplicación) | ✅ **192/192 tareas** — tracker archivado |
+| Cableado a la pantalla | 🔄 **31/34 tareas** — tracker `cablear-el-mvp` |
+| Prueba con el dueño | 🔄 En curso |
 
-**Stack elegido:** NestJS + React/Vite + PostgreSQL + Drizzle + pg-boss, en monorepo hexagonal. Entrega prevista en **14 PRs encadenados** (~5.050 líneas). El detalle y el fundamento están en `openspec/changes/turnero-digital-jc-barberia/design.md`.
+**El sistema se usa de punta a punta desde el navegador y desde el celular.**
 
-**Todavía no hay código.** El stack se elige en la fase de diseño.
+### Por qué hay un segundo tracker
+
+El primer tracker cerró 192/192 y sus requisitos estaban implementados y
+probados. Pero pedía **dominio y aplicación**: casi ninguna tarea pedía endpoint.
+Ninguna fase fue dueña de *"cablear todo a HTTP y construir los adaptadores que
+faltan"*, así que ese trabajo no estaba en ningún lado.
+
+Se vio recién al ejecutar la aplicación: buena parte del sistema tenía casos de
+uso escritos, testeados e **inalcanzables**. De ahí sale `cablear-el-mvp`, con un
+criterio de aceptación distinto y más duro:
+
+> **Cada función se ejecuta desde la pantalla, con datos reales, contra
+> PostgreSQL real. Un test verde no cierra ninguna tarea.**
+
+### Lo que funciona hoy, verificado desde la pantalla
+
+- **Sitio público** — inicio, servicios con precios, equipo, horario, ubicación
+- **Reservar** — elegir barbero, servicio y fecha; horarios libres reales en hora
+  del local; hold de 15 minutos con cuenta regresiva; alta de cuenta al confirmar
+- **Pagar la seña** — MercadoPago devuelve una preferencia real, con `back_urls`,
+  `auto_return` y `notification_url`; el cliente vuelve a `/pago/retorno`
+- **Cuenta del cliente** — pedir código de acceso, entrar, ver los turnos propios
+  y cancelarlos respetando la ventana de 1 hora
+- **Panel** — login del personal y navegación **construida desde los permisos del
+  actor**, no desde el rol: el dueño ve facturación del local, el barbero no
+- **Agenda del día** — marcar realizado, confirmar ausencia, editar, cancelar y
+  cargar walk-ins; un barbero solo resuelve los suyos, y el límite está en la
+  consulta, no en la pantalla
+- **Turno telefónico**, gestión de clientes y barberos, facturación del barbero y
+  del local
+- **Notificaciones por email reales** — el outbox se despacha por Gmail; probado
+  con una entrega real, no con un doble
+
+### Lo que falta
+
+| Pendiente | Por qué |
+|-----------|---------|
+| **Pago real de punta a punta** | Necesita una cuenta comprador de prueba de MercadoPago. La cadena aprobación → webhook → `deposits` → turno `reservado` → mail de confirmación no se puede simular, y es lo único que falta del viaje del cliente |
+| **A.7 · reembolso al vencer un hold** | La rama `refunded-and-notified` de `ExpireHold` exige un reembolso exitoso contra MercadoPago real. Las otras dos ramas ya están probadas en vivo |
+| **B.7 · click-through completo del panel** | Las acciones están verificadas por HTTP contra PostgreSQL real y por tests sobre los componentes de producción, pero falta la sesión de navegador entera |
+| **E.3 · ofertas por ausencia en pantalla** | La mitad del recordatorio de 2h está verificada; falta marcar un barbero ausente desde el panel y ver salir la oferta |
+| **Cambios de UX/UI** | El dueño los define después de terminar de probar |
+| **Aterrizar a `main`** | `main` sigue en `2173dac`, solo documentación. Hay 21 PRs abiertos y el trabajo vive en `feat/turnero-integracion` |
+| **Producción** | Deploy, dominio, HTTPS, backups, monitoreo |
+
+### Estado de la suite
+
+| Paquete | Archivos | Tests |
+|---------|:---:|:---:|
+| `domain` | 12 | 60 |
+| `application` | 39 | 189 |
+| `apps/web` | 30 | 122 |
+| `apps/api` | 17 | 113 |
+| **Total rápido** | **98** | **484** |
+
+`infrastructure` corre aparte: sus suites levantan un PostgreSQL real con
+Testcontainers, así que tardan minutos en vez de segundos. En cada corrida
+también van `typecheck`, `lint` y `depcruise` sobre los 7 paquetes.
 
 ---
 
-## 10. Plan de construcción
+## 10. Cómo se construyó
 
-**191 tareas en 14 fases, entregadas como 14 PRs encadenados.** El detalle tarea por tarea está en `openspec/changes/turnero-digital-jc-barberia/tasks.md`.
+**192 tareas en 14 fases**, entregadas como PRs encadenados, más un segundo
+tracker de cableado. El detalle está en
+`openspec/changes/archive/2026-08-17-turnero-digital-jc-barberia/tasks.md` y en
+`openspec/changes/cablear-el-mvp/tasks.md`.
 
-| # | Fase | Qué deja andando | Tareas |
+| # | Fase | Qué dejó andando | Tareas |
 |---|------|------------------|:------:|
 | 0 | Fundación | Monorepo, Vitest, Docker Compose, Drizzle, CI. **Activa el TDD estricto** | 13 |
-| 1 | Modelo de disponibilidad | Barberos, servicios, horarios, días libres, generación de huecos | 9 |
-| 2 | **Ocupación y hold** | El núcleo de concurrencia. Sin interfaz todavía | 17 |
+| 1 | Modelo de disponibilidad | Barberos, servicios, horarios, días libres, generación de huecos | 10 |
+| 2 | **Ocupación y hold** | El núcleo de concurrencia | 17 |
 | 3a | Identidad | Acceso sin contraseña del cliente, contraseña del personal, sesiones | 19 |
 | 3b | Autorización | Guard deny-by-default y contrato ruta × rol | 13 |
 | 4 | Ciclo de vida del turno | Los cinco estados y sus transiciones | 10 |
@@ -446,31 +532,73 @@ Para revisar **el día de la entrega del MVP**, con el dueño presente:
 | 11 | Perfil del barbero | Agenda propia, estadísticas, marcado propio | 13 |
 | 12 | **Reasignación por ausencia** | El flujo completo de ausencia del barbero | 13 |
 
+Después, `cablear-el-mvp` en seis rebanadas: **A** notificaciones de punta a punta
+· **B** acciones del panel sobre el turno · **C** autogestión del cliente ·
+**D** separar sitio público y panel, con identidad visual · **E** cerrar los
+productores que nadie invocaba · **F** el viaje real del cliente: pagar, volver y
+recibir el mail.
+
 ### Por qué ese orden
 
-**El modelo de disponibilidad va primero** porque sin el concepto de "hueco libre" no hay nada que reservar ni que ofrecer. Es prerequisito duro de todo lo demás.
+**El modelo de disponibilidad va primero** porque sin el concepto de "hueco
+libre" no hay nada que reservar ni que ofrecer.
 
-**La vista del día se construye una sola vez**, en la fase 8, y la consumen el panel, la web pública y el perfil del barbero. Por eso va antes que las tres.
+**La vista del día se construye una sola vez**, en la fase 8, y la consumen el
+panel, la web pública y el perfil del barbero.
 
-**La reasignación por ausencia va última** aunque sea el problema que originó el proyecto. Acumula más dependencias que cualquier otra fase: necesita el hold, los procesos de fondo, las notificaciones y el panel funcionando. Es también la que mejor le vende el sistema al dueño, así que conviene que llegue completa y no a medias.
+**La reasignación por ausencia va última** aunque sea el problema que originó el
+proyecto: acumula más dependencias que cualquier otra fase.
 
 ### Cómo se testea
 
-**Test primero, siempre.** De la fase 1 en adelante, la tarea de test precede a la de implementación. La fase 0 deja el TDD estricto activado.
+**Test primero, siempre.** De la fase 1 en adelante, la tarea de test precede a
+la de implementación.
 
 Tres cosas se prueban contra infraestructura real, no contra dobles:
 
-- **El hold**, con 20 transacciones simultáneas peleando por el mismo horario contra una base de datos real. Es el único test que prueba de verdad que no hay doble reserva
+- **El hold**, con 20 transacciones simultáneas peleando por el mismo horario
+  contra una base de datos real. Es el único test que prueba de verdad que no hay
+  doble reserva
 - **La autenticación**, contra el hash real
 - **El webhook de MercadoPago**, con su firma
 
-### Lo que hay que tener presente
+### Sobre el tamaño de los PRs
 
-**Cinco de las catorce fases rozan el techo de 400 líneas** — las de ocupación, pagos, vista del día, web pública y panel. Las estimaciones no se comprimieron para que entraran. Cuando lleguemos a cada una hay que decidir si se parte en dos o se acepta la excepción.
+El plan preveía 14 PRs. **En la práctica las fases grandes se partieron en dos**:
+el presupuesto de 400 líneas de producción por PR existe para proteger la
+atención de quien revisa, y una fase de 17 o 19 tareas no entra.
 
-**La fase 5 tiene un bloqueo duro:** su primera tarea es verificar la documentación oficial de MercadoPago. El diseño escribió los detalles de la API de memoria, sin acceso a documentación, así que el formato de la firma, la ventana de reembolso y el comportamiento de los reembolsos parciales hay que confirmarlos antes de escribir código de pagos.
+El criterio que funcionó es **partir por frontera funcional o hexagonal, nunca
+por cantidad de tareas**: dominio por un lado y persistencia por otro, identidad
+del cliente por un lado y del personal por otro. Cada mitad se sostiene y se
+revisa sola.
+
+**Las estimaciones resultaron optimistas.** La fase 3b estimó ~350 líneas y
+salieron 720. La causa no fue mal cálculo sino trabajo no contado: levantar
+NestJS era parte de esa fase y no figuraba en su título ni en el diseño, solo en
+la columna de harness de verificación de la tabla de entrega. **Antes de estimar
+una fase, leer esa columna.**
+
+### La lección del proyecto
+
+Todos los bugs que bloquearon el producto aparecieron **abriendo el navegador**,
+no leyendo reportes. En cada caso `typecheck`, `lint` y los tests estaban en
+verde:
+
+| Bug | Por qué los tests no lo veían |
+|-----|-------------------------------|
+| `/panel` devolvía un 404 en JSON | El proxy de Vite listaba cada prefijo de controlador y `/panel` matcheaba la API **y** la ruta del SPA. Resuelto con un prefijo `/api` global |
+| Un hipo de la cola mataba la API entera | pg-boss es un `EventEmitter`, y un evento `error` sin listener es caída dura del proceso en Node, no una promesa rechazada |
+| Toda reserva devolvía 500 | pg-boss v12 exige que la cola exista antes de encolar, y solo el worker las declaraba |
+| La barbería abría 09:00 y la página decía 12:00 | Se cortaba `HH:mm` del ISO crudo en vez de convertir a hora del local. Los tests afirmaban lo viejo |
+| El código de acceso nunca podía llegar por mail | La API escribía en un outbox de consola en vez del real. Los tests usan el fake, así que pasaban |
+| El webhook devolvía 500 en vez de 401 | Sin `data.id` se escribía en `payment_events` con id vacío y reventaba una restricción NOT NULL |
+
+Por eso el segundo tracker exige evidencia en pantalla y no acepta un test verde
+como cierre de tarea.
 
 ---
+
 
 ## 11. Cómo trabajamos
 
@@ -499,8 +627,25 @@ fix: corregir zona horaria del barrido diario
 ```
 .
 ├── README.md              ← este documento: la lógica de negocio
+├── apps/
+│   ├── api/               ← NestJS: la API HTTP
+│   ├── worker/            ← pg-boss: los procesos de fondo y el despacho del outbox
+│   └── web/               ← React + Vite: web pública y panel
+├── packages/
+│   ├── domain/            ← reglas de negocio y puertos. No importa nada de afuera
+│   ├── application/       ← casos de uso que orquestan el dominio
+│   ├── infrastructure/    ← adaptadores: Drizzle, reloj, notificaciones
+│   └── contracts/         ← tipos compartidos entre back y front
+├── docs/
+│   └── DEMO.md            ← cómo levantarlo, variables de entorno, cuentas del seed
 ├── openspec/
 │   ├── config.yaml        ← configuración del flujo SDD
+│   ├── specs/             ← especificaciones vigentes, una por dominio
 │   └── changes/           ← artefactos por cambio (propuesta, specs, diseño, tareas)
+├── docker-compose.yml     ← PostgreSQL 16 para desarrollo
 └── .atl/                  ← registro de skills de la herramienta
 ```
+
+**La dirección de las dependencias es una regla, no una sugerencia.** `domain` no puede importar `application`, `infrastructure` ni librerías de terceros que no sean tipos. No es disciplina personal: `dependency-cruiser` corre en cada PR y rompe el build si alguien la viola.
+
+Lo mismo con el tiempo: `Date.now()`, `new Date()` y `toLocaleString` están **prohibidos por regla de lint** fuera de `ShopClock`. Todo el manejo de fechas pasa por el puerto `Clock`, porque el local vive en UTC-3 sin horario de verano y el barrido de las 23:59 tiene que marcar ausencias en el momento correcto.
