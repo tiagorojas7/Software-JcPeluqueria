@@ -10,6 +10,7 @@ import { BarberDayBoardPage } from './pages/BarberDayBoardPage';
 import { BookingPage } from './pages/BookingPage';
 import { HomePage } from './pages/HomePage';
 import { ManagementPage } from './pages/ManagementPage';
+import { PaymentReturnPage } from './pages/PaymentReturnPage';
 import { PhoneAppointmentPage } from './pages/PhoneAppointmentPage';
 import { RevenuePage } from './pages/RevenuePage';
 import { ShopRevenuePage } from './pages/ShopRevenuePage';
@@ -40,6 +41,8 @@ function renderPublicRoute(pathname: string) {
       return <AccessCodePage />;
     case '/mi-cuenta':
       return <MyAccountPage />;
+    case '/pago/retorno':
+      return <PaymentReturnPage />;
     default:
       return <NotFound />;
   }
