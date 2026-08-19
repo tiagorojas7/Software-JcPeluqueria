@@ -61,6 +61,29 @@ describe('MercadoPago webhook (App Nest levantada en memoria)', () => {
     ]);
   });
 
+  it('rejects a notification carrying no data.id with 401, never touching the event log', async () => {
+    // Found by pointing a real tunnel at this endpoint: without `data.id` the
+    // handler used to reach `events.record({ paymentId: undefined })`, which
+    // the `payment_events` NOT NULL constraint turned into a 500. On a public,
+    // unauthenticated endpoint that is a crash any stray POST can trigger, and
+    // it buries real failures in the same noise. MercadoPago always appends
+    // `data.id` to `notification_url` (that is the value its own SDKs sign
+    // against), so its absence means the caller is not MercadoPago — 401, and
+    // no audit row, because there is no resource id to key one on.
+    // The fakes are shared across this suite's cases, so what matters is the
+    // delta this one call produced, not the absolute contents.
+    const recordsBefore = events.records.length;
+
+    const response = await request(app.getHttpServer())
+      .post('/webhooks/mercadopago')
+      .set('x-signature', 'ts=1700000000,v1=deadbeef')
+      .send({ type: 'payment' });
+
+    expect(response.status).toBe(401);
+    expect(queue.enqueuedPaymentIds).toEqual([]);
+    expect(events.records).toHaveLength(recordsBefore);
+  });
+
   it('accepts a validly signed payload with 200 and enqueues the payment id for async processing', async () => {
     const ts = 1700000001;
     const response = await request(app.getHttpServer())
