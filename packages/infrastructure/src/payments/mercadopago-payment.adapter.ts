@@ -54,6 +54,16 @@ export class MercadoPagoApiError extends Error {
 }
 
 /**
+ * The exact SPA route the client lands on after paying (`apps/web/src/App.tsx`
+ * — `renderPublicRoute`'s `/pago/retorno` case, cablear-el-mvp item 3).
+ * `estado` is OUR OWN query param, appended to before MercadoPago adds its
+ * own (`payment_id`, `status`, `external_reference`, `merchant_order_id`) —
+ * MercadoPago preserves whatever query string a `back_urls` entry already
+ * carries and appends to it, never replaces it.
+ */
+const RETURN_PATH = (estado: 'success' | 'pending' | 'failure'): string => `/pago/retorno?estado=${estado}`;
+
+/**
  * The ONLY place that talks HTTP to MercadoPago — every endpoint path lives
  * here, behind one `request()` helper and one `baseUrl`. `createPreference`
  * sets `external_reference` to the hold id so `getPayment` can hand it back
@@ -63,6 +73,14 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
   constructor(
     private readonly accessToken: string,
     private readonly baseUrl: string = DEFAULT_BASE_URL,
+    // cablear-el-mvp item 2: undefined by default, on purpose. MercadoPago
+    // REJECTS a localhost back_url outright ("Do not use local domains...
+    // these will cause errors"), so a deployment that never set
+    // `PUBLIC_BASE_URL` (every test, every local dev run without a tunnel)
+    // must omit these fields entirely rather than guess a broken default —
+    // the exact same adapter every existing test already exercises,
+    // unchanged.
+    private readonly publicBaseUrl?: string,
   ) {}
 
   async createPreference(input: {
@@ -82,6 +100,19 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
           },
         ],
         external_reference: input.externalReference,
+        ...(this.publicBaseUrl
+          ? {
+              back_urls: {
+                success: `${this.publicBaseUrl}${RETURN_PATH('success')}`,
+                pending: `${this.publicBaseUrl}${RETURN_PATH('pending')}`,
+                failure: `${this.publicBaseUrl}${RETURN_PATH('failure')}`,
+              },
+              auto_return: 'approved',
+              // `apps/api/src/main.ts`'s `app.setGlobalPrefix('api')` — every
+              // API route, including this webhook, lives under `/api`.
+              notification_url: `${this.publicBaseUrl}/api/webhooks/mercadopago`,
+            }
+          : {}),
       }),
     });
     return { preferenceId: response.id, initPoint: response.init_point };

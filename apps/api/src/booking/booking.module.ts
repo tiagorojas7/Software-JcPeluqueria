@@ -109,8 +109,17 @@ import {
       // Task 9.11/9.12 — the seam this token was declared for and nothing
       // ever bound: MercadoPago is a plain HTTP client, so unlike
       // `HOLD_EXPIRE_SCHEDULER` there is no pg-boss laziness concern here.
+      //
+      // cablear-el-mvp item 2: this is the ONLY `MercadoPagoPaymentAdapter`
+      // instance whose `createPreference` a real request ever reaches (via
+      // `CheckoutUseCase` below) — the third argument, `PUBLIC_BASE_URL`,
+      // is what puts `back_urls`/`auto_return`/`notification_url` on the
+      // preference. Left undefined (every other module's own adapter
+      // instance, used only for `getPayment`/`refund`) keeps today's
+      // behavior exactly as it was.
       provide: PAYMENT_PORT,
-      useFactory: () => new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? ''),
+      useFactory: () =>
+        new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? '', undefined, process.env.PUBLIC_BASE_URL),
     },
     {
       // client-booking: "Reserva web con seña obligatoria del 50%" — reuses
