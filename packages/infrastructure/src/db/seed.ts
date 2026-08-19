@@ -1,3 +1,4 @@
+import '../config/load-env';
 import { eq } from 'drizzle-orm';
 
 import { Argon2PasswordHasher } from '../identity/argon2-password-hasher';

@@ -1,3 +1,7 @@
+// FIRST import, deliberately: `AppModule` reads `process.env` while its own
+// providers are being constructed (the MercadoPago adapter, the db pool), and
+// ES modules evaluate in import order.
+import '@jc-barberia/infrastructure/env';
 import 'reflect-metadata';
 
 import { NestFactory } from '@nestjs/core';

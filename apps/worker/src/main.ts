@@ -1,3 +1,5 @@
+// FIRST import, deliberately — see `apps/api/src/main.ts`.
+import '@jc-barberia/infrastructure/env';
 import { PgBoss } from 'pg-boss';
 import {
   AppointmentReminder,

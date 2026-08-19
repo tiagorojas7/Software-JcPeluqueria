@@ -1,3 +1,4 @@
+import './src/config/load-env';
 import { defineConfig } from 'drizzle-kit';
 
 // Migrations are generated from packages/infrastructure/src/db/schema and

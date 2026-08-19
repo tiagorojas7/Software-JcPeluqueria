@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./env": "./src/config/load-env.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -14,6 +18,7 @@
   "dependencies": {
     "@jc-barberia/domain": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.38.4",
     "nodemailer": "^9.0.5",
     "pg-boss": "^12.27.0",
