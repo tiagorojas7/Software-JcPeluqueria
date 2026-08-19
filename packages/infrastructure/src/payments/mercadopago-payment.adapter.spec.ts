@@ -43,6 +43,59 @@ describe('MercadoPagoPaymentAdapter', () => {
     expect(body.items[0].unit_price).toBe(2500);
   });
 
+  // cablear-el-mvp item 2: without these three fields, MercadoPago never
+  // sends the client back after paying and never calls our webhook — the
+  // appointment stays `held` forever even though the money moved.
+  it('includes back_urls/auto_return/notification_url built from PUBLIC_BASE_URL when configured', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ id: 'pref-1', init_point: 'https://mp.example/checkout/pref-1' }), {
+        status: 201,
+      }),
+    );
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL, 'https://duct-making-grid.ngrok-free.dev');
+
+    await adapter.createPreference({
+      externalReference: 'hold-1',
+      amountCents: 250000,
+      description: 'Corte clasico',
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(init.body);
+    expect(body.back_urls).toEqual({
+      success: 'https://duct-making-grid.ngrok-free.dev/pago/retorno?estado=success',
+      pending: 'https://duct-making-grid.ngrok-free.dev/pago/retorno?estado=pending',
+      failure: 'https://duct-making-grid.ngrok-free.dev/pago/retorno?estado=failure',
+    });
+    expect(body.auto_return).toBe('approved');
+    expect(body.notification_url).toBe('https://duct-making-grid.ngrok-free.dev/api/webhooks/mercadopago');
+  });
+
+  // The exact regression this task warns about: a broken localhost URL sent
+  // to MercadoPago is rejected outright, so unset MUST omit these fields
+  // rather than guess a default — every test above this one already proves
+  // the adapter still works with no third argument at all.
+  it('omits back_urls/auto_return/notification_url when PUBLIC_BASE_URL is not configured', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ id: 'pref-1', init_point: 'https://mp.example/checkout/pref-1' }), {
+        status: 201,
+      }),
+    );
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL);
+
+    await adapter.createPreference({
+      externalReference: 'hold-1',
+      amountCents: 250000,
+      description: 'Corte clasico',
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(init.body);
+    expect(body.back_urls).toBeUndefined();
+    expect(body.auto_return).toBeUndefined();
+    expect(body.notification_url).toBeUndefined();
+  });
+
   it('reads a payment status against the single /v1/payments/:id path, never trusting a passed-in status', async () => {
     fetchMock.mockResolvedValue(
       new Response(
