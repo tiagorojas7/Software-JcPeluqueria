@@ -26,6 +26,7 @@ const stubRegistry = {
   reminder_without_deposit: () => ({ subject: 'Recordatorio', body: 'body-reminder' }),
   absence_reassignment_offer: () => ({ subject: 'Horario alternativo', body: 'body-offer' }),
   client_access_code: () => ({ subject: 'Tu codigo de acceso', body: 'body-access-code' }),
+  booking_confirmed: () => ({ subject: 'Turno confirmado', body: 'body-booking-confirmed' }),
 } as const;
 
 describe('GmailNotificationAdapter (7.3)', () => {

@@ -27,6 +27,7 @@ const stubRegistry = {
   // missing a case would let an unrenderable notification reach production.
   absence_reassignment_offer: () => ({ subject: 'Tu barbero no esta disponible', body: 'body-offer' }),
   client_access_code: () => ({ subject: 'Tu codigo de acceso', body: 'body-access-code' }),
+  booking_confirmed: () => ({ subject: 'Turno confirmado', body: 'body-booking-confirmed' }),
 } as const;
 
 describe('createNotificationPort (7.5/7.6 — intercambio de canal)', () => {

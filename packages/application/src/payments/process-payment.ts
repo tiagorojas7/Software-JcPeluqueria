@@ -1,10 +1,15 @@
 import type {
+  Appointment,
   AppointmentRepository,
+  BarberRepository,
+  ClientRepository,
   DepositRepository,
+  NotificationOutboxRepository,
   PaymentPort,
   PaymentStatus,
   RecordSettledPaymentResult,
   ReleaseRejectedPaymentResult,
+  ServiceRepository,
 } from '@jc-barberia/domain';
 
 import type { ScheduleAppointmentReminder } from '../booking/appointment-reminder';
@@ -40,6 +45,15 @@ export type ProcessPaymentResult =
  * re-read here rather than trusted from the payment payload, the same
  * "re-read, don't trust a snapshot" discipline `appointment.reminder`'s own
  * handler already applies at fire time.
+ *
+ * cablear-el-mvp item 1: the SAME 'confirmed' branch, for the SAME
+ * idempotency reason, also enqueues the `booking_confirmed` notification —
+ * the ONLY message a client who paid online gets before the 2h reminder.
+ * Written to `NotificationOutboxRepository` (never `NotificationPort`
+ * directly), the same transactional-outbox pattern
+ * `GenerateAbsenceReassignmentOffers` already established, gated on the
+ * client having an email registrado — same gate `AppointmentReminder`
+ * already uses: no email, no dispatch, never a crash.
  */
 export class ProcessPaymentUseCase {
   constructor(
@@ -47,6 +61,10 @@ export class ProcessPaymentUseCase {
     private readonly deposits: DepositRepository,
     private readonly appointments: AppointmentRepository,
     private readonly scheduleReminder: ScheduleAppointmentReminder,
+    private readonly outbox: NotificationOutboxRepository,
+    private readonly clients: ClientRepository,
+    private readonly barbers: BarberRepository,
+    private readonly services: ServiceRepository,
   ) {}
 
   async execute(paymentId: string): Promise<ProcessPaymentResult> {
@@ -64,6 +82,7 @@ export class ProcessPaymentUseCase {
             appointmentId: appointment.id,
             appointmentStart: appointment.timeRange.start,
           });
+          await this.notifyBookingConfirmed(appointment);
         }
       }
       return { outcome };
@@ -75,5 +94,32 @@ export class ProcessPaymentUseCase {
     }
 
     return { outcome: 'ignored', status: payment.status };
+  }
+
+  /** notification-port spec's email gate: no email registrado, no dispatch,
+   *  never a crash — the hold/turno itself is confirmed regardless of
+   *  whether this fires. Barber/service names default to '' on a dangling
+   *  id rather than throwing, matching `notifyClient` in
+   *  `GenerateAbsenceReassignmentOffers`'s own "never crash the confirmation
+   *  path over a notification" posture. */
+  private async notifyBookingConfirmed(appointment: Appointment): Promise<void> {
+    const client = await this.clients.findById(appointment.clientId);
+    if (!client || !client.email) {
+      return;
+    }
+    const [barber, service] = await Promise.all([
+      this.barbers.findById(appointment.barberId),
+      this.services.findById(appointment.serviceId),
+    ]);
+    await this.outbox.enqueue({
+      notificationType: 'booking_confirmed',
+      recipientEmail: client.email,
+      payload: {
+        appointmentId: appointment.id,
+        barberName: barber?.name ?? '',
+        serviceName: service?.name ?? '',
+        appointmentTime: appointment.timeRange.start.toISOString(),
+      },
+    });
   }
 }

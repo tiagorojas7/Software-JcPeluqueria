@@ -14,10 +14,12 @@ import {
   APPOINTMENT_REMINDER_QUEUE,
   DrizzleAppointmentRepository,
   DrizzleAppointmentSweepRepository,
+  DrizzleBarberRepository,
   DrizzleClientRepository,
   DrizzleDepositRepository,
   DrizzleHoldExpireViewRepository,
   DrizzleNotificationOutboxRepository,
+  DrizzleServiceRepository,
   HOLD_EXPIRE_QUEUE,
   MercadoPagoPaymentAdapter,
   PAYMENT_PROCESS_QUEUE,
@@ -133,11 +135,19 @@ async function main(): Promise<void> {
   // composition roots in `apps/api`, this file only constructs use cases
   // AFTER `await boss.start()` above already resolved, so there is no eager
   // "connects during module-graph construction" trap to defend against here.
+  // cablear-el-mvp item 1 — `booking_confirmed` writes to the SAME outbox
+  // `appointment.reminder`'s own producer/consumer already use below; the
+  // barber/service/client repos are only ever read here to fill in the
+  // notification's payload, never written.
   const processPayment = new ProcessPaymentUseCase(
     new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? ''),
     new DrizzleDepositRepository(db),
     new DrizzleAppointmentRepository(db),
     new ScheduleAppointmentReminder(new ShopClock(), new PgBossAppointmentReminderScheduler(boss)),
+    new DrizzleNotificationOutboxRepository(db),
+    new DrizzleClientRepository(db),
+    new DrizzleBarberRepository(db),
+    new DrizzleServiceRepository(db),
   );
   // pg-boss v12's `work()` handler always receives a batch (`Job<T>[]`), even
   // for a single enqueue — never a lone job object. Same `createQueue`

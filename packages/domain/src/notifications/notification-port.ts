@@ -25,6 +25,15 @@
  * replacement hold (barber-absence-reassignment spec, "Ofertas del mismo
  * día, de cualquier barbero" — "MUST notificar al cliente por el canal de
  * notificación configurado").
+ *
+ * `booking_confirmed` lands in cablear-el-mvp (item 1, "no booking-confirmation
+ * notification at all"): `ProcessPaymentUseCase` fires it on the FIRST
+ * `'confirmed'` outcome — the exact same branch, for the exact same reason,
+ * that schedules the 2h reminder — never on a retried webhook's
+ * `'already-processed'` outcome. It is the ONLY message a client who paid
+ * online ever receives before the reminder, so it carries what a real person
+ * needs: which barber, which service, the shop-local time, and that the rest
+ * of the price is paid at the shop.
  */
 export type NotificationTemplate =
   | 'staff_activation'
@@ -36,7 +45,8 @@ export type NotificationTemplate =
   // The client's own passwordless access code (client-booking: access happens
   // through a one-time code or link). Distinct from the two staff templates:
   // staff have passwords, clients never do.
-  | 'client_access_code';
+  | 'client_access_code'
+  | 'booking_confirmed';
 
 /**
  * A dispatch intention — deliberately transport-agnostic. `data` carries
