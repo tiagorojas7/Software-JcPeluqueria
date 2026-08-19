@@ -6,7 +6,7 @@ Tested on Node v24.15.0, pnpm v11.21.0, Docker Desktop (Docker Compose v5) on Wi
 
 ## 0. Environment variables
 
-**`.env.example` could not be created in this session** — a sandbox permission rule blocked every file/Bash operation that referenced an `.env*` path. Create `.env` at the repo root yourself with this content (all values are read directly by the code — see the grep-verified list below):
+**`.env.example` cannot be created from an agent session** — a sandbox permission rule blocks every file/Bash operation that references an `.env*` path. Create `.env` **at the repository root** yourself with the content below. The API, the worker, `pnpm db:migrate` and `pnpm seed` all load that exact file automatically (`packages/infrastructure/src/config/load-env.ts`, imported first thing by each entrypoint), so no shell juggling is needed.
 
 ```bash
 # Matches docker-compose.yml's postgres service exactly.
@@ -20,18 +20,26 @@ SHOP_UTC_OFFSET=-03:00
 MERCADOPAGO_ACCESS_TOKEN=TEST-0000000000000000-000000-00000000000000000000000000000000-000000000
 MERCADOPAGO_WEBHOOK_SECRET=TEST-webhook-secret-from-your-mercadopago-panel
 
+# Notification channel. `console` prints every message to the worker's log —
+# that is how the access code is read during a demo. Set it to `gmail` only
+# once the three GMAIL_* values below are real.
+NOTIFICATION_CHANNEL=console
+
 # Gmail "App Password" (not your normal password) — https://myaccount.google.com/apppasswords
-# Not required for the core booking flow in this demo (see "Known limitations").
+GMAIL_USER=tu-cuenta@gmail.com
 GMAIL_APP_PASSWORD=your-16-character-gmail-app-password
+GMAIL_FROM=JC Barberia <tu-cuenta@gmail.com>
 
 # Introduced by this arranque slice.
 PORT=3000
 WEB_ORIGIN=http://localhost:5173
 ```
 
-Every variable's origin (which file reads it): `DATABASE_URL` — `packages/infrastructure` (db connection, migrations, seed) and `apps/worker` (pg-boss shares this database). `SHOP_UTC_OFFSET` — `ShopClock`. `MERCADOPAGO_ACCESS_TOKEN` — `apps/api` (BookingModule) and `apps/worker` (payment processing). `MERCADOPAGO_WEBHOOK_SECRET` — `apps/api` (webhook signature check). `GMAIL_APP_PASSWORD` — `GmailNotificationAdapter`. `PORT`/`WEB_ORIGIN` — `apps/api/src/main.ts`.
+Every variable's origin (which file reads it): `DATABASE_URL` — `packages/infrastructure` (db connection, migrations, seed) and `apps/worker` (pg-boss shares this database). `SHOP_UTC_OFFSET` — `ShopClock`. `MERCADOPAGO_ACCESS_TOKEN` — `apps/api` (BookingModule, AppointmentsModule, IdentityModule) and `apps/worker` (payment processing). `MERCADOPAGO_WEBHOOK_SECRET` — `apps/api` (webhook signature check). `NOTIFICATION_CHANNEL` / `GMAIL_USER` / `GMAIL_APP_PASSWORD` / `GMAIL_FROM` — `createNotificationPort` in `apps/worker`. `PORT`/`WEB_ORIGIN` — `apps/api/src/main.ts`.
 
-The commands below all export `DATABASE_URL` inline too, so the demo works even before you create `.env` — but the API/worker processes themselves (started with `pnpm start:api` / `pnpm start:worker`) read `.env` only if you load it yourself (e.g. `set -a; source .env; set +a` in bash, or a tool like `dotenv-cli`). Simplest: export the variables in the same shell you start each process from, exactly as shown below.
+A real environment variable always wins over the file (`dotenv` runs with `override: false`), so `DATABASE_URL=...:5442 pnpm db:migrate` still points wherever the caller said — the way each isolated agent database has been driven.
+
+Without `MERCADOPAGO_ACCESS_TOKEN` the deposit step fails with a real `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` from MercadoPago, surfaced in the browser as "Internal server error". That is the single most common reason the demo appears broken.
 
 ## 1. Install and start Postgres
 
