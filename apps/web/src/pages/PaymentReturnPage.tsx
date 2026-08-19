@@ -8,25 +8,25 @@ const COPY: Record<PaymentEstado, { readonly title: string; readonly body: strin
   success: {
     title: 'Recibimos tu pago',
     body:
-      'Todavia estamos confirmando tu turno con el sistema. En unos minutos te va a llegar un email con la ' +
-      'confirmacion, el barbero, el servicio y el horario. Si no te llega, revisa la carpeta de spam o entra a ' +
+      'Todavía estamos confirmando tu turno con el sistema. En unos minutos te va a llegar un email con la ' +
+      'confirmación, el barbero, el servicio y el horario. Si no te llega, revisá la carpeta de spam o entrá a ' +
       'Mi cuenta para ver el estado real de tu turno.',
   },
   pending: {
-    title: 'Tu pago esta pendiente',
+    title: 'Tu pago está pendiente',
     body:
-      'MercadoPago todavia esta procesando el pago. Si se aprueba, te va a llegar un email de confirmacion; si ' +
-      'no se aprueba, el horario se libera automaticamente y podes volver a intentarlo.',
+      'MercadoPago todavía está procesando el pago. Si se aprueba, te va a llegar un email de confirmación; si ' +
+      'no se aprueba, el horario se libera automáticamente y podés volver a intentarlo.',
   },
   failure: {
     title: 'El pago no se pudo completar',
-    body: 'No se acredito el pago y el turno no quedo reservado. Podes volver a intentar la reserva cuando quieras.',
+    body: 'No se acreditó el pago y el turno no quedó reservado. Podés volver a intentar la reserva cuando quieras.',
   },
   unknown: {
     title: 'Volviste de MercadoPago',
     body:
       'No pudimos identificar el estado de tu pago desde este enlace. Si ya pagaste, en unos minutos te llega ' +
-      'un email de confirmacion; si preferis, entra a Mi cuenta para revisar tus turnos.',
+      'un email de confirmación; si preferís, entrá a Mi cuenta para revisar tus turnos.',
   },
 };
 
