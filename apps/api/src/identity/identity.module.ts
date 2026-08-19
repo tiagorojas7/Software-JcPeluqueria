@@ -11,12 +11,12 @@ import {
 } from '@jc-barberia/application';
 import {
   Argon2PasswordHasher,
-  ConsoleNotificationOutboxRepository,
   db,
   DrizzleAppointmentRepository,
   DrizzleAuthChallengeRepository,
   DrizzleClientAccountRepository,
   DrizzleClientRepository,
+  DrizzleNotificationOutboxRepository,
   DrizzleSessionRepository,
   DrizzleUserCredentialsRepository,
   MercadoPagoPaymentAdapter,
@@ -60,12 +60,13 @@ import {
  * instance registered under a different token, same one-token-per-module
  * discipline every other feature module in this app follows.
  *
- * `NOTIFICATION_OUTBOX_REPOSITORY` is bound to the interim
- * `ConsoleNotificationOutboxRepository` — Slice A's real
- * `DrizzleNotificationOutboxRepository` (migration 0011) does not exist on
- * this branch yet, and cablear-el-mvp explicitly says not to wait for it
- * (see that class's own doc comment). Swapping in the Drizzle adapter once
- * it lands is a one-line change here, nothing else in this module.
+ * `NOTIFICATION_OUTBOX_REPOSITORY` is bound to Slice A's real
+ * `DrizzleNotificationOutboxRepository` (migration 0011). The interim
+ * console adapter it replaced was correct while Slice A had not landed on
+ * this branch — but console-only meant the access code was printed to the
+ * API log and never written to `notification_outbox`, so the worker's
+ * dispatcher could not see it and `NOTIFICATION_CHANNEL=gmail` would still
+ * never mail a client their code.
  */
 @Module({
   imports: [AccessControlModule],
@@ -80,7 +81,7 @@ import {
     { provide: AUTH_CHALLENGE_REPOSITORY, useFactory: () => new DrizzleAuthChallengeRepository(db) },
     {
       provide: NOTIFICATION_OUTBOX_REPOSITORY,
-      useFactory: () => new ConsoleNotificationOutboxRepository(),
+      useFactory: () => new DrizzleNotificationOutboxRepository(db),
     },
     {
       // C.3/C.4: "Mi cuenta" reads/writes the exact same `slot_occupancies`

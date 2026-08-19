@@ -26,9 +26,9 @@ export const CLIENT_ACCOUNT_REPOSITORY = Symbol('CLIENT_ACCOUNT_REPOSITORY');
 export const AUTH_CHALLENGE_REPOSITORY = Symbol('AUTH_CHALLENGE_REPOSITORY');
 
 /** DI token for the `NotificationOutboxRepository` port (C.1: where the
- *  access code/link is enqueued). Bound to the interim
- *  `ConsoleNotificationOutboxRepository` until Slice A's Drizzle adapter
- *  lands — see that class's own doc comment. */
+ *  access code/link is enqueued). Bound to Slice A's real
+ *  `DrizzleNotificationOutboxRepository`, so the worker's dispatcher can
+ *  actually deliver the code. */
 export const NOTIFICATION_OUTBOX_REPOSITORY = Symbol('NOTIFICATION_OUTBOX_REPOSITORY');
 
 /** DI token for the `AppointmentRepository` port (C.3/C.4: "Mi cuenta" reads
