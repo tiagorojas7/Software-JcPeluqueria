@@ -88,7 +88,14 @@ async function buildApp(beginCheckoutResult: boolean, paymentPort: FakePaymentPo
   return { app, holds, paymentPort };
 }
 
-describe('POST /holds/checkout (App Nest levantada en memoria)', () => {
+// Every case here compiles its own Nest module graph through `buildApp`, and
+// the first one also pays the cold-start cost of that graph. Against Vitest's
+// 5s default this sat right on the edge: the same file failed one run and
+// passed 4/4 the next, on an otherwise idle machine. The timeout is raised
+// rather than the boot shared, because each case deliberately builds its own
+// app with its own fakes — that isolation is the point. `mercadopago-webhook.spec.ts`
+// already carries the same kind of allowance on its own Nest bootstrap.
+describe('POST /holds/checkout (App Nest levantada en memoria)', { timeout: 30_000 }, () => {
   it('cobra exactamente el 50% del precio de lista y reenvia el initPoint de la pasarela', async () => {
     const paymentPort = new FakePaymentPort();
     const { app, holds } = await buildApp(true, paymentPort);
