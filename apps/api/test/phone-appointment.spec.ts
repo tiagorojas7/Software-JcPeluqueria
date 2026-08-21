@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
+  createService,
   FakeActorContextRepository,
   FakeAppointmentReminderScheduler,
   FakeClientRepository,
@@ -8,6 +9,7 @@ import {
   FakeHoldExpireScheduler,
   FakeHoldRepository,
   FakeRolePermissionRepository,
+  FakeServiceRepository,
   type Permission,
 } from '@jc-barberia/domain';
 import request from 'supertest';
@@ -22,12 +24,19 @@ import {
   CLOCK,
   HOLD_EXPIRE_SCHEDULER,
   HOLD_REPOSITORY,
+  SERVICE_REPOSITORY,
 } from '../src/appointments/tokens';
 
 const OWNER_SESSION = 'session-owner';
 const BARBER_SESSION = 'session-barber';
 const BARBER_ID = 'aaaaaaaa-1111-4000-8000-000000000001';
 const SERVICE_ID = 'bbbbbbbb-2222-4000-8000-000000000002';
+
+// D.4 (paneles-y-turno-telefonico): the secretary never types an end time —
+// CreatePhoneAppointmentUseCase derives it from this service's
+// durationMinutes instead, so this suite needs a real one to look up.
+const services = new FakeServiceRepository();
+services.create(createService({ id: SERVICE_ID, name: 'Corte clasico', durationMinutes: 30, priceCents: 800000 }));
 
 const actorContexts = new FakeActorContextRepository();
 actorContexts.seed(OWNER_SESSION, { userId: 'owner-user-id', role: 'owner' });
@@ -63,6 +72,8 @@ describe('POST /appointments/phone (App Nest levantada en memoria)', () => {
       .useValue(new FakeClientRepository())
       .overrideProvider(HOLD_REPOSITORY)
       .useValue(new FakeHoldRepository())
+      .overrideProvider(SERVICE_REPOSITORY)
+      .useValue(services)
       .overrideProvider(CLOCK)
       .useValue(clock)
       // `CreateHold` enqueues `hold.expire` for every hold (task 6.3), so the
@@ -92,7 +103,7 @@ describe('POST /appointments/phone (App Nest levantada en memoria)', () => {
     expect(response.status).toBe(403);
   });
 
-  it('books a phone appointment with only name and phone, no seña', async () => {
+  it('books a phone appointment with only name and phone, no seña, no endTime in the request', async () => {
     const response = await withSession(
       request(app.getHttpServer()).post('/appointments/phone'),
       OWNER_SESSION,
@@ -101,12 +112,31 @@ describe('POST /appointments/phone (App Nest levantada en memoria)', () => {
       serviceId: SERVICE_ID,
       calendarDate: '2026-09-01',
       startTime: '10:00',
-      endTime: '10:30',
       client: { name: 'Marcos', phone: '3511234567' },
     });
 
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ status: 'reservado' });
+  });
+
+  // D.4: the exact property the owner asked to guarantee — the stored
+  // duration always matches the selected service's durationMinutes (30 for
+  // SERVICE_ID here), server-derived, never trusted from the request.
+  it("derives endsAt from the selected service's durationMinutes", async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).post('/appointments/phone'),
+      OWNER_SESSION,
+    ).send({
+      barberId: BARBER_ID,
+      serviceId: SERVICE_ID,
+      calendarDate: '2026-09-01',
+      startTime: '13:00',
+      client: { name: 'Sofia', phone: '3519876543' },
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.startsAt).toBe(dateBuilder.localTimeToUtc('2026-09-01', '13:00').toISOString());
+    expect(response.body.endsAt).toBe(dateBuilder.localTimeToUtc('2026-09-01', '13:30').toISOString());
   });
 
   it('rejects a request missing the required phone field', async () => {
@@ -118,8 +148,22 @@ describe('POST /appointments/phone (App Nest levantada en memoria)', () => {
       serviceId: SERVICE_ID,
       calendarDate: '2026-09-01',
       startTime: '11:00',
-      endTime: '11:30',
       client: { name: 'Laura' },
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects a serviceId that does not exist with 400, never a bare 500', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).post('/appointments/phone'),
+      OWNER_SESSION,
+    ).send({
+      barberId: BARBER_ID,
+      serviceId: 'cccccccc-3333-4000-8000-000000000003',
+      calendarDate: '2026-09-01',
+      startTime: '14:00',
+      client: { name: 'Laura', phone: '3517654321' },
     });
 
     expect(response.status).toBe(400);
@@ -134,7 +178,6 @@ describe('POST /appointments/phone (App Nest levantada en memoria)', () => {
       serviceId: SERVICE_ID,
       calendarDate: '2026-09-01',
       startTime: '12:00',
-      endTime: '12:30',
       client: { name: 'Laura', phone: '3517654321' },
     });
 

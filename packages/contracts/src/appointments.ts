@@ -18,7 +18,15 @@ export const CreatePhoneAppointmentRequestSchema = z.object({
   serviceId: z.string().uuid(),
   calendarDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato esperado: YYYY-MM-DD'),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm'),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm'),
+  /**
+   * The secretary never has this on the phone — it is a property of the
+   * service she picked, not information she restates by hand. The server
+   * always derives it from the selected service's `durationMinutes`
+   * (`CreatePhoneAppointmentUseCase`), so this is optional and, even when
+   * present, ignored: no caller can create a turno whose duration
+   * disagrees with its service.
+   */
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm').optional(),
   client: z.object({
     name: z.string().min(1, 'El nombre es obligatorio'),
     phone: z.string().min(1, 'El teléfono es obligatorio'),

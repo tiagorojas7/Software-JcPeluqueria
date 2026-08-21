@@ -16,3 +16,8 @@ export const APPOINTMENT_REPOSITORY = Symbol('APPOINTMENT_REPOSITORY');
 export const ABSENCE_RECORD_REPOSITORY = Symbol('ABSENCE_RECORD_REPOSITORY');
 export const PAYMENT_PORT = Symbol('PAYMENT_PORT');
 export const WALK_IN_REPOSITORY = Symbol('WALK_IN_REPOSITORY');
+/** `CreatePhoneAppointmentUseCase`'s own read-only lookup to derive a
+ *  turno's end time from the selected service's `durationMinutes` — bound
+ *  to its own token here rather than reused across modules, same
+ *  one-token-per-module pattern as every other repository above. */
+export const SERVICE_REPOSITORY = Symbol('SERVICE_REPOSITORY');

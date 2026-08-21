@@ -1,9 +1,11 @@
 import {
+  createService,
   FakeAppointmentReminderScheduler,
   FakeClientRepository,
   FakeClock,
   FakeHoldExpireScheduler,
   FakeHoldRepository,
+  FakeServiceRepository,
   REMINDER_LEAD_MINUTES,
   type TimeWindow,
 } from '@jc-barberia/domain';
@@ -11,19 +13,34 @@ import { describe, expect, it } from 'vitest';
 
 import { ScheduleAppointmentReminder } from '../booking/appointment-reminder';
 import { CreateHold } from '../booking/create-hold';
-import { CreatePhoneAppointmentUseCase } from './create-phone-appointment';
+import { CreatePhoneAppointmentUseCase, PhoneAppointmentServiceNotFoundError } from './create-phone-appointment';
 
 const dateBuilder = new FakeClock();
 const at = (time: string) => dateBuilder.localTimeToUtc('2026-09-01', time);
 
+// admin-operations spec: the secretary picks a service, never types an end
+// time — the appointment's duration always comes from the service she
+// selected (`Service.durationMinutes`), never from a second field she would
+// have to keep consistent by hand.
+const HAIRCUT_SERVICE_ID = 'service-1';
+const HAIRCUT_DURATION_MINUTES = 30;
+
 describe('CreatePhoneAppointmentUseCase', () => {
-  const timeRange: TimeWindow = { start: at('10:00'), end: at('10:30') };
   const searchWindow: TimeWindow = { start: at('09:00'), end: at('18:00') };
 
   function buildUseCase() {
     const clients = new FakeClientRepository();
     const holds = new FakeHoldRepository();
     const clock = new FakeClock(-180, at('09:45'));
+    const services = new FakeServiceRepository();
+    services.create(
+      createService({
+        id: HAIRCUT_SERVICE_ID,
+        name: 'Corte clasico',
+        durationMinutes: HAIRCUT_DURATION_MINUTES,
+        priceCents: 500000,
+      }),
+    );
     // Phase 6 (6.3) gave `CreateHold` a `HoldExpireScheduler`: every hold it
     // creates enqueues its own expiry. A phone appointment is confirmed
     // immediately after, so the job fires on an already-`reservado` row and
@@ -31,8 +48,8 @@ describe('CreatePhoneAppointmentUseCase', () => {
     const createHold = new CreateHold(holds, clock, new FakeHoldExpireScheduler());
     const reminderScheduler = new FakeAppointmentReminderScheduler();
     const scheduleReminder = new ScheduleAppointmentReminder(clock, reminderScheduler);
-    const useCase = new CreatePhoneAppointmentUseCase(clients, holds, createHold, scheduleReminder);
-    return { useCase, clients, holds, reminderScheduler };
+    const useCase = new CreatePhoneAppointmentUseCase(clients, holds, createHold, scheduleReminder, services, clock);
+    return { useCase, clients, holds, reminderScheduler, services, clock };
   }
 
   it('books a new client directly into reservado, with no deposit', async () => {
@@ -41,8 +58,8 @@ describe('CreatePhoneAppointmentUseCase', () => {
     const appointment = await useCase.execute({
       id: 'appt-1',
       barberId: 'barber-1',
-      serviceId: 'service-1',
-      timeRange,
+      serviceId: HAIRCUT_SERVICE_ID,
+      startsAt: at('10:00'),
       searchWindow,
       client: { name: 'Marcos', phone: '3511234567', email: 'marcos@example.com', age: 30 },
     });
@@ -54,14 +71,33 @@ describe('CreatePhoneAppointmentUseCase', () => {
     expect(holds.confirmCalls).toEqual(['appt-1']);
   });
 
+  // The exact property the owner asked to guarantee: a turno's duration
+  // never disagrees with its service. Derived server-side from
+  // Service.durationMinutes via the same Clock every other instant in this
+  // codebase goes through — never trusted from a caller-supplied endTime.
+  it("derives the appointment's end time from the selected service's durationMinutes, never from caller input", async () => {
+    const { useCase } = buildUseCase();
+
+    const appointment = await useCase.execute({
+      id: 'appt-1b',
+      barberId: 'barber-1',
+      serviceId: HAIRCUT_SERVICE_ID,
+      startsAt: at('10:00'),
+      searchWindow,
+      client: { name: 'Marcos', phone: '3511234567', email: null, age: null },
+    });
+
+    expect(appointment.timeRange).toEqual({ start: at('10:00'), end: at('10:30') });
+  });
+
   it('creates the appointment without email, no blocking whatsoever', async () => {
     const { useCase } = buildUseCase();
 
     const appointment = await useCase.execute({
       id: 'appt-2',
       barberId: 'barber-1',
-      serviceId: 'service-1',
-      timeRange,
+      serviceId: HAIRCUT_SERVICE_ID,
+      startsAt: at('10:00'),
       searchWindow,
       client: { name: 'Laura', phone: '3517654321', email: null, age: null },
     });
@@ -77,8 +113,8 @@ describe('CreatePhoneAppointmentUseCase', () => {
     const appointment = await useCase.execute({
       id: 'appt-3',
       barberId: 'barber-1',
-      serviceId: 'service-1',
-      timeRange,
+      serviceId: HAIRCUT_SERVICE_ID,
+      startsAt: at('10:00'),
       searchWindow,
       client: { name: 'Marcos', phone: '3511234567', email: null, age: null },
     });
@@ -88,16 +124,16 @@ describe('CreatePhoneAppointmentUseCase', () => {
 
   // E.2 (cablear-el-mvp Slice E): a phone appointment is confirmed the moment
   // it is created — there is no payment step to wait for — so the 2h
-  // reminder is scheduled off the SAME `timeRange.start` right here, using
-  // the same `Clock` that computed it, never a fresh wall-clock read.
-  it('schedules the 2h appointment.reminder job at timeRange.start - 120min', async () => {
+  // reminder is scheduled off the SAME derived start right here, using the
+  // same `Clock` that computed it, never a fresh wall-clock read.
+  it('schedules the 2h appointment.reminder job at startsAt - 120min', async () => {
     const { useCase, reminderScheduler } = buildUseCase();
 
     const appointment = await useCase.execute({
       id: 'appt-4',
       barberId: 'barber-1',
-      serviceId: 'service-1',
-      timeRange,
+      serviceId: HAIRCUT_SERVICE_ID,
+      startsAt: at('10:00'),
       searchWindow,
       client: { name: 'Marcos', phone: '3511234567', email: 'marcos@example.com', age: 30 },
     });
@@ -105,8 +141,23 @@ describe('CreatePhoneAppointmentUseCase', () => {
     expect(reminderScheduler.scheduleCalls).toEqual([
       {
         appointmentId: appointment.id,
-        startAfter: dateBuilder.addMinutes(timeRange.start, -REMINDER_LEAD_MINUTES),
+        startAfter: dateBuilder.addMinutes(at('10:00'), -REMINDER_LEAD_MINUTES),
       },
     ]);
+  });
+
+  it('rejects a serviceId that does not exist, never guessing a duration', async () => {
+    const { useCase } = buildUseCase();
+
+    await expect(
+      useCase.execute({
+        id: 'appt-5',
+        barberId: 'barber-1',
+        serviceId: 'no-such-service',
+        startsAt: at('10:00'),
+        searchWindow,
+        client: { name: 'Marcos', phone: '3511234567', email: null, age: null },
+      }),
+    ).rejects.toBeInstanceOf(PhoneAppointmentServiceNotFoundError);
   });
 });
