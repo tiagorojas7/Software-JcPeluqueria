@@ -17,6 +17,7 @@ import {
   DrizzleAppointmentRepository,
   DrizzleClientRepository,
   DrizzleHoldRepository,
+  DrizzleServiceRepository,
   DrizzleWalkInRepository,
   lazyJobSender,
   MercadoPagoPaymentAdapter,
@@ -34,6 +35,7 @@ import type {
   HoldExpireScheduler,
   HoldRepository,
   PaymentPort,
+  ServiceRepository,
   WalkInRepository,
 } from '@jc-barberia/domain';
 
@@ -49,6 +51,7 @@ import {
   HOLD_EXPIRE_SCHEDULER,
   HOLD_REPOSITORY,
   PAYMENT_PORT,
+  SERVICE_REPOSITORY,
   WALK_IN_REPOSITORY,
 } from './tokens';
 
@@ -62,6 +65,7 @@ import {
     { provide: CLOCK, useFactory: () => new ShopClock() },
     { provide: CLIENT_REPOSITORY, useFactory: () => new DrizzleClientRepository(db) },
     { provide: HOLD_REPOSITORY, useFactory: () => new DrizzleHoldRepository(db) },
+    { provide: SERVICE_REPOSITORY, useFactory: () => new DrizzleServiceRepository(db) },
     {
       // Task 6.3's production half. `CreateHold` enqueues `hold.expire` on
       // every hold it creates, so the API is a pg-boss PRODUCER (the worker is
@@ -98,13 +102,15 @@ import {
     },
     {
       provide: CreatePhoneAppointmentUseCase,
-      inject: [CLIENT_REPOSITORY, HOLD_REPOSITORY, CreateHold, ScheduleAppointmentReminder],
+      inject: [CLIENT_REPOSITORY, HOLD_REPOSITORY, CreateHold, ScheduleAppointmentReminder, SERVICE_REPOSITORY, CLOCK],
       useFactory: (
         clients: ClientRepository,
         holds: HoldRepository,
         createHold: CreateHold,
         scheduleReminder: ScheduleAppointmentReminder,
-      ) => new CreatePhoneAppointmentUseCase(clients, holds, createHold, scheduleReminder),
+        services: ServiceRepository,
+        clock: Clock,
+      ) => new CreatePhoneAppointmentUseCase(clients, holds, createHold, scheduleReminder, services, clock),
     },
     // Slice B (cablear-el-mvp, B.1-B.5): bound to their own tokens here
     // rather than reused across modules — same one-token-per-module pattern

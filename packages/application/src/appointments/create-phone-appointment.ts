@@ -1,7 +1,9 @@
 import {
   type Appointment,
+  type Clock,
   type ClientRepository,
   type HoldRepository,
+  type ServiceRepository,
   type TimeWindow,
 } from '@jc-barberia/domain';
 
@@ -15,11 +17,30 @@ export class PhoneAppointmentConfirmationFailedError extends Error {
   }
 }
 
+/**
+ * The end time is not information the secretary has on the phone — it is a
+ * property of the service she picked (admin-operations spec). This use case
+ * derives it itself from `Service.durationMinutes` rather than trusting a
+ * caller-supplied one, so a `serviceId` that does not exist fails loudly
+ * instead of silently producing a turno with no duration to derive.
+ */
+export class PhoneAppointmentServiceNotFoundError extends Error {
+  constructor(readonly serviceId: string) {
+    super(`No service found with id "${serviceId}"`);
+    this.name = 'PhoneAppointmentServiceNotFoundError';
+  }
+}
+
 export interface CreatePhoneAppointmentInput {
   readonly id: string;
   readonly barberId: string;
   readonly serviceId: string;
-  readonly timeRange: TimeWindow;
+  /** Shop-local instant the turno starts. The end is never supplied by the
+   *  caller — it is always derived from the selected service's
+   *  `durationMinutes` (see `PhoneAppointmentServiceNotFoundError`'s doc
+   *  comment), so no caller can create a turno whose duration disagrees
+   *  with its service. */
+  readonly startsAt: Date;
   /** Where alternatives are searched if the slot turns out to be taken. */
   readonly searchWindow: TimeWindow;
   /**
@@ -55,9 +76,16 @@ export class CreatePhoneAppointmentUseCase {
     private readonly holds: HoldRepository,
     private readonly createHold: CreateHold,
     private readonly scheduleReminder: ScheduleAppointmentReminder,
+    private readonly services: ServiceRepository,
+    private readonly clock: Clock,
   ) {}
 
   async execute(input: CreatePhoneAppointmentInput): Promise<Appointment> {
+    const service = await this.services.findById(input.serviceId);
+    if (!service) {
+      throw new PhoneAppointmentServiceNotFoundError(input.serviceId);
+    }
+
     const client =
       (await this.clients.findByPhone(input.client.phone)) ??
       (await this.clients.create({
@@ -67,13 +95,18 @@ export class CreatePhoneAppointmentUseCase {
         age: input.client.age ?? null,
       }));
 
+    const timeRange: TimeWindow = {
+      start: input.startsAt,
+      end: this.clock.addMinutes(input.startsAt, service.durationMinutes),
+    };
+
     const hold = await this.createHold.execute({
       id: input.id,
       barberId: input.barberId,
       serviceId: input.serviceId,
       clientId: client.id,
       channel: 'telefonico',
-      timeRange: input.timeRange,
+      timeRange,
       searchWindow: input.searchWindow,
     });
 

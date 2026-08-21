@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Inject, Post } from '@nestjs/common';
-import { CreatePhoneAppointmentUseCase } from '@jc-barberia/application';
+import { CreatePhoneAppointmentUseCase, PhoneAppointmentServiceNotFoundError } from '@jc-barberia/application';
 import { CreatePhoneAppointmentRequestSchema, type PhoneAppointmentResponse } from '@jc-barberia/contracts';
 import type { Appointment, Clock } from '@jc-barberia/domain';
 
@@ -38,23 +38,29 @@ export class PhoneAppointmentController {
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.flatten());
     }
-    const { barberId, serviceId, calendarDate, startTime, endTime, client } = parsed.data;
+    const { barberId, serviceId, calendarDate, startTime, client } = parsed.data;
 
-    const appointment = await this.createPhoneAppointment.execute({
-      id: crypto.randomUUID(),
-      barberId,
-      serviceId,
-      timeRange: {
-        start: this.clock.localTimeToUtc(calendarDate, startTime),
-        end: this.clock.localTimeToUtc(calendarDate, endTime),
-      },
-      // Bounds alternatives on conflict; the shop's actual per-barber working
-      // window (Phase 1's AvailabilityService) is a refinement left for when
-      // this endpoint grows a real availability lookup.
-      searchWindow: this.clock.businessDayBounds(calendarDate),
-      client,
-    });
+    try {
+      const appointment = await this.createPhoneAppointment.execute({
+        id: crypto.randomUUID(),
+        barberId,
+        serviceId,
+        // No endTime here on purpose: the use case derives it itself from the
+        // selected service's durationMinutes, never from the request body.
+        startsAt: this.clock.localTimeToUtc(calendarDate, startTime),
+        // Bounds alternatives on conflict; the shop's actual per-barber working
+        // window (Phase 1's AvailabilityService) is a refinement left for when
+        // this endpoint grows a real availability lookup.
+        searchWindow: this.clock.businessDayBounds(calendarDate),
+        client,
+      });
 
-    return toResponse(appointment);
+      return toResponse(appointment);
+    } catch (error) {
+      if (error instanceof PhoneAppointmentServiceNotFoundError) {
+        throw new BadRequestException(`No existe el servicio "${error.serviceId}"`);
+      }
+      throw error;
+    }
   }
 }
