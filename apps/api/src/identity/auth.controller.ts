@@ -91,13 +91,14 @@ export class AuthController {
   }
 
   /**
-   * cablear-el-mvp Slice C (C.1): client-booking spec, "Cuenta sin
+   * cuenta-cliente-persistente: client-booking spec, "Cuenta sin
    * contraseña creada al final del flujo". `@Public()` — a client has no
    * session yet at this point, that is the entire reason this endpoint
    * exists. Always answers `{outcome:'requested'}`, whether or not the
-   * phone is on file and whether or not that client ever registered for web
-   * access (`RequestClientAccessUseCase`'s own doc comment): this endpoint
-   * MUST NOT become an oracle for which phone numbers are registered.
+   * email is on file and whether or not it belongs to a client who
+   * completed web registration (`RequestClientAccessUseCase`'s own doc
+   * comment): this endpoint MUST NOT become an oracle for which emails are
+   * registered customers.
    */
   @Public()
   @Post('request-client-access')
@@ -108,7 +109,7 @@ export class AuthController {
       throw new BadRequestException(parsed.error.flatten());
     }
 
-    return this.requestClientAccessUseCase.execute({ phone: parsed.data.phone });
+    return this.requestClientAccessUseCase.execute({ email: parsed.data.email });
   }
 
   /**

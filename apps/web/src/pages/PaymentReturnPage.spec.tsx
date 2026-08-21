@@ -25,7 +25,7 @@ describe('PaymentReturnPage (cablear-el-mvp item 3)', () => {
 
     expect(screen.getByText(/recibimos tu pago/i)).toBeInTheDocument();
     expect(screen.queryByText(/turno.*confirmado/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/email/i)).toBeInTheDocument();
+    expect(screen.getByText(/email con la confirmaci/i)).toBeInTheDocument();
   });
 
   it('con estado=pending, dice que el pago esta pendiente', () => {
@@ -46,9 +46,13 @@ describe('PaymentReturnPage (cablear-el-mvp item 3)', () => {
     expect(screen.getByText(/no pudimos identificar/i)).toBeInTheDocument();
   });
 
-  it('ofrece un enlace para entrar a Mi cuenta y ver el turno real', () => {
+  // cuenta-cliente-persistente: the client may never see this exact page
+  // again once he leaves — this is where he needs to learn HOW he gets back
+  // in later (a code, not a password), not just that a link exists.
+  it('invita a pedir un codigo de acceso, con un enlace real a /acceder', () => {
     renderReturn('?estado=success');
 
-    expect(screen.getByRole('link', { name: /mi cuenta|entrar/i })).toHaveAttribute('href', '/acceder');
+    expect(screen.getByText(/c.digo de acceso/i)).toBeInTheDocument();
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/acceder');
   });
 });

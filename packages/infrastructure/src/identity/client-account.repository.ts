@@ -26,6 +26,21 @@ export class DrizzleClientAccountRepository implements ClientAccountRepository {
     return { id: row.id, clientId: row.clientId, email: row.email };
   }
 
+  /** cuenta-cliente-persistente: `users.email` is UNIQUE, so at most one row
+   *  ever matches. `client_id IS NOT NULL` is what excludes a staff email —
+   *  the same predicate `findByClientId`'s own return guard applies. */
+  async findByEmail(email: string): Promise<ClientAccount | null> {
+    const rows = await this.db
+      .select({ id: users.id, clientId: users.clientId, email: users.email })
+      .from(users)
+      .where(eq(users.email, email));
+    const row = rows[0];
+    if (!row || !row.clientId) {
+      return null;
+    }
+    return { id: row.id, clientId: row.clientId, email: row.email };
+  }
+
   async create(input: CreateClientAccountInput): Promise<ClientAccount> {
     const rows = await this.db
       .insert(users)

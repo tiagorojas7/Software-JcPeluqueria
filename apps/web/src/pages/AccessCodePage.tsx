@@ -6,31 +6,36 @@ import { apiPost, describeError } from '../shared/api-client';
 import { useRouter } from '../shared/router';
 
 /**
- * cablear-el-mvp Slice C (C.7): wires the two endpoints C.1/C.2 already
- * expose — `POST /auth/request-client-access` (phone in, always
+ * cuenta-cliente-persistente: wires the two endpoints C.1/C.2 already
+ * expose — `POST /auth/request-client-access` (EMAIL in, always
  * `{outcome:'requested'}` out BY DESIGN, never a `challengeId`: returning one
  * only when a challenge was actually issued would itself be the disclosure
  * `RequestClientAccessUseCase`'s own doc comment refuses to make, since an
- * unregistered phone issues no challenge at all) and `POST /auth/client-login`
+ * unregistered email issues no challenge at all) and `POST /auth/client-login`
  * (`challengeId` + `secret` in, per `ClientLoginRequestSchema`).
+ *
+ * Keyed by email, not phone: a web booking always captures the client's
+ * email and creates the passwordless account with it at that exact moment
+ * (`ConfirmReservationRequestSchema`), so it is the address the client just
+ * typed and will remember — never phone, which was this screen's original
+ * (now superseded) field.
  *
  * Because the first call can never hand the browser a `challengeId`, this
  * page asks for it directly as its own field rather than pretending the
- * browser already knows it. In today's MVP nothing delivers that id to a real
- * phone either (the access-code email's magic link only carries `token`, and
- * there is no SMS channel yet), so — exactly like the plaintext code — a
- * client reads it from wherever the notification landed
- * (`notification_outbox` / the worker's console). That gap belongs to the
- * notification templates (`packages/infrastructure`), outside this slice.
+ * browser already knows it (the access-code email's magic link only carries
+ * `token`, never the id), so — exactly like the plaintext code — a client
+ * reads it from wherever the notification landed (`notification_outbox` /
+ * the worker's console). That gap belongs to the notification templates
+ * (`packages/infrastructure`), outside this slice.
  *
  * The one-shape response from step one is rendered as the SAME notice
  * regardless of what happened server-side, keeping the non-disclosure intact
- * on this screen: nothing here ever branches on whether the phone was on
+ * on this screen: nothing here ever branches on whether the email was on
  * file.
  */
 export function AccessCodePage() {
   const { navigate } = useRouter();
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [requested, setRequested] = useState(false);
   const [challengeId, setChallengeId] = useState('');
   const [status, setStatus] = useState<AccessCodeFormStatus>({ outcome: 'idle' });
@@ -41,10 +46,10 @@ export function AccessCodePage() {
     event.preventDefault();
     setError(null);
     try {
-      await apiPost<RequestClientAccessResponseBody>('/auth/request-client-access', { phone });
+      await apiPost<RequestClientAccessResponseBody>('/auth/request-client-access', { email });
       setRequested(true);
       setNotice(
-        'Si el teléfono está registrado, te enviamos un código de acceso y el ID de la solicitud. Completá los dos campos de abajo para ingresar.',
+        'Si el email está registrado, te enviamos un código de acceso y el ID de la solicitud. Completá los dos campos de abajo para ingresar.',
       );
     } catch (err) {
       setError(describeError(err));
@@ -91,8 +96,8 @@ export function AccessCodePage() {
         {notice && <p role="status">{notice}</p>}
         {!requested ? (
           <form onSubmit={handleRequestCode}>
-            <label htmlFor="access-phone">Teléfono</label>
-            <input id="access-phone" type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <label htmlFor="access-email">Email</label>
+            <input id="access-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
             <button type="submit">Pedir código</button>
           </form>
         ) : (

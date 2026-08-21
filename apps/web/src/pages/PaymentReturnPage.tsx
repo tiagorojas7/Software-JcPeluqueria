@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Link } from '../shared/router';
+import { AccessCodeNotice } from '../booking/AccessCodeNotice';
 
 type PaymentEstado = 'success' | 'pending' | 'failure' | 'unknown';
 
@@ -62,9 +62,7 @@ export function PaymentReturnPage({ search = window.location.search }: PaymentRe
       <div className="card">
         <h2>{title}</h2>
         <p role="status">{body}</p>
-        <p>
-          <Link to="/acceder">Entrar a Mi cuenta</Link>
-        </p>
+        <AccessCodeNotice />
       </div>
     </section>
   );

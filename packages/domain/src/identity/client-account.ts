@@ -28,5 +28,15 @@ export interface ClientAccountRepository {
    *  `ClientRepository.findByPhone`). */
   findByClientId(clientId: string): Promise<ClientAccount | null>;
 
+  /**
+   * cuenta-cliente-persistente: the lookup `RequestClientAccessUseCase` uses
+   * — a web booking always captures an email and always creates the account
+   * at that moment, so `email` is a reliable, single-hop key straight to the
+   * account, the same idiom `UserCredentialsRepository.findByEmail` already
+   * uses for `ResetPasswordUseCase.request`. `email` is `users.email`, which
+   * carries a UNIQUE constraint, so at most one account can ever match.
+   */
+  findByEmail(email: string): Promise<ClientAccount | null>;
+
   create(input: CreateClientAccountInput): Promise<ClientAccount>;
 }

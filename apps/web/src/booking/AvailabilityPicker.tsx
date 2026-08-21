@@ -1,6 +1,6 @@
 import type { AvailabilitySlot } from '@jc-barberia/contracts';
 
-import { utcIsoToShopLocalTime } from '../shared/shop-time';
+import { isoSlotDurationMinutes, utcIsoToShopLocalTime } from '../shared/shop-time';
 
 export interface AvailabilityPickerProps {
   readonly slots: readonly AvailabilitySlot[];
@@ -22,21 +22,38 @@ function timeLabel(iso: string): string {
  * already computed (`GetPublicAvailabilityUseCase`) and reports a selection
  * back — it never fetches, never asks for a name/phone/email/password, and
  * never decides which schedules are free itself.
+ *
+ * Each slot shows only its START time ("09:00"), never a range — the shop
+ * owner's own words: "poné cuándo inicia, no cuándo inicia y termina."
+ * Every slot for one search shares the same duration (the service just
+ * picked), so it is stated ONCE above the list instead, derived from the
+ * first slot's own `startsAt`/`endsAt` — `DEMO_SERVICES` carries no
+ * duration field of its own today, so this is the only source the frontend
+ * actually has.
  */
 export function AvailabilityPicker({ slots, onSelectSlot }: AvailabilityPickerProps) {
-  if (slots.length === 0) {
+  // Destructured rather than indexed: `noUncheckedIndexedAccess` does not
+  // narrow `slots[0]` from a `.length` check, and the empty case has to be
+  // handled here anyway.
+  const [firstSlot] = slots;
+  if (!firstSlot) {
     return <p>No hay horarios disponibles para esta selección.</p>;
   }
 
+  const durationMinutes = isoSlotDurationMinutes(firstSlot.startsAt, firstSlot.endsAt);
+
   return (
-    <ul>
-      {slots.map((slot) => (
-        <li key={slot.startsAt}>
-          <button type="button" onClick={() => onSelectSlot(slot)}>
-            {timeLabel(slot.startsAt)} - {timeLabel(slot.endsAt)}
-          </button>
-        </li>
-      ))}
-    </ul>
+    <>
+      <p className="availability-picker__duration">Duración del turno: {durationMinutes} min</p>
+      <ul>
+        {slots.map((slot) => (
+          <li key={slot.startsAt}>
+            <button type="button" onClick={() => onSelectSlot(slot)}>
+              {timeLabel(slot.startsAt)}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

@@ -15,7 +15,6 @@ import {
   DrizzleAppointmentRepository,
   DrizzleAuthChallengeRepository,
   DrizzleClientAccountRepository,
-  DrizzleClientRepository,
   DrizzleNotificationOutboxRepository,
   DrizzleSessionRepository,
   DrizzleUserCredentialsRepository,
@@ -27,7 +26,6 @@ import type {
   AuthChallengeRepository,
   Clock,
   ClientAccountRepository,
-  ClientRepository,
   NotificationOutboxRepository,
   PasswordHasher,
   PaymentPort,
@@ -42,7 +40,6 @@ import {
   APPOINTMENT_REPOSITORY,
   AUTH_CHALLENGE_REPOSITORY,
   CLIENT_ACCOUNT_REPOSITORY,
-  CLIENT_REPOSITORY,
   CLOCK,
   NOTIFICATION_OUTBOX_REPOSITORY,
   PASSWORD_HASHER,
@@ -76,7 +73,6 @@ import {
     { provide: PASSWORD_HASHER, useFactory: () => new Argon2PasswordHasher() },
     { provide: USER_CREDENTIALS_REPOSITORY, useFactory: () => new DrizzleUserCredentialsRepository(db) },
     { provide: SESSION_REPOSITORY, useFactory: () => new DrizzleSessionRepository(db) },
-    { provide: CLIENT_REPOSITORY, useFactory: () => new DrizzleClientRepository(db) },
     { provide: CLIENT_ACCOUNT_REPOSITORY, useFactory: () => new DrizzleClientAccountRepository(db) },
     { provide: AUTH_CHALLENGE_REPOSITORY, useFactory: () => new DrizzleAuthChallengeRepository(db) },
     {
@@ -120,13 +116,12 @@ import {
     },
     {
       provide: RequestClientAccessUseCase,
-      inject: [CLIENT_REPOSITORY, CLIENT_ACCOUNT_REPOSITORY, ChallengeService, NOTIFICATION_OUTBOX_REPOSITORY],
+      inject: [CLIENT_ACCOUNT_REPOSITORY, ChallengeService, NOTIFICATION_OUTBOX_REPOSITORY],
       useFactory: (
-        clients: ClientRepository,
         accounts: ClientAccountRepository,
         challenges: ChallengeService,
         outbox: NotificationOutboxRepository,
-      ) => new RequestClientAccessUseCase(clients, accounts, challenges, outbox),
+      ) => new RequestClientAccessUseCase(accounts, challenges, outbox),
     },
     {
       provide: ClientLoginUseCase,

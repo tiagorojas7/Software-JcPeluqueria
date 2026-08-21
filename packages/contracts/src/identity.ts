@@ -32,13 +32,16 @@ export type StaffLoginResponseBody =
   | { readonly outcome: 'rejected' };
 
 /**
- * cablear-el-mvp Slice C (C.1): the phone-only input `RequestClientAccessUseCase`
- * needs. Deliberately no email field — the use case looks the client up by
- * phone and reaches for the email already on file (client-booking spec,
- * "Cuenta sin contraseña creada al final del flujo").
+ * cuenta-cliente-persistente: the email-only input `RequestClientAccessUseCase`
+ * needs. A web booking always captures the client's email
+ * (`ConfirmReservationRequestSchema`) and creates the passwordless account at
+ * that exact moment, so the email the client just typed is the reliable key
+ * — never phone, which was the original (now superseded) key for this
+ * endpoint (see the use case's own doc comment for why phone does not cover
+ * this flow).
  */
 export const RequestClientAccessRequestSchema = z.object({
-  phone: z.string().min(1, 'El teléfono es obligatorio'),
+  email: z.string().email('Email inválido'),
 });
 
 export type RequestClientAccessRequest = z.infer<typeof RequestClientAccessRequestSchema>;
@@ -46,8 +49,8 @@ export type RequestClientAccessRequest = z.infer<typeof RequestClientAccessReque
 /**
  * A single, outcome-invariant shape (client-booking spec, "Código de acceso
  * vencido" + `RequestClientAccessUseCase`'s own doc comment): whether the
- * phone is on file, and whether that client ever completed web registration,
- * must never be observable from this response.
+ * email is on file, and whether it belongs to a client who completed web
+ * registration, must never be observable from this response.
  */
 export interface RequestClientAccessResponseBody {
   readonly outcome: 'requested';

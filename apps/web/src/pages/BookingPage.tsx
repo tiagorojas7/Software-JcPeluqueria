@@ -7,6 +7,7 @@ import type {
   HoldResponse,
 } from '@jc-barberia/contracts';
 
+import { AccessCodeNotice } from '../booking/AccessCodeNotice';
 import { BookingFlowContainer } from '../booking/BookingFlowContainer';
 import { CheckoutStep } from '../booking/CheckoutStep';
 import { HoldCountdown } from '../booking/HoldCountdown';
@@ -173,6 +174,11 @@ export function BookingPage() {
         <div className="card booking-page__results">
           <HoldCountdown expiresAt={hold.expiresAt} nowMs={tick} />
           <CheckoutStep checkout={checkout} onStartCheckout={handleStartCheckout} />
+          {/* cuenta-cliente-persistente: shown as soon as the account exists,
+              because clicking "Pagar la seña ahora" (CheckoutStep) navigates
+              the browser AWAY to MercadoPago — this may be the client's only
+              chance to see this page again before that happens. */}
+          <AccessCodeNotice />
         </div>
       )}
 

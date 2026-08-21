@@ -32,3 +32,19 @@ export function utcIsoToShopLocalTime(iso: string): string {
   const mm = String(localMinutes % 60).padStart(2, '0');
   return `${hh}:${mm}`;
 }
+
+/**
+ * Minutes between two ISO UTC instants on the SAME `AvailabilitySlot`
+ * (`startsAt`/`endsAt`) — the frontend's only source of a service's
+ * duration today (`shared/demo-data.ts`'s `DEMO_SERVICES` carries no
+ * duration field). Same pure string/number arithmetic as
+ * `utcIsoToShopLocalTime` above, for the same ESLint reason: no `Date`
+ * construction anywhere in this file. Wraps around a UTC-midnight crossing
+ * the same defensive way that function already does, even though no
+ * appointment slot is long enough to make that matter in practice.
+ */
+export function isoSlotDurationMinutes(startsAt: string, endsAt: string): number {
+  const toMinutes = (iso: string) => Number(iso.slice(11, 13)) * 60 + Number(iso.slice(14, 16));
+  const diffMinutes = toMinutes(endsAt) - toMinutes(startsAt);
+  return ((diffMinutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+}

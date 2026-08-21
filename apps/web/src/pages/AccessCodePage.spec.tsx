@@ -29,7 +29,7 @@ function renderPage() {
 }
 
 async function requestCode() {
-  fireEvent.change(screen.getByLabelText(/tel.fono/i), { target: { value: '+5493511111111' } });
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'sofia@example.com' } });
   fireEvent.click(screen.getByRole('button', { name: /pedir c.digo/i }));
   await screen.findByLabelText(/id de la solicitud/i);
 }
@@ -40,13 +40,13 @@ describe('AccessCodePage (C.7)', () => {
     window.history.pushState({}, '', '/acceder');
   });
 
-  it('pide el telefono y solicita el acceso contra el endpoint real', async () => {
+  it('pide el email y solicita el acceso contra el endpoint real', async () => {
     vi.mocked(apiPost).mockResolvedValueOnce({ outcome: 'requested' } satisfies RequestClientAccessResponseBody);
     renderPage();
 
     await requestCode();
 
-    expect(apiPost).toHaveBeenCalledWith('/auth/request-client-access', { phone: '+5493511111111' });
+    expect(apiPost).toHaveBeenCalledWith('/auth/request-client-access', { email: 'sofia@example.com' });
     expect(screen.getByLabelText(/id de la solicitud/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/codigo/i)).toBeInTheDocument();
   });
@@ -81,7 +81,7 @@ describe('AccessCodePage (C.7)', () => {
     expect(screen.getByRole('button', { name: /ingresar/i })).toBeEnabled();
   });
 
-  it('con un codigo vencido exige pedir uno nuevo y vuelve al paso de telefono', async () => {
+  it('con un codigo vencido exige pedir uno nuevo y vuelve al paso de email', async () => {
     vi.mocked(apiPost)
       .mockResolvedValueOnce({ outcome: 'requested' } satisfies RequestClientAccessResponseBody)
       .mockResolvedValueOnce({
@@ -99,20 +99,20 @@ describe('AccessCodePage (C.7)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /pedir un codigo nuevo/i }));
 
-    expect(screen.getByLabelText(/tel.fono/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/id de la solicitud/i)).toBeNull();
   });
 
-  it('nunca revela si el telefono esta registrado: siempre el mismo aviso', async () => {
+  it('nunca revela si el email esta registrado: siempre el mismo aviso', async () => {
     vi.mocked(apiPost).mockResolvedValueOnce({ outcome: 'requested' } satisfies RequestClientAccessResponseBody);
     renderPage();
 
-    fireEvent.change(screen.getByLabelText(/tel.fono/i), { target: { value: '+5493519999999' } });
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'nadie@example.com' } });
     fireEvent.click(screen.getByRole('button', { name: /pedir c.digo/i }));
 
     await screen.findByLabelText(/id de la solicitud/i);
     // The only thing this screen can ever show after requesting is the one
-    // outcome-invariant message — never a branch on whether the phone was found.
+    // outcome-invariant message — never a branch on whether the email was found.
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

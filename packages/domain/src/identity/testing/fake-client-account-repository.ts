@@ -10,6 +10,15 @@ export class FakeClientAccountRepository implements ClientAccountRepository {
     return this.byClientId.get(clientId) ?? null;
   }
 
+  async findByEmail(email: string): Promise<ClientAccount | null> {
+    for (const account of this.byClientId.values()) {
+      if (account.email === email) {
+        return account;
+      }
+    }
+    return null;
+  }
+
   async create(input: CreateClientAccountInput): Promise<ClientAccount> {
     const account: ClientAccount = { id: `client-account-${this.nextId++}`, ...input };
     this.byClientId.set(account.clientId, account);

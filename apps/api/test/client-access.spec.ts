@@ -19,7 +19,6 @@ import { HOLD_EXPIRE_SCHEDULER } from '../src/booking/tokens';
 import {
   AUTH_CHALLENGE_REPOSITORY,
   CLIENT_ACCOUNT_REPOSITORY,
-  CLIENT_REPOSITORY,
   CLOCK,
   NOTIFICATION_OUTBOX_REPOSITORY,
   SESSION_REPOSITORY,
@@ -100,8 +99,6 @@ describe('POST /auth/request-client-access + POST /auth/client-login (C.1/C.2)',
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(CLOCK)
       .useValue(clock)
-      .overrideProvider(CLIENT_REPOSITORY)
-      .useValue(clients)
       .overrideProvider(CLIENT_ACCOUNT_REPOSITORY)
       .useValue(accounts)
       .overrideProvider(AUTH_CHALLENGE_REPOSITORY)
@@ -137,10 +134,10 @@ describe('POST /auth/request-client-access + POST /auth/client-login (C.1/C.2)',
     expect(response.status).toBe(400);
   });
 
-  it('answers {outcome:"requested"} for an UNKNOWN phone, identically to a known one — no oracle', async () => {
+  it('answers {outcome:"requested"} for an UNKNOWN email, identically to a known one — no oracle', async () => {
     const response = await request(app.getHttpServer())
       .post('/auth/request-client-access')
-      .send({ phone: '+5493511111111' });
+      .send({ email: 'nadie@example.com' });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ outcome: 'requested' });
@@ -153,7 +150,7 @@ describe('POST /auth/request-client-access + POST /auth/client-login (C.1/C.2)',
 
     const response = await request(app.getHttpServer())
       .post('/auth/request-client-access')
-      .send({ phone: '+5493512222222' });
+      .send({ email: 'ana@example.com' });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ outcome: 'requested' });
@@ -175,7 +172,7 @@ describe('POST /auth/request-client-access + POST /auth/client-login (C.1/C.2)',
     const account = await accounts.create({ clientId: client.id, email: 'beto@example.com' });
     sessionsAndClientContext.seedClientAccount(account.id, client.id);
 
-    await request(app.getHttpServer()).post('/auth/request-client-access').send({ phone: '+5493513333333' });
+    await request(app.getHttpServer()).post('/auth/request-client-access').send({ email: 'beto@example.com' });
     const issued = outbox.enqueued.at(-1);
     const challengeId = issued?.payload.challengeId;
     const code = issued?.payload.code;
@@ -204,7 +201,7 @@ describe('POST /auth/request-client-access + POST /auth/client-login (C.1/C.2)',
     const client = await clients.create({ name: 'Cami', phone: '+5493514444444', email: 'cami@example.com', age: null });
     await accounts.create({ clientId: client.id, email: 'cami@example.com' });
 
-    await request(app.getHttpServer()).post('/auth/request-client-access').send({ phone: '+5493514444444' });
+    await request(app.getHttpServer()).post('/auth/request-client-access').send({ email: 'cami@example.com' });
     const challengeId = outbox.enqueued.at(-1)?.payload.challengeId;
 
     const response = await request(app.getHttpServer())
@@ -219,7 +216,7 @@ describe('POST /auth/request-client-access + POST /auth/client-login (C.1/C.2)',
     const client = await clients.create({ name: 'Dani', phone: '+5493515555555', email: 'dani@example.com', age: null });
     await accounts.create({ clientId: client.id, email: 'dani@example.com' });
 
-    await request(app.getHttpServer()).post('/auth/request-client-access').send({ phone: '+5493515555555' });
+    await request(app.getHttpServer()).post('/auth/request-client-access').send({ email: 'dani@example.com' });
     const issued = outbox.enqueued.at(-1);
     const challengeId = issued?.payload.challengeId;
     const code = issued?.payload.code;

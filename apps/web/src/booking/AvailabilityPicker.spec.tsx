@@ -18,16 +18,28 @@ describe('AvailabilityPicker', () => {
   it('lists every free schedule with no registration prompt anywhere', () => {
     render(<AvailabilityPicker slots={slots} onSelectSlot={() => {}} />);
 
-    expect(screen.getAllByRole('button', { name: /^\d{2}:\d{2}/ })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /^\d{2}:\d{2}$/ })).toHaveLength(2);
     expect(screen.queryByText(/registr/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/contraseñ/i)).not.toBeInTheDocument();
+  });
+
+  // The owner's own words: "poné cuándo inicia, no cuándo inicia y
+  // termina." Each button shows ONLY the start time — never a range —
+  // and the duration every slot shares is stated once, above the list.
+  it('shows only the start time on each slot, and the shared duration once above the list', () => {
+    render(<AvailabilityPicker slots={slots} onSelectSlot={() => {}} />);
+
+    expect(screen.getByRole('button', { name: '09:00' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '09:30' })).toBeInTheDocument();
+    expect(screen.queryByText(/09:00 - 09:30/)).not.toBeInTheDocument();
+    expect(screen.getByText(/duraci.n del turno: 30 min/i)).toBeInTheDocument();
   });
 
   it('reports the exact slot chosen, unmodified, to the caller', () => {
     const onSelectSlot = vi.fn();
     render(<AvailabilityPicker slots={slots} onSelectSlot={onSelectSlot} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '09:30 - 10:00' }));
+    fireEvent.click(screen.getByRole('button', { name: '09:30' }));
 
     expect(onSelectSlot).toHaveBeenCalledWith(slots[1]);
   });

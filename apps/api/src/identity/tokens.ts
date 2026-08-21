@@ -11,14 +11,11 @@ export const SESSION_REPOSITORY = Symbol('SESSION_REPOSITORY');
 
 export const CLOCK = Symbol('CLOCK');
 
-/** DI token for the `ClientRepository` port (C.1: `RequestClientAccessUseCase`
- *  looks a client up by phone). Its own token instance, not reused from
- *  `BookingModule` — the one-token-per-module pattern every module in this
- *  app already follows. */
-export const CLIENT_REPOSITORY = Symbol('CLIENT_REPOSITORY');
-
 /** DI token for the `ClientAccountRepository` port (C.1: the passwordless
- *  account a challenge attaches to). */
+ *  account a challenge attaches to; cuenta-cliente-persistente:
+ *  `RequestClientAccessUseCase` now looks the account up directly by email
+ *  through this same port, so `ClientRepository`/`CLIENT_REPOSITORY` is no
+ *  longer a dependency of this module at all). */
 export const CLIENT_ACCOUNT_REPOSITORY = Symbol('CLIENT_ACCOUNT_REPOSITORY');
 
 /** DI token for the `AuthChallengeRepository` port (`ChallengeService`'s own
