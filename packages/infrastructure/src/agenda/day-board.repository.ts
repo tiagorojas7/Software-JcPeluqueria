@@ -2,7 +2,8 @@ import type { ActorContext, Clock, DayBoardQueryResult, DayBoardRepository } fro
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
-import { barbers } from '../db/schema/availability';
+import { barbers, services } from '../db/schema/availability';
+import { clients } from '../db/schema/clients';
 import { slotOccupancies } from '../db/schema/slot-occupancy';
 
 /** design.md: `held`/`liberado` are "anteriores al ciclo de vida del turno"
@@ -48,16 +49,28 @@ export class DrizzleDayBoardRepository implements DayBoardRepository {
     // `.mapWith` borrows the `holdExpiresAt` timestamptz column's decoder —
     // same technique as DrizzleHoldRepository.freeRanges — so `startsAt`/
     // `endsAt` come back as real `Date`s, not raw strings.
+    //
+    // `services` is an inner join — every `slot_occupancies` row has a
+    // `NOT NULL` `service_id` FK, so this can never drop a row. `clients` is
+    // a LEFT join: `client_id` is nullable (a turno not yet linked to a
+    // client), and this is exactly the "cuando esté cargada" case
+    // admin-operations documents — a real `NULL`, not a placeholder.
     return this.db
       .select({
         id: slotOccupancies.id,
         barberId: slotOccupancies.barberId,
         serviceId: slotOccupancies.serviceId,
+        serviceName: services.name,
         clientId: slotOccupancies.clientId,
+        clientName: clients.name,
+        clientAge: clients.age,
+        clientPhone: clients.phone,
         status: slotOccupancies.status,
         startsAt: sql`lower(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
         endsAt: sql`upper(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
       })
-      .from(slotOccupancies);
+      .from(slotOccupancies)
+      .innerJoin(services, eq(slotOccupancies.serviceId, services.id))
+      .leftJoin(clients, eq(slotOccupancies.clientId, clients.id));
   }
 }

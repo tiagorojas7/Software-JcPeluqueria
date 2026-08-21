@@ -1,5 +1,7 @@
 import type { DayBoardColumn, DayBoardSlot, SlotAction } from '@jc-barberia/contracts';
 
+import { utcIsoToShopLocalTime } from '../shared/shop-time';
+
 export interface DayBoardProps {
   readonly columns: readonly DayBoardColumn[];
   readonly slots: readonly DayBoardSlot[];
@@ -33,6 +35,10 @@ export function DayBoard({ columns, slots, onSlotAction }: DayBoardProps) {
               .filter((slot) => slot.barberId === column.barberId)
               .map((slot) => (
                 <li key={slot.id}>
+                  <span>
+                    {utcIsoToShopLocalTime(slot.startsAt)}-{utcIsoToShopLocalTime(slot.endsAt)}
+                  </span>
+                  <span>{slot.serviceName}</span>
                   <span>{slot.status}</span>
                   {slot.clientName ? (
                     <span>
@@ -40,6 +46,7 @@ export function DayBoard({ columns, slots, onSlotAction }: DayBoardProps) {
                       {slot.clientAge !== undefined ? ` (${slot.clientAge})` : ''}
                     </span>
                   ) : null}
+                  {slot.clientPhone ? <span>{slot.clientPhone}</span> : null}
                   {slot.allowedActions.map((action) => (
                     <button key={action} type="button" onClick={() => onSlotAction(slot.id, action)}>
                       {ACTION_LABELS[action]}

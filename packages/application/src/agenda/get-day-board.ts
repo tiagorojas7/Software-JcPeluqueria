@@ -33,13 +33,23 @@ export class GetDayBoardUseCase {
   }
 
   private async toContractSlot(slot: DayBoardSlotRecord, actor: ActorContext): Promise<DayBoardSlot> {
+    const canManageClients = await this.rolePermissions.hasPermission(actor.role, 'client:manage');
     return {
       id: slot.id,
       barberId: slot.barberId,
       serviceId: slot.serviceId,
+      serviceName: slot.serviceName,
       status: slot.status,
       startsAt: slot.startsAt.toISOString(),
       endsAt: slot.endsAt.toISOString(),
+      clientName: slot.clientName ?? undefined,
+      clientAge: slot.clientAge ?? undefined,
+      // access-control's rule applied to a new field: the server decides
+      // who receives clientPhone (admin-operations, "gestión de clientes" —
+      // client:manage reaches owner and secretary, never barber), so this
+      // is never included for an actor without that permission, no matter
+      // what DayBoardRepository returned.
+      clientPhone: canManageClients ? (slot.clientPhone ?? undefined) : undefined,
       allowedActions: await this.allowedActionsFor(slot, actor),
     };
   }
