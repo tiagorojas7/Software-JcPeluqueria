@@ -528,3 +528,128 @@ panel sin CSS propio (`AdminDayBoardPage`, `BarberDayBoardPage`,
   reales a endpoints protegidos por permiso, confirmando que la agenda del
   barbero llega ya filtrada a una sola columna desde el servidor (no solo
   desde el cliente).
+
+---
+
+## Slice G: Paneles usables y turno telefónico operable
+
+Detectado por el dueño mientras probaba la app en vivo (rama
+`feat/paneles-y-turno-telefonico`, sobre `feat/turnero-integracion`). Cuatro
+gaps de producto reales, no de dominio:
+
+- [x] G.1 **El day board no mostraba nada útil**. `DayBoardSlot`
+      (`packages/contracts/src/agenda.ts`) ya declaraba `clientName`/
+      `clientAge`, pero su propio comentario decía que `GetDayBoardUseCase`
+      los dejaba siempre `undefined` — escrito cuando la tabla `clients`
+      todavía no existía. Tampoco había `serviceName`: el slot traía
+      `serviceId` pero ningún nombre. `DrizzleDayBoardRepository`
+      (`packages/infrastructure/src/agenda/day-board.repository.ts`) suma un
+      `innerJoin` real a `services` (todo slot tiene uno) y un `leftJoin` a
+      `clients` (`NULL` hasta que el turno está vinculado); `GetDayBoardUseCase`
+      pasa `serviceName`/`clientName`/`clientAge` sin condición y
+      `clientPhone` **solo** cuando el actor tiene `client:manage` (dueño o
+      secretaria) vía `RolePermissionRepository` — nunca hardcodeado por rol,
+      nunca en el navegador. Un barbero ve el mismo nombre/edad de cliente
+      que la secretaria, pero nunca el teléfono. `DayBoard.tsx` (compartido
+      por `AdminDayBoardPanel` y `BarberDayBoardPanel` vía sus containers)
+      ahora muestra hora local del comercio (`utcIsoToShopLocalTime`, nunca
+      un slice del ISO crudo), servicio, estado, cliente y teléfono cuando
+      llega. TDD real: RED en `12b4527`, GREEN en `891c12f`.
+- [x] G.2 **Verificación real de los tres paneles** — ver evidencia abajo.
+- [x] G.3 **Barbero y Servicio eran texto libre con una tarjeta de UUIDs al
+      lado para copiar a mano** (`PhoneAppointmentForm.tsx`,
+      `PhoneAppointmentPage.tsx`) — un arnés de desarrollador, no algo
+      operable con un cliente esperando al teléfono. Ahora son `<select>`
+      reales sobre `DEMO_BARBERS`/`DEMO_SERVICES` (los mismos que
+      `BookingPage` ya usa — sin fetch nuevo, no hay endpoint que liste
+      barberos/servicios), con el precio incluido en el nombre del servicio
+      igual que la pantalla de reserva. `Fecha` pasa de texto libre
+      `YYYY-MM-DD` a `input type="date"`. La tarjeta de referencia
+      desaparece junto a su CSS muerto (`tokens.css`). TDD real: RED en
+      `fbbf6d2`, GREEN en `fc2b2fa`.
+- [x] G.4 **La secretaria tenía que escribir `Hora de fin` a mano.**
+      `CreatePhoneAppointmentRequestSchema` la exigía, pero esa duración es
+      una propiedad del servicio que ya eligió, no algo que ella calcule —
+      pedírsela habilita turnos cuya duración contradice su servicio.
+      `endTime` pasa a opcional en el contrato; `CreatePhoneAppointmentUseCase`
+      recibe un `ServiceRepository` y un `Clock`, busca el `Service` por
+      `serviceId` y computa `timeRange.end = clock.addMinutes(startsAt,
+      service.durationMinutes)` — nunca confía en un `endTime` del llamador.
+      Un `serviceId` inexistente lanza `PhoneAppointmentServiceNotFoundError`,
+      que el controller traduce a 400 en vez de romper con 500.
+      `PhoneAppointmentForm` ya no tiene campo de hora de fin. Deriva
+      server-side, la opción más fuerte de las dos que planteaba la tarea (la
+      alternativa — derivarla en el formulario a partir de la duración del
+      servicio — habría dejado la garantía dependiendo de que el frontend no
+      se rompa; server-side ningún llamador puede eludirla). TDD real: RED en
+      `dcc6de7`, GREEN en `43eaf6b`.
+
+**G.2 — evidencia en pantalla, contra Postgres real (puerto 5442), API en
+3001, web en 5175**:
+
+- Cliente real por **reserva web**: `/reservar` → Cristian Gómez, Corte
+  clásico, 2026-08-24 10:00 → cuenta creada al confirmar (Marcos Rivero,
+  3511112222, marcos.rivero@example.com, 29) → "Pagar la seña" devuelve
+  `Internal server error` real (sin `MERCADOPAGO_ACCESS_TOKEN` real en este
+  entorno — el mismo bloqueo que A.5/A.7/F.4 ya documentaron, no un defecto
+  de esta slice). Confirmado con SQL: la fila queda `status='held'`,
+  `payment_pending=true` — nunca se fabricó un `reservado` a mano.
+- Cliente real por **turno telefónico** (secretaria, `/panel/turno-telefonico`):
+  Laura Fernandez, 3512223344, Cristian Gómez, Corte + Barba, 2026-08-24,
+  hora de inicio 14:00, sin campo de hora de fin — "Turno creado ... estado
+  reservado."
+- **Dueño** (`dueno@jcbarberia.test`) y **secretaria**
+  (`secretaria@jcbarberia.test`) en `/panel`, agenda del 2026-08-24: la
+  columna de Cristian Gómez muestra `14:00-14:45 · Corte + Barba · reservado
+  · Laura Fernandez · 3512223344` con los botones Editar/Cancelar/Marcar
+  realizado — idéntico para ambos roles.
+- **Barbero** (`cristian@jcbarberia.test`) en la misma fecha: una sola
+  columna (la propia — ni Facundo ni Nahuel aparecen), mismo turno con
+  `14:00-14:45 · Corte + Barba · reservado · Laura Fernandez`, **sin el
+  teléfono** (`client:manage` no alcanza a `barber` en la migración 0006), y
+  un solo botón, Marcar realizado (sin `appointment:update`/`:cancel`).
+- **Gestión de clientes** (`/panel/gestion`, dueño y secretaria): la tabla
+  `Nombre/Teléfono/Email/Edad` trae tanto a Marcos Rivero (reserva web, con
+  email y edad) como a Laura Fernandez (turno telefónico, sin email) desde
+  `GET /panel/clients` real.
+
+**G.4 — prueba SQL directa** (acceptance bar de la tarea), contra
+`jc_barberia_test` real:
+
+```
+SELECT so.id, b.name barber, s.name service, s.duration_minutes,
+       c.name client, c.phone,
+       lower(so.time_range) starts_utc, upper(so.time_range) ends_utc,
+       EXTRACT(EPOCH FROM (upper(so.time_range)-lower(so.time_range)))/60 stored_minutes,
+       so.status, so.channel
+FROM slot_occupancies so
+JOIN services s ON s.id = so.service_id
+JOIN barbers b ON b.id = so.barber_id
+LEFT JOIN clients c ON c.id = so.client_id
+WHERE c.name = 'Laura Fernandez';
+
+                  id                  |     barber     |    service    | duration_minutes |     client      |   phone    |     starts_utc      |      ends_utc       |   stored_minutes    |  status   |  channel
+--------------------------------------+----------------+---------------+------------------+-----------------+------------+---------------------+---------------------+---------------------+-----------+------------
+ 46ca9cba-e68c-472e-937c-c0f87ffb5ad1 | Cristian Gómez | Corte + Barba |               45 | Laura Fernandez | 3512223344 | 2026-08-24 17:00:00 | 2026-08-24 17:45:00 | 45.0000000000000000 | reservado | telefonico
+```
+
+`stored_minutes` (45) coincide exactamente con `services.duration_minutes`
+(45, "Corte + Barba") aunque la secretaria solo tipeó `14:00` como hora de
+inicio — nunca escribió una hora de fin. `starts_utc`/`ends_utc` (17:00-17:45
+UTC) son 14:00-14:45 en hora del comercio (UTC-3), lo mismo que muestran los
+tres paneles.
+
+**Suites ejecutadas por separado (nunca en paralelo con otras — la nota del
+tracker sobre contención real bajo carga aplica también a `apps/web`, no
+solo a `apps/api`), todas verdes**:
+`packages/application` (`get-day-board.spec.ts` + `create-phone-appointment.spec.ts`,
+17/17) · `packages/infrastructure` (`day-board.repository.spec.ts` contra
+Testcontainers real, 5/5) · `apps/api` (`day-board.spec.ts` +
+`barber-day-board-access.spec.ts` + `phone-appointment.spec.ts`, 10/10) ·
+`apps/web` (specs de `agenda/` y `appointments/PhoneAppointmentForm`, 35/35).
+`pnpm typecheck`, `pnpm lint` y `pnpm depcruise` verdes en todo el workspace.
+
+**Abierto**: la confirmación real del pago web (MercadoPago aprueba →
+`reservado` con seña) sigue bloqueada por la falta de credenciales reales de
+prueba en este entorno, igual que en A.5/A.7/F.4 — no es un defecto
+introducido ni corregido por esta slice.
