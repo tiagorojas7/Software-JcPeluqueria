@@ -119,7 +119,16 @@ import {
       // behavior exactly as it was.
       provide: PAYMENT_PORT,
       useFactory: () =>
-        new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? '', undefined, process.env.PUBLIC_BASE_URL),
+        new MercadoPagoPaymentAdapter(
+          process.env.MERCADOPAGO_ACCESS_TOKEN ?? '',
+          undefined,
+          process.env.PUBLIC_BASE_URL,
+          // Con credenciales de prueba hay que cobrar en el checkout de
+          // sandbox: el productivo rechaza las tarjetas de prueba. Explicito
+          // porque la respuesta de MercadoPago trae las dos URLs siempre y no
+          // permite deducir cual corresponde.
+          process.env.MERCADOPAGO_SANDBOX === 'true',
+        ),
     },
     {
       // client-booking: "Reserva web con seña obligatoria del 50%" — reuses

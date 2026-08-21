@@ -81,6 +81,21 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     // the exact same adapter every existing test already exercises,
     // unchanged.
     private readonly publicBaseUrl?: string,
+    /**
+     * Whether to send the buyer to MercadoPago's SANDBOX checkout
+     * (`sandbox_init_point`) instead of the production one (`init_point`).
+     *
+     * MercadoPago returns BOTH URLs on every preference, whichever credential
+     * created it, so the response alone cannot tell us which one the caller
+     * needs — hence an explicit flag rather than a guess. Getting it wrong is
+     * not a subtle failure: a test card on the production checkout is rejected
+     * with "estas usando datos de prueba", and no test payment can ever be
+     * completed.
+     *
+     * `false` by default, so production behaviour is unchanged for any caller
+     * that does not opt in.
+     */
+    private readonly useSandbox: boolean = false,
   ) {}
 
   async createPreference(input: {
@@ -88,7 +103,11 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     amountCents: number;
     description: string;
   }): Promise<CreatePreferenceResult> {
-    const response = await this.request<{ id: string; init_point: string }>('/checkout/preferences', {
+    const response = await this.request<{
+      id: string;
+      init_point: string;
+      sandbox_init_point?: string;
+    }>('/checkout/preferences', {
       method: 'POST',
       body: JSON.stringify({
         items: [
@@ -115,7 +134,13 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
           : {}),
       }),
     });
-    return { preferenceId: response.id, initPoint: response.init_point };
+    // Falls back to the production URL when sandbox was asked for but
+    // MercadoPago did not return one: a broken checkout link is worse than
+    // the wrong environment, and the caller finds out immediately.
+    const initPoint =
+      this.useSandbox && response.sandbox_init_point ? response.sandbox_init_point : response.init_point;
+
+    return { preferenceId: response.id, initPoint };
   }
 
   async getPayment(paymentId: string): Promise<PaymentStatusResult> {

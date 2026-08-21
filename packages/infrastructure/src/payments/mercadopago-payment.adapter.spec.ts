@@ -71,6 +71,75 @@ describe('MercadoPagoPaymentAdapter', () => {
     expect(body.notification_url).toBe('https://duct-making-grid.ngrok-free.dev/api/webhooks/mercadopago');
   });
 
+  // Con credenciales de prueba, MercadoPago cobra en `sandbox_init_point`
+  // (sandbox.mercadopago.com), no en `init_point` (www.mercadopago.com).
+  // Mandar al comprador al productivo con una tarjeta de prueba termina en
+  // "estas usando datos de prueba" y el pago nunca se puede completar.
+  it('devuelve sandbox_init_point cuando el modo sandbox esta activado', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'pref-1',
+          init_point: 'https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=pref-1',
+          sandbox_init_point: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=pref-1',
+        }),
+        { status: 201 },
+      ),
+    );
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL, undefined, true);
+
+    const result = await adapter.createPreference({
+      externalReference: 'hold-1',
+      amountCents: 250000,
+      description: 'Corte clasico',
+    });
+
+    expect(result.initPoint).toBe('https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=pref-1');
+  });
+
+  // El default no cambia: sin el flag, produccion sigue cobrando donde siempre.
+  it('devuelve init_point cuando el modo sandbox no esta activado', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'pref-1',
+          init_point: 'https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=pref-1',
+          sandbox_init_point: 'https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=pref-1',
+        }),
+        { status: 201 },
+      ),
+    );
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL);
+
+    const result = await adapter.createPreference({
+      externalReference: 'hold-1',
+      amountCents: 250000,
+      description: 'Corte clasico',
+    });
+
+    expect(result.initPoint).toBe('https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=pref-1');
+  });
+
+  // Sandbox pedido pero MercadoPago no mando la URL: caer al productivo es
+  // preferible a devolver undefined y romper el checkout entero.
+  it('cae a init_point si se pide sandbox y la respuesta no trae sandbox_init_point', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: 'pref-1', init_point: 'https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=pref-1' }),
+        { status: 201 },
+      ),
+    );
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL, undefined, true);
+
+    const result = await adapter.createPreference({
+      externalReference: 'hold-1',
+      amountCents: 250000,
+      description: 'Corte clasico',
+    });
+
+    expect(result.initPoint).toBe('https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=pref-1');
+  });
+
   // The exact regression this task warns about: a broken localhost URL sent
   // to MercadoPago is rejected outright, so unset MUST omit these fields
   // rather than guess a default — every test above this one already proves
