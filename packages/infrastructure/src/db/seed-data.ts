@@ -5,11 +5,12 @@
  * data-SHAPING logic, not pure I/O, so it is the one piece that gets a
  * test — see apply-progress).
  *
- * Fixed, readable UUIDs on purpose: a demo operator needs to paste a real
- * `barberId`/`serviceId` into `PhoneAppointmentForm`'s bare text inputs
- * (that component's own doc comment: purely presentational, no dropdown),
- * so the ids need to be stable across re-runs, not whatever
- * `defaultRandom()` happens to generate.
+ * Fixed, readable UUIDs on purpose: `apps/web/src/shared/demo-data.ts`
+ * duplicates these same ids for the SPA's `DEMO_BARBERS`/`DEMO_SERVICES`
+ * (no HTTP endpoint lists them yet, see that file's own doc comment) — the
+ * ids need to be stable across re-runs so that fixed frontend list keeps
+ * matching real seeded rows, not whatever `defaultRandom()` happens to
+ * generate.
  */
 
 export const BARBER_CRISTIAN = 'a0000000-0000-4000-8000-000000000001';

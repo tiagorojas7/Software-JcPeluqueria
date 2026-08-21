@@ -400,42 +400,6 @@ button.btn-primary:hover {
   margin-top: var(--space-2);
 }
 
-.panel-page__reference {
-  margin-bottom: var(--space-5);
-}
-
-.panel-page__reference h3 {
-  margin-bottom: var(--space-3);
-}
-
-.panel-page__reference-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-5);
-}
-
-.panel-page__reference-grid strong {
-  display: block;
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-2);
-}
-
-.panel-page__reference-grid ul {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.panel-page__reference-grid li {
-  font-size: var(--text-sm);
-  color: var(--color-ink-soft);
-}
-
-.panel-page__reference-grid code {
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
 .access-code-page {
   padding: var(--space-7) 0 var(--space-8);
   display: flex;
