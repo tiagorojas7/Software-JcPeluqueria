@@ -3,6 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
   FakeClientContextRepository,
+  FakeClock,
   FakeRolePermissionRepository,
   type ActorContext,
   type ClientContext,
@@ -14,6 +15,18 @@ import { RequiresClientSession } from './decorators/requires-client-session.deco
 import { RequiresPermission } from './decorators/requires-permission.decorator';
 import { PermissionsGuard } from './permissions.guard';
 import { SESSION_COOKIE_NAME } from './session-cookie';
+
+// A throwaway clock only to build a fixed `sessionExpiresAt` fixture — never
+// the one any production code reads (same pattern every other spec in this
+// suite establishes for date fixtures).
+const dateBuilder = new FakeClock();
+const SESSION_EXPIRES_AT = dateBuilder.localTimeToUtc('2026-09-01', '12:00');
+
+interface FakeCookieCall {
+  readonly name: string;
+  readonly value: string;
+  readonly options: Record<string, unknown>;
+}
 
 // Test-only handlers — exercise the guard's actor-resolution and DB-backed
 // permission-check branches in isolation, without needing any real
@@ -43,15 +56,27 @@ const buildContext = (actor?: ActorContext, handler = DummyController.prototype.
 /** Same shape `buildContext` builds, but with a real, mutable `request`
  *  object (so a test can assert `request.client` was attached by the guard)
  *  and a raw `Cookie` header — the input `@RequiresClientSession()`'s branch
- *  reads instead of a pre-attached `actor`. */
-const buildClientSessionContext = (cookieHeader?: string): { context: ExecutionContext; request: { client?: ClientContext } } => {
+ *  reads instead of a pre-attached `actor`. Also carries a fake `response`
+ *  recording every `res.cookie(...)` call — cuenta-cliente-persistente: the
+ *  guard re-issues the session cookie on every successful check, so a test
+ *  needs somewhere to observe that. */
+const buildClientSessionContext = (
+  cookieHeader?: string,
+): { context: ExecutionContext; request: { client?: ClientContext }; cookieCalls: FakeCookieCall[] } => {
   const request: { headers: { cookie?: string }; client?: ClientContext } = { headers: { cookie: cookieHeader } };
+  const cookieCalls: FakeCookieCall[] = [];
+  const response = {
+    cookie: (name: string, value: string, options: Record<string, unknown>) => {
+      cookieCalls.push({ name, value, options });
+    },
+    clearCookie: () => {},
+  };
   const context = {
     getHandler: () => DummyController.prototype.clientHandler,
     getClass: () => DummyController,
-    switchToHttp: () => ({ getRequest: () => request }),
+    switchToHttp: () => ({ getRequest: () => request, getResponse: () => response }),
   } as unknown as ExecutionContext;
-  return { context, request };
+  return { context, request, cookieCalls };
 };
 
 describe('PermissionsGuard — permission-check branch', () => {
@@ -158,25 +183,55 @@ describe('PermissionsGuard — @RequiresClientSession() branch', () => {
 
   it('allows and attaches request.client when the session cookie resolves to a client', async () => {
     const clientContexts = new FakeClientContextRepository();
-    clientContexts.seed('client-session-1', { userId: 'user-1', clientId: 'client-1' });
+    clientContexts.seed('client-session-1', { userId: 'user-1', clientId: 'client-1', sessionExpiresAt: SESSION_EXPIRES_AT });
     const guard = new PermissionsGuard(new Reflector(), new FakeRolePermissionRepository(), clientContexts);
     const { context, request } = buildClientSessionContext(`${SESSION_COOKIE_NAME}=client-session-1`);
 
     const result = await guard.canActivate(context);
 
     expect(result).toBe(true);
-    expect(request.client).toEqual({ userId: 'user-1', clientId: 'client-1' });
+    expect(request.client).toEqual({ userId: 'user-1', clientId: 'client-1', sessionExpiresAt: SESSION_EXPIRES_AT });
   });
 
   it('never consults RolePermissionRepository for a @RequiresClientSession() route — the two checks are independent', async () => {
     const rolePermissions = new FakeRolePermissionRepository();
     const clientContexts = new FakeClientContextRepository();
-    clientContexts.seed('client-session-1', { userId: 'user-1', clientId: 'client-1' });
+    clientContexts.seed('client-session-1', { userId: 'user-1', clientId: 'client-1', sessionExpiresAt: SESSION_EXPIRES_AT });
     const guard = new PermissionsGuard(new Reflector(), rolePermissions, clientContexts);
     const { context } = buildClientSessionContext(`${SESSION_COOKIE_NAME}=client-session-1`);
 
     await guard.canActivate(context);
 
     expect(rolePermissions.hasPermissionCalls).toHaveLength(0);
+  });
+
+  // cuenta-cliente-persistente: the guard is the ONLY place a rolling
+  // renewal reaches the browser — see `checkClientSession`'s own doc
+  // comment for why the cookie is re-issued on every successful check, not
+  // only when the DB row actually moved.
+  it('re-issues the session cookie with the resolved sessionExpiresAt on every successful check', async () => {
+    const clientContexts = new FakeClientContextRepository();
+    clientContexts.seed('client-session-1', { userId: 'user-1', clientId: 'client-1', sessionExpiresAt: SESSION_EXPIRES_AT });
+    const guard = new PermissionsGuard(new Reflector(), new FakeRolePermissionRepository(), clientContexts);
+    const { context, cookieCalls } = buildClientSessionContext(`${SESSION_COOKIE_NAME}=client-session-1`);
+
+    await guard.canActivate(context);
+
+    expect(cookieCalls).toHaveLength(1);
+    expect(cookieCalls[0]).toMatchObject({
+      name: SESSION_COOKIE_NAME,
+      value: 'client-session-1',
+      options: { expires: SESSION_EXPIRES_AT, httpOnly: true, sameSite: 'lax' },
+    });
+  });
+
+  it('never re-issues a cookie when the session does not resolve to a client', async () => {
+    const clientContexts = new FakeClientContextRepository();
+    const guard = new PermissionsGuard(new Reflector(), new FakeRolePermissionRepository(), clientContexts);
+    const { context, cookieCalls } = buildClientSessionContext(`${SESSION_COOKIE_NAME}=not-a-client-session`);
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(cookieCalls).toHaveLength(0);
   });
 });

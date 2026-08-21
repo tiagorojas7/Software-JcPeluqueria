@@ -6,11 +6,13 @@ import {
   DrizzleActorContextRepository,
   DrizzleClientContextRepository,
   DrizzleRolePermissionRepository,
+  ShopClock,
 } from '@jc-barberia/infrastructure';
+import type { Clock } from '@jc-barberia/domain';
 
 import { ActorContextMiddleware } from './actor-context.middleware';
 import { PermissionsGuard } from './permissions.guard';
-import { ACTOR_CONTEXT_REPOSITORY, CLIENT_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from './tokens';
+import { ACTOR_CONTEXT_REPOSITORY, CLIENT_CONTEXT_REPOSITORY, CLOCK, ROLE_PERMISSION_REPOSITORY } from './tokens';
 
 /**
  * Wires `PermissionsGuard` as the application-wide guard (`APP_GUARD`),
@@ -32,6 +34,7 @@ import { ACTOR_CONTEXT_REPOSITORY, CLIENT_CONTEXT_REPOSITORY, ROLE_PERMISSION_RE
  */
 @Module({
   providers: [
+    { provide: CLOCK, useFactory: () => new ShopClock() },
     {
       provide: ROLE_PERMISSION_REPOSITORY,
       useFactory: () => new DrizzleRolePermissionRepository(db),
@@ -41,8 +44,12 @@ import { ACTOR_CONTEXT_REPOSITORY, CLIENT_CONTEXT_REPOSITORY, ROLE_PERMISSION_RE
       useFactory: () => new DrizzleActorContextRepository(db),
     },
     {
+      // cuenta-cliente-persistente: takes `CLOCK` too, to parse the raw
+      // timestamp its own rolling-session renewal query returns (see the
+      // repository's own doc comment).
       provide: CLIENT_CONTEXT_REPOSITORY,
-      useFactory: () => new DrizzleClientContextRepository(db),
+      inject: [CLOCK],
+      useFactory: (clock: Clock) => new DrizzleClientContextRepository(db, clock),
     },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],

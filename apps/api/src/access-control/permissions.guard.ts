@@ -7,7 +7,7 @@ import { IS_PUBLIC_KEY } from './decorators/public.decorator';
 import { REQUIRES_CLIENT_SESSION_KEY } from './decorators/requires-client-session.decorator';
 import { REQUIRES_PERMISSION_KEY } from './decorators/requires-permission.decorator';
 import type { RequestWithActor } from './request-with-actor';
-import { readSessionCookie } from './session-cookie';
+import { readSessionCookie, writeSessionCookie, type CookieResponse } from './session-cookie';
 import { CLIENT_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from './tokens';
 
 interface MinimalRequestWithCookie extends RequestWithActor {
@@ -108,15 +108,30 @@ export class PermissionsGuard implements CanActivate {
    * `request.client` on success, the same seam `@CurrentClient()` reads
    * (mirrors `ActorContextMiddleware` attaching `request.actor`, just
    * resolved lazily here instead of on every request).
+   *
+   * cuenta-cliente-persistente: `resolveBySessionId` may have just renewed
+   * this session (see its own doc comment for the half-life rule) — this is
+   * the ONLY place that decision reaches the browser, so the cookie is
+   * re-issued with `client.sessionExpiresAt` on EVERY successful check, not
+   * only when a renewal happened. That is deliberately cheap: writing the
+   * response header costs nothing extra (no DB access here), while skipping
+   * it on the "no renewal" branch would risk a stale cookie surviving a
+   * renewal this method decided NOT to report. The actual Postgres write
+   * already only happens conditionally, inside the repository's query.
    */
   private async checkClientSession(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<MinimalRequestWithCookie>();
+    const httpContext = context.switchToHttp();
+    const request = httpContext.getRequest<MinimalRequestWithCookie>();
     const sessionId = readSessionCookie(request.headers.cookie);
-    const client = sessionId ? await this.clientContexts.resolveBySessionId(sessionId) : null;
+    if (!sessionId) {
+      throw new ForbiddenException('No authenticated client session for this request.');
+    }
+    const client = await this.clientContexts.resolveBySessionId(sessionId);
     if (!client) {
       throw new ForbiddenException('No authenticated client session for this request.');
     }
     request.client = client;
+    writeSessionCookie(httpContext.getResponse<CookieResponse>(), sessionId, client.sessionExpiresAt);
     return true;
   }
 }

@@ -75,8 +75,8 @@ describe('POST /account/offers/:holdId/accept + POST /account/offers/:holdId/rej
   const OWNER_SESSION = 'offer-client-session';
   const OWNER_CLIENT_ID = 'client-1';
   const OTHER_SESSION = 'offer-other-client-session';
-  clientContexts.seed(OWNER_SESSION, { userId: 'offer-user-1', clientId: OWNER_CLIENT_ID });
-  clientContexts.seed(OTHER_SESSION, { userId: 'offer-user-2', clientId: 'client-2' });
+  clientContexts.seed(OWNER_SESSION, { userId: 'offer-user-1', clientId: OWNER_CLIENT_ID, sessionExpiresAt: at('12:00') });
+  clientContexts.seed(OTHER_SESSION, { userId: 'offer-user-2', clientId: 'client-2', sessionExpiresAt: at('12:00') });
 
   beforeAll(async () => {
     holds = new FakeHoldRepository();

@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import {
   FakeActorContextRepository,
   FakeClientContextRepository,
+  FakeClock,
   FakeHoldExpireScheduler,
   type ClientContext,
 } from '@jc-barberia/domain';
@@ -16,6 +17,19 @@ import { SESSION_COOKIE_NAME } from '../src/access-control/session-cookie';
 import { ACTOR_CONTEXT_REPOSITORY, CLIENT_CONTEXT_REPOSITORY } from '../src/access-control/tokens';
 import { HOLD_EXPIRE_SCHEDULER } from '../src/booking/tokens';
 import { AppModule } from '../src/app.module';
+
+// A throwaway clock only to build a fixed `sessionExpiresAt` fixture — never
+// the one any production code reads (same pattern every other spec in this
+// suite establishes for date fixtures).
+const dateBuilder = new FakeClock();
+const SESSION_EXPIRES_AT = dateBuilder.localTimeToUtc('2026-09-01', '12:00');
+
+// cuenta-cliente-persistente: `sessionExpiresAt` here is a FIXED fixture
+// value the fake simply echoes back — `FakeClientContextRepository` does
+// not implement the real half-life renewal (same posture
+// `FakeAuthChallengeRepository` already takes for its own time-dependent
+// branch: that guarantee is proven only against the real Postgres adapter's
+// Testcontainers suite, `client-context.repository.spec.ts`).
 
 // cablear-el-mvp Slice C (C.4): the client-session counterpart of
 // `apps/api/test/authorization.contract.spec.ts` — proves
@@ -30,8 +44,8 @@ const CLIENT_SESSION = 'client-session-fixture';
 const OTHER_CLIENT_SESSION = 'client-session-other';
 
 const clientContexts = new FakeClientContextRepository();
-clientContexts.seed(CLIENT_SESSION, { userId: 'user-client-1', clientId: 'client-1' });
-clientContexts.seed(OTHER_CLIENT_SESSION, { userId: 'user-client-2', clientId: 'client-2' });
+clientContexts.seed(CLIENT_SESSION, { userId: 'user-client-1', clientId: 'client-1', sessionExpiresAt: SESSION_EXPIRES_AT });
+clientContexts.seed(OTHER_CLIENT_SESSION, { userId: 'user-client-2', clientId: 'client-2', sessionExpiresAt: SESSION_EXPIRES_AT });
 
 function withSession(req: request.Test, sessionId?: string): request.Test {
   return sessionId ? req.set('Cookie', `${SESSION_COOKIE_NAME}=${sessionId}`) : req;
@@ -104,7 +118,11 @@ describe('client-session authorization contract — @RequiresClientSession() (Ap
     const response = await withSession(request(app.getHttpServer()).get('/client-fixture/whoami'), CLIENT_SESSION);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ userId: 'user-client-1', clientId: 'client-1' });
+    expect(response.body).toEqual({
+      userId: 'user-client-1',
+      clientId: 'client-1',
+      sessionExpiresAt: SESSION_EXPIRES_AT.toISOString(),
+    });
   });
 
   it('resolves a DIFFERENT client session to that client’s own identity, never a cached previous one', async () => {
@@ -114,6 +132,10 @@ describe('client-session authorization contract — @RequiresClientSession() (Ap
     );
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ userId: 'user-client-2', clientId: 'client-2' });
+    expect(response.body).toEqual({
+      userId: 'user-client-2',
+      clientId: 'client-2',
+      sessionExpiresAt: SESSION_EXPIRES_AT.toISOString(),
+    });
   });
 });

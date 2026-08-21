@@ -11,23 +11,8 @@ import {
 import type { ActorContextRepository, ClientContextRepository } from '@jc-barberia/domain';
 
 import { Public } from '../access-control/decorators/public.decorator';
-import { SESSION_COOKIE_NAME } from '../access-control/session-cookie';
+import { SESSION_COOKIE_NAME, writeSessionCookie, type CookieResponse } from '../access-control/session-cookie';
 import { ACTOR_CONTEXT_REPOSITORY, CLIENT_CONTEXT_REPOSITORY } from '../access-control/tokens';
-
-/**
- * Minimal structural shape of what this handler needs from the platform
- * response object (`res.cookie`/`res.clearCookie`, both real Express
- * methods since `@nestjs/platform-express` is the adapter this app already
- * uses) — deliberately NOT `import type { Response } from 'express'`:
- * `express` is only a transitive dependency here (via
- * `@nestjs/platform-express`), and pnpm's strict linking does not expose
- * transitive packages to this app's own imports. A structural type avoids
- * adding a direct dependency for types alone.
- */
-interface CookieResponse {
-  cookie(name: string, value: string, options: Record<string, unknown>): void;
-  clearCookie(name: string): void;
-}
 
 /**
  * The staff-side entrypoint this application never had. `StaffLoginUseCase`
@@ -100,14 +85,7 @@ export class AuthController {
       throw new BadRequestException('Session created but could not be resolved to an actor.');
     }
 
-    res.cookie(SESSION_COOKIE_NAME, session.id, {
-      httpOnly: true,
-      sameSite: 'lax',
-      // Secure cookies require HTTPS — the demo runs the API over plain
-      // HTTP on localhost, so this only turns on for a real deployment.
-      secure: process.env.NODE_ENV === 'production',
-      expires: session.expiresAt,
-    });
+    writeSessionCookie(res, session.id, session.expiresAt);
 
     return { outcome: 'authenticated', userId: actor.userId, role: actor.role, barberId: actor.barberId ?? null };
   }
@@ -172,12 +150,7 @@ export class AuthController {
       throw new BadRequestException('Session created but could not be resolved to a client.');
     }
 
-    res.cookie(SESSION_COOKIE_NAME, session.id, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      expires: session.expiresAt,
-    });
+    writeSessionCookie(res, session.id, session.expiresAt);
 
     return { outcome: 'authenticated', clientId: client.clientId };
   }

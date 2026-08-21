@@ -64,7 +64,7 @@ class InMemorySessionsAndClientContext implements SessionRepository, ClientConte
       return null;
     }
     const clientId = this.clientIdByUserId.get(session.userId);
-    return clientId ? { userId: session.userId, clientId } : null;
+    return clientId ? { userId: session.userId, clientId, sessionExpiresAt: session.expiresAt } : null;
   }
 
   get(sessionId: string): Session | undefined {

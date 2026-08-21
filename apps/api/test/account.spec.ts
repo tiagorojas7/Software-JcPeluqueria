@@ -44,7 +44,7 @@ function newClientSession(): { sessionId: string; clientId: string } {
   const n = sessionCounter++;
   const sessionId = `account-session-${n}`;
   const clientId = `account-client-${n}`;
-  clientContexts.seed(sessionId, { userId: `account-user-${n}`, clientId });
+  clientContexts.seed(sessionId, { userId: `account-user-${n}`, clientId, sessionExpiresAt: at('12:00') });
   return { sessionId, clientId };
 }
 
