@@ -14,6 +14,7 @@ function buildSlot(overrides: Partial<DayBoardSlot> = {}): DayBoardSlot {
     id: 'slot-1',
     barberId: 'barber-1',
     serviceId: 'service-1',
+    serviceName: 'Corte clasico',
     status: 'reservado',
     startsAt: '2026-08-20T12:00:00.000Z',
     endsAt: '2026-08-20T12:30:00.000Z',
@@ -54,6 +55,32 @@ describe('DayBoard', () => {
 
     expect(screen.getByText('Marcos (34)')).toBeInTheDocument();
     expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+  });
+
+  // The owner's actual complaint: a slot rendered as little more than the
+  // word "reservado". Time must be shop-local (utcIsoToShopLocalTime), never
+  // sliced off the raw UTC ISO string, and the service name must be on
+  // screen without the browser inventing a lookup of its own.
+  it('shows the shop-local start-end time and the service name on every slot', () => {
+    const slots = [
+      buildSlot({ id: 'slot-1', serviceName: 'Corte + Barba', startsAt: '2026-08-20T12:00:00.000Z', endsAt: '2026-08-20T12:30:00.000Z' }),
+    ];
+
+    render(<DayBoard columns={columns} slots={slots} onSlotAction={() => {}} />);
+
+    expect(screen.getByText('09:00-09:30')).toBeInTheDocument();
+    expect(screen.getByText('Corte + Barba')).toBeInTheDocument();
+  });
+
+  it('shows the client phone only when the server sent it (an actor holding client:manage)', () => {
+    const slots = [
+      buildSlot({ id: 'slot-1', clientName: 'Marcos', clientPhone: '3511234567' }),
+      buildSlot({ id: 'slot-2', clientName: 'Laura' }),
+    ];
+
+    render(<DayBoard columns={columns} slots={slots} onSlotAction={() => {}} />);
+
+    expect(screen.getByText('3511234567')).toBeInTheDocument();
   });
 
   it('renders only the actions the server allowed for a slot, and reports the chosen one back with the slot id', () => {

@@ -23,6 +23,7 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
   let repository: DrizzleDayBoardRepository;
   let barberAId: string;
   let barberBId: string;
+  let serviceId: string;
 
   const clock = new ShopClock();
   const at = (calendarDate: string, wallClock: string): Date => clock.localTimeToUtc(calendarDate, wallClock);
@@ -57,6 +58,7 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
     await new DrizzleServiceRepository(db).create(service);
     barberAId = barberA.id;
     barberBId = barberB.id;
+    serviceId = service.id;
 
     // The board carries BOTH channels, so the fixture does too. Phase 5's
     // `web_channel_requires_deposit_once_settled` makes a web row past the
@@ -125,5 +127,40 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
     const result = await repository.findDayBoard(OTHER_DAY, OWNER);
 
     expect(result.slots).toEqual([expect.objectContaining({ barberId: barberAId, status: 'reservado' })]);
+  });
+
+  // The real product gap the owner reported: a slot carried no more than a
+  // status. This proves the join is real (a real clients row, a real
+  // services row), not a placeholder — the only thing packages/application
+  // can trust to be a real join rather than a fake's passthrough.
+  it('joins serviceName from services and clientName/clientAge/clientPhone from clients when the slot is linked to one', async () => {
+    const [newClient] = await client<{ id: string }[]>`
+      insert into clients (name, phone, age)
+      values ('Marcos Diaz', '3511234567', 34)
+      returning id`;
+    await client`insert into slot_occupancies (barber_id, service_id, client_id, channel, status, time_range)
+                 values (${barberAId}, ${serviceId}, ${newClient!.id}, 'telefonico', 'reservado', ${range(DAY, '13:00', '13:30')}::tstzrange)`;
+
+    const result = await repository.findDayBoard(DAY, OWNER);
+
+    const slot = result.slots.find((s) => s.startsAt.toISOString() === at(DAY, '13:00').toISOString());
+    expect(slot).toEqual(
+      expect.objectContaining({
+        serviceName: 'Corte clasico',
+        clientId: newClient!.id,
+        clientName: 'Marcos Diaz',
+        clientAge: 34,
+        clientPhone: '3511234567',
+      }),
+    );
+  });
+
+  it('leaves clientName/clientAge/clientPhone null and still fills serviceName when no client is linked', async () => {
+    const result = await repository.findDayBoard(DAY, OWNER);
+
+    const slot = result.slots.find((s) => s.barberId === barberBId);
+    expect(slot).toEqual(
+      expect.objectContaining({ serviceName: 'Corte clasico', clientId: null, clientName: null, clientAge: null, clientPhone: null }),
+    );
   });
 });

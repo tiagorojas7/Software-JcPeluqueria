@@ -29,6 +29,12 @@ export interface DayBoardSlot {
   readonly barberId: string;
   readonly serviceId: string;
   /**
+   * Server-computed name of `serviceId`, the same way `DayBoardColumn.barberName`
+   * already travels alongside `barberId` — the panel names the service
+   * without inventing its own lookup in the browser.
+   */
+  readonly serviceName: string;
+  /**
    * Raw `slot_occupancies.status` passthrough. `packages/domain/appointments`
    * (built in a parallel phase) owns the closed appointment-status
    * vocabulary — this stays a plain string here rather than duplicating or
@@ -39,15 +45,20 @@ export interface DayBoardSlot {
   readonly startsAt: string;
   readonly endsAt: string;
   /**
-   * Present only once a `clients` table exists (Phase 9/10) and this row is
-   * actually linked to one — "cuando esté cargada" per admin-operations'
-   * "Vista del día por columnas de barbero". Every row `GetDayBoardUseCase`
-   * produces today leaves both fields `undefined`; they exist now so
-   * `DayBoard`/`AdminDayBoardContainer` already render them correctly the
-   * moment that data starts arriving.
+   * Present once this row is linked to a `clients` row — "cuando esté
+   * cargada" per admin-operations' "Vista del día por columnas de barbero".
+   * `GetDayBoardUseCase` populates both from the real `clients` join now
+   * that the table exists and every turno is linked to one.
    */
   readonly clientName?: string;
   readonly clientAge?: number;
+  /**
+   * Present only when the viewer holds `client:manage` (owner/secretary) —
+   * `GetDayBoardUseCase` decides this from `ActorContext` and
+   * `role_permissions`, never the browser. A barber's role never has
+   * `client:manage`, so this field never reaches a barber's screen.
+   */
+  readonly clientPhone?: string;
   /** Computed server-side by `GetDayBoardUseCase` from `ActorContext` and
    *  `role_permissions` — never derived in the browser. */
   readonly allowedActions: readonly SlotAction[];

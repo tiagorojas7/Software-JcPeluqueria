@@ -4,7 +4,15 @@ export interface DayBoardSlotRecord {
   readonly id: string;
   readonly barberId: string;
   readonly serviceId: string;
+  /** Joined from `services.name` — every slot has a real service, so this
+   *  is never null. */
+  readonly serviceName: string;
   readonly clientId: string | null;
+  /** Joined from `clients`, `null` only when `clientId` itself is `null`
+   *  (no client linked to this row yet). */
+  readonly clientName: string | null;
+  readonly clientAge: number | null;
+  readonly clientPhone: string | null;
   /** Raw `slot_occupancies.status` — see `DayBoardRepository`'s own doc
    *  comment on why this stays a string here. */
   readonly status: string;

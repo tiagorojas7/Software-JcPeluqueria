@@ -22,14 +22,23 @@ function realisticRolePermissions(): FakeRolePermissionRepository {
     new Map([
       [
         'owner',
-        new Set<Permission>(['appointment:update', 'appointment:cancel', 'appointment:mark-completed:any']),
+        new Set<Permission>([
+          'appointment:update',
+          'appointment:cancel',
+          'appointment:mark-completed:any',
+          'client:manage',
+        ]),
       ],
       ['barber', new Set<Permission>(['appointment:mark-completed:own'])],
     ]),
   );
 }
 
-function seedOneSlot(repository: FakeDayBoardRepository, status = 'reservado'): void {
+function seedOneSlot(
+  repository: FakeDayBoardRepository,
+  status = 'reservado',
+  overrides: { clientName?: string | null; clientAge?: number | null; clientPhone?: string | null } = {},
+): void {
   repository.seed('2026-08-20', {
     columns: [{ barberId: 'barber-a', barberName: 'Juan' }],
     slots: [
@@ -37,7 +46,11 @@ function seedOneSlot(repository: FakeDayBoardRepository, status = 'reservado'): 
         id: 'slot-1',
         barberId: 'barber-a',
         serviceId: 'service-1',
-        clientId: null,
+        serviceName: 'Corte clasico',
+        clientId: overrides.clientName === undefined ? null : 'client-1',
+        clientName: overrides.clientName ?? null,
+        clientAge: overrides.clientAge ?? null,
+        clientPhone: overrides.clientPhone ?? null,
         status,
         startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
         endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
@@ -132,5 +145,67 @@ describe('GetDayBoardUseCase', () => {
     expect(result.slots).toEqual([
       expect.objectContaining({ id: 'slot-1', allowedActions: ['edit', 'cancel', 'mark-completed'] }),
     ]);
+  });
+
+  // The day board's actual product gap the owner reported while testing the
+  // live app: a slot rendered as little more than "reservado". serviceName
+  // travels the same way DayBoardColumn.barberName already does — a
+  // server-computed name, never a browser-side lookup.
+  it('includes the service name on every slot, server-computed like barberName', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository);
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const result = await useCase.execute('2026-08-20', OWNER);
+
+    expect(result.slots).toEqual([expect.objectContaining({ id: 'slot-1', serviceName: 'Corte clasico' })]);
+  });
+
+  it('passes clientName and clientAge straight through once the slot is linked to a client', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'reservado', { clientName: 'Marcos', clientAge: 34 });
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const result = await useCase.execute('2026-08-20', OWNER);
+
+    expect(result.slots).toEqual([
+      expect.objectContaining({ id: 'slot-1', clientName: 'Marcos', clientAge: 34 }),
+    ]);
+  });
+
+  it('leaves clientName and clientAge undefined when no client is linked to the slot', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository);
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const result = await useCase.execute('2026-08-20', OWNER);
+
+    expect(result.slots[0]?.clientName).toBeUndefined();
+    expect(result.slots[0]?.clientAge).toBeUndefined();
+  });
+
+  // access-control's rule applied to a new field: the server decides who
+  // receives clientPhone, never the browser. Only an actor holding
+  // client:manage (owner/secretary) gets it; a barber never does, even
+  // though he does see clientName/clientAge on the very same slot.
+  it('includes clientPhone for an actor holding client:manage', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'reservado', { clientName: 'Marcos', clientAge: 34, clientPhone: '3511234567' });
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const result = await useCase.execute('2026-08-20', OWNER);
+
+    expect(result.slots).toEqual([expect.objectContaining({ id: 'slot-1', clientPhone: '3511234567' })]);
+  });
+
+  it('omits clientPhone for a barber, who never holds client:manage, even though he sees the client name', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'reservado', { clientName: 'Marcos', clientAge: 34, clientPhone: '3511234567' });
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const result = await useCase.execute('2026-08-20', BARBER_A);
+
+    expect(result.slots[0]?.clientName).toBe('Marcos');
+    expect(result.slots[0]?.clientPhone).toBeUndefined();
   });
 });

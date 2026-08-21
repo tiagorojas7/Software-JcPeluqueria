@@ -8,6 +8,7 @@ function aSlot(overrides: Partial<DayBoardSlot> = {}): DayBoardSlot {
     id: 'slot-1',
     barberId: 'barber-1',
     serviceId: 'service-1',
+    serviceName: 'Corte clasico',
     status: 'reservado',
     startsAt: '2026-09-01T13:00:00.000Z',
     endsAt: '2026-09-01T13:30:00.000Z',
