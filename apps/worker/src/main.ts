@@ -175,7 +175,7 @@ async function main(): Promise<void> {
       gmailAppPassword: process.env.GMAIL_APP_PASSWORD,
       gmailFrom: process.env.GMAIL_FROM,
     },
-    { templates: createTemplateRegistry(new ShopClock()) },
+    { templates: createTemplateRegistry(new ShopClock(), process.env.PUBLIC_BASE_URL) },
   );
 
   // arranque finding: `CreateHold` (both `HoldController` and

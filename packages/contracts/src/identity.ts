@@ -57,11 +57,14 @@ export interface RequestClientAccessResponseBody {
 }
 
 /**
- * cablear-el-mvp Slice C (C.2): `challengeId` travels here because the
- * client's access link/code always carries it (see
- * `RequestClientAccessUseCase`'s own doc comment on why) — never a bare
- * 6-digit code alone, which could not disambiguate between two outstanding
- * challenges.
+ * cablear-el-mvp Slice C (C.2), narrowed by fix/acceso-cliente-sin-id:
+ * `challengeId` travels here for the MAGIC-LINK path only — the query string
+ * of the link the client-access-code email sends
+ * (`packages/infrastructure/src/notifications/templates/client-access-code.template.ts`),
+ * never something a human ever types. A client typing their code by hand
+ * goes through `ClientLoginByEmailRequestSchema` below instead — the shop
+ * owner was explicit that the client only ever sees the code, never this id
+ * ("la idea es que el cliente solo ponga el codigo").
  */
 export const ClientLoginRequestSchema = z.object({
   challengeId: z.string().uuid(),
@@ -71,12 +74,38 @@ export const ClientLoginRequestSchema = z.object({
 export type ClientLoginRequest = z.infer<typeof ClientLoginRequestSchema>;
 
 /**
+ * fix/acceso-cliente-sin-id: what the client-facing login FORM actually
+ * submits — the email typed one step earlier on the SAME screen
+ * (`RequestClientAccessRequestSchema`) plus the 6-digit code, no
+ * `challengeId` in sight. See `ClientLoginByEmailUseCase`'s own doc comment
+ * (`packages/application/src/identity`) for how this resolves to the one
+ * challenge to check the code against without ever becoming an oracle for
+ * which emails are registered customers.
+ */
+export const ClientLoginByEmailRequestSchema = z.object({
+  email: z.string().email('Email inválido'),
+  secret: z.string().min(1, 'El código es obligatorio'),
+});
+
+export type ClientLoginByEmailRequest = z.infer<typeof ClientLoginByEmailRequestSchema>;
+
+/**
  * Mirrors `ClientLoginResult['outcome']` plus the one field the USE CASE
  * itself deliberately does not return: `clientId`, resolved by the
  * controller via `ClientContextRepository` right after minting the session —
  * the same "resolve immediately after creating the session" shape
  * `AuthController.login` already established for staff, reused here rather
  * than invented twice.
+ *
+ * Shared by both `POST /auth/client-login` request shapes above. In
+ * practice `must-request-new-code` is only ever reachable through the
+ * `challengeId` (magic-link) shape — `ClientLoginByEmailUseCase` collapses
+ * every dead-challenge case into `rejected` on purpose (fix/acceso-cliente-
+ * sin-id, Decision 2: an email-keyed endpoint that distinguished "expired"
+ * from "wrong code" would let an attacker learn which emails are
+ * customers by requesting a code and waiting it out). The type stays a
+ * single union because both request shapes answer through the same
+ * response body.
  */
 export type ClientLoginResponseBody =
   | { readonly outcome: 'authenticated'; readonly clientId: string }

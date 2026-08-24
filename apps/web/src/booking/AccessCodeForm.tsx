@@ -39,15 +39,25 @@ const DEAD_CHALLENGE_MESSAGE: Record<'expired' | 'exhausted' | 'consumed', strin
  *   AND MUST exigir una nueva solicitud de acceso
  *
  * `status.outcome === 'must-request-new-code'` (expired/exhausted/consumed,
- * 9.9) is the only branch that kills the retry path: no submit button, the
- * code field disabled, and the sole remaining action is
- * `onRequestNewCode`. `rejected` (wrong digits, challenge still alive) keeps
- * the ordinary form — a retry there can still succeed. Never a password
- * field: the client's web access has none (client-booking, "Cuenta sin
- * contraseña creada al final del flujo"). Purely presentational — same
- * container/presentational split as `AccountForm`: it never calls the login
- * API itself, only reports the typed code or the "request new code" intent
- * to its caller.
+ * 9.9) is the branch that kills the RETRY path on this specific challenge:
+ * no submit button, the code field disabled. `rejected` (wrong digits,
+ * challenge still alive) keeps the ordinary form — a retry there can still
+ * succeed. Never a password field: the client's web access has none
+ * (client-booking, "Cuenta sin contraseña creada al final del flujo").
+ * Purely presentational — same container/presentational split as
+ * `AccountForm`: it never calls the login API itself, only reports the
+ * typed code or the "request new code" intent to its caller.
+ *
+ * fix/acceso-cliente-sin-id, Decision 2's compensation: "Pedir un codigo
+ * nuevo" is now ALWAYS rendered, not gated on `dead`. The email-keyed login
+ * path (`ClientLoginByEmailUseCase`) deliberately never reports
+ * `must-request-new-code` — every dead-challenge case collapses to
+ * `rejected`, indistinguishable from a wrong guess, so this endpoint can
+ * never become an oracle for which emails are registered. That means a
+ * client whose code genuinely expired only ever sees `rejected` here, with
+ * no signal that a retry is futile — so the one way forward that always
+ * works, request a fresh code, has to be visible unconditionally rather
+ * than only after the server admits the challenge is dead.
  */
 export function AccessCodeForm({ status, onSubmit, onRequestNewCode }: AccessCodeFormProps) {
   const [code, setCode] = useState('');
@@ -66,11 +76,9 @@ export function AccessCodeForm({ status, onSubmit, onRequestNewCode }: AccessCod
         <input id="access-code" disabled={dead} value={code} onChange={(e) => setCode(e.target.value)} />
         {!dead && <button type="submit">Ingresar</button>}
       </form>
-      {dead && (
-        <button type="button" onClick={onRequestNewCode}>
-          Pedir un codigo nuevo
-        </button>
-      )}
+      <button type="button" onClick={onRequestNewCode}>
+        Pedir un codigo nuevo
+      </button>
     </div>
   );
 }

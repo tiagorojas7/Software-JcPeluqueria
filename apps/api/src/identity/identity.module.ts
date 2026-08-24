@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import {
   ChallengeService,
+  ClientLoginByEmailUseCase,
   ClientLoginUseCase,
   ListOwnAppointmentsUseCase,
   PasswordService,
@@ -127,6 +128,16 @@ import {
       provide: ClientLoginUseCase,
       inject: [ChallengeService],
       useFactory: (challenges: ChallengeService) => new ClientLoginUseCase(challenges),
+    },
+    {
+      // fix/acceso-cliente-sin-id: the email-keyed client-facing login path.
+      // Depends on `ClientLoginUseCase` itself (already provided above) to
+      // reuse its exact challengeId+secret consumption/mapping rather than
+      // duplicating it.
+      provide: ClientLoginByEmailUseCase,
+      inject: [CLIENT_ACCOUNT_REPOSITORY, ChallengeService, ClientLoginUseCase],
+      useFactory: (accounts: ClientAccountRepository, challenges: ChallengeService, clientLogin: ClientLoginUseCase) =>
+        new ClientLoginByEmailUseCase(accounts, challenges, clientLogin),
     },
     {
       provide: ListOwnAppointmentsUseCase,
