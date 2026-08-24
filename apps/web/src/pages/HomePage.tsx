@@ -1,4 +1,8 @@
-import { DEMO_BARBERS, DEMO_SERVICES } from '../shared/demo-data';
+import { useEffect, useState } from 'react';
+import type { PublicBarberResponse, PublicBarbersResponse, PublicServiceResponse, PublicServicesResponse } from '@jc-barberia/contracts';
+
+import { apiGet, describeError } from '../shared/api-client';
+import { formatPriceArs } from '../shared/money';
 import { Link } from '../shared/router';
 import './HomePage.css';
 
@@ -9,12 +13,45 @@ const STEPS = [
 ] as const;
 
 /**
- * D.2: the public landing page (`/`). Reuses the same demo reference data
- * `BookingPage` already draws from (`shared/demo-data.ts`) so the services
- * and team shown here are never out of sync with what a visitor can
- * actually book two clicks later.
+ * D.2 / datos-reales-en-ui: the public landing page (`/`). Used to import
+ * `shared/demo-data.ts` — hardcoded barbers/services with prices baked into
+ * display strings, never touching the database. Now fetches `GET /barbers`
+ * (already active-only server-side, ListPublicBarbersUseCase) and
+ * `GET /services` (real `priceCents`, formatted here via `formatPriceArs`)
+ * on mount, same `apiGet` every other page uses. A deactivated barber or a
+ * changed price is therefore correct here the instant the panel changes it
+ * — there is no separate copy of this data left to go stale.
  */
 export function HomePage() {
+  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
+  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [servicesResponse, barbersResponse] = await Promise.all([
+          apiGet<PublicServicesResponse>('/services'),
+          apiGet<PublicBarbersResponse>('/barbers'),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setServices(servicesResponse.services);
+        setBarbers(barbersResponse.barbers);
+      } catch (err) {
+        if (!cancelled) {
+          setError(describeError(err));
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="home">
       <section className="home__hero">
@@ -43,29 +80,45 @@ export function HomePage() {
         </div>
       </section>
 
+      {error && <p role="alert">{error}</p>}
+
       <section className="home__section home__section--alt" aria-labelledby="home-services-heading">
         <div className="container">
           <h2 id="home-services-heading">Servicios</h2>
-          <ul className="home__grid">
-            {DEMO_SERVICES.map((service) => (
-              <li key={service.id} className="home__card">
-                <strong>{service.name}</strong>
-              </li>
-            ))}
-          </ul>
+          {services === null && !error && <p className="empty-state">Cargando servicios...</p>}
+          {services !== null && services.length === 0 && (
+            <p className="empty-state">Todavía no hay servicios cargados.</p>
+          )}
+          {services !== null && services.length > 0 && (
+            <ul className="home__grid">
+              {services.map((service) => (
+                <li key={service.id} className="home__card">
+                  <strong>
+                    {service.name} ({formatPriceArs(service.priceCents)})
+                  </strong>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
       <section className="home__section" aria-labelledby="home-team-heading">
         <div className="container">
           <h2 id="home-team-heading">Nuestro equipo</h2>
-          <ul className="home__grid">
-            {DEMO_BARBERS.map((barber) => (
-              <li key={barber.id} className="home__card home__card--barber">
-                <strong>{barber.name}</strong>
-              </li>
-            ))}
-          </ul>
+          {barbers === null && !error && <p className="empty-state">Cargando equipo...</p>}
+          {barbers !== null && barbers.length === 0 && (
+            <p className="empty-state">Todavía no hay barberos cargados.</p>
+          )}
+          {barbers !== null && barbers.length > 0 && (
+            <ul className="home__grid">
+              {barbers.map((barber) => (
+                <li key={barber.id} className="home__card home__card--barber">
+                  <strong>{barber.name}</strong>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 

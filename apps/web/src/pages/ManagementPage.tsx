@@ -1,8 +1,13 @@
-import { useState, type FormEvent } from 'react';
-import type { ClientRecordResponse } from '@jc-barberia/contracts';
+import { useEffect, useState, type FormEvent } from 'react';
+import type {
+  ClientRecordResponse,
+  PublicBarberResponse,
+  PublicBarbersResponse,
+  PublicServiceResponse,
+  PublicServicesResponse,
+} from '@jc-barberia/contracts';
 
 import { apiGet, apiPost, apiPut, describeError } from '../shared/api-client';
-import { DEMO_BARBERS, DEMO_SERVICES } from '../shared/demo-data';
 import { hasPermission } from '../shared/permissions';
 import type { Actor } from '../shared/actor';
 import './ManagementPage.css';
@@ -20,12 +25,13 @@ export interface ManagementPageProps {
  * `hasPermission` — the same source of truth `PanelLayout`'s nav already
  * uses, never a second hardcoded role check.
  *
- * There is no `GET /panel/barbers` (list) endpoint, so — same choice
- * `BookingPage` already made for the same reason — barber/service pickers
- * below reuse `DEMO_BARBERS`/`DEMO_SERVICES` instead of fetching a list.
- * Adding a new barber here does not retroactively appear in that fixed
- * list; a fresh page load already would not know about it either, since
- * there is nothing to list it from.
+ * datos-reales-en-ui: used to feed the barber/service pickers below from
+ * `shared/demo-data.ts`. Now fetches `GET /barbers` (active-only — exactly
+ * the set a barber CAN still be deactivated/rescheduled from;
+ * `ManageClientsAndBarbersUseCase` has no "reactivate" operation, so an
+ * already-deactivated barber has nothing to be picked for here) and
+ * `GET /services` once, up front, only when the actor's role actually needs
+ * one of the sections that uses them.
  */
 export function ManagementPage({ actor }: ManagementPageProps) {
   const canClients = hasPermission(actor.role, 'client:manage');
@@ -33,17 +39,54 @@ export function ManagementPage({ actor }: ManagementPageProps) {
   const canSchedules = hasPermission(actor.role, 'schedule:configure');
   const canPricing = hasPermission(actor.role, 'pricing:configure');
   const hasAnySection = canClients || canBarbers || canSchedules || canPricing;
+  const needsReferenceData = canBarbers || canSchedules || canPricing;
+
+  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
+  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!needsReferenceData) {
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      try {
+        const [barbersResponse, servicesResponse] = await Promise.all([
+          apiGet<PublicBarbersResponse>('/barbers'),
+          apiGet<PublicServicesResponse>('/services'),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setBarbers(barbersResponse.barbers);
+        setServices(servicesResponse.services);
+      } catch (err) {
+        if (!cancelled) {
+          setReferenceError(describeError(err));
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [needsReferenceData]);
+
+  const referenceDataReady = barbers !== null && services !== null && !referenceError;
 
   return (
     <section className="management">
       <h2>Gestión</h2>
-      {!hasAnySection && (
-        <p className="empty-state">Tu cuenta no tiene acceso a ninguna sección de gestión.</p>
-      )}
+      {!hasAnySection && <p className="empty-state">Tu cuenta no tiene acceso a ninguna sección de gestión.</p>}
+      {referenceError && <p role="alert">{referenceError}</p>}
       {canClients && <ClientsSection />}
-      {canBarbers && <BarbersSection />}
-      {canSchedules && <SchedulesSection />}
-      {canPricing && <PricingSection />}
+      {needsReferenceData && !referenceDataReady && !referenceError && (
+        <p className="empty-state">Cargando barberos y servicios...</p>
+      )}
+      {canBarbers && referenceDataReady && <BarbersSection barbers={barbers} />}
+      {canSchedules && referenceDataReady && <SchedulesSection barbers={barbers} />}
+      {canPricing && referenceDataReady && <PricingSection services={services} />}
     </section>
   );
 }
@@ -96,12 +139,17 @@ function ClientsSection() {
   );
 }
 
-function BarbersSection() {
+interface BarbersSectionProps {
+  readonly barbers: readonly PublicBarberResponse[];
+}
+
+function BarbersSection({ barbers }: BarbersSectionProps) {
+  const [firstBarber] = barbers;
   const [name, setName] = useState('');
   const [dayOfWeek, setDayOfWeek] = useState('1');
   const [opensAt, setOpensAt] = useState('09:00');
   const [closesAt, setClosesAt] = useState('18:00');
-  const [barberToDeactivate, setBarberToDeactivate] = useState<string>(DEMO_BARBERS[0].id);
+  const [barberToDeactivate, setBarberToDeactivate] = useState<string>(firstBarber?.id ?? '');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,7 +162,7 @@ function BarbersSection() {
         name,
         schedule: [{ dayOfWeek: Number(dayOfWeek), opensAt, closesAt }],
       });
-      setNotice(`${created.name} dado de alta correctamente.`);
+      setNotice(`${created.name} dado de alta correctamente. Recargá la página para verlo en los selectores.`);
       setName('');
     } catch (err) {
       setError(describeError(err));
@@ -122,6 +170,9 @@ function BarbersSection() {
   }
 
   async function handleDeactivate() {
+    if (!barberToDeactivate) {
+      return;
+    }
     setError(null);
     setNotice(null);
     try {
@@ -176,35 +227,44 @@ function BarbersSection() {
         <button type="submit">Dar de alta</button>
       </form>
 
-      <form
-        className="management__form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleDeactivate();
-        }}
-      >
-        <span className="management__field">
-          <label htmlFor="mgmt-barber-deactivate">Barbero a dar de baja</label>
-          <select
-            id="mgmt-barber-deactivate"
-            value={barberToDeactivate}
-            onChange={(e) => setBarberToDeactivate(e.target.value)}
-          >
-            {DEMO_BARBERS.map((barber) => (
-              <option key={barber.id} value={barber.id}>
-                {barber.name}
-              </option>
-            ))}
-          </select>
-        </span>
-        <button type="submit">Dar de baja</button>
-      </form>
+      {barbers.length === 0 ? (
+        <p className="empty-state">Todavía no hay barberos activos para dar de baja.</p>
+      ) : (
+        <form
+          className="management__form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleDeactivate();
+          }}
+        >
+          <span className="management__field">
+            <label htmlFor="mgmt-barber-deactivate">Barbero a dar de baja</label>
+            <select
+              id="mgmt-barber-deactivate"
+              value={barberToDeactivate}
+              onChange={(e) => setBarberToDeactivate(e.target.value)}
+            >
+              {barbers.map((barber) => (
+                <option key={barber.id} value={barber.id}>
+                  {barber.name}
+                </option>
+              ))}
+            </select>
+          </span>
+          <button type="submit">Dar de baja</button>
+        </form>
+      )}
     </div>
   );
 }
 
-function SchedulesSection() {
-  const [barberId, setBarberId] = useState<string>(DEMO_BARBERS[0].id);
+interface SchedulesSectionProps {
+  readonly barbers: readonly PublicBarberResponse[];
+}
+
+function SchedulesSection({ barbers }: SchedulesSectionProps) {
+  const [firstBarber] = barbers;
+  const [barberId, setBarberId] = useState<string>(firstBarber?.id ?? '');
   const [dayOfWeek, setDayOfWeek] = useState('1');
   const [opensAt, setOpensAt] = useState('09:00');
   const [closesAt, setClosesAt] = useState('18:00');
@@ -213,6 +273,9 @@ function SchedulesSection() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!barberId) {
+      return;
+    }
     setError(null);
     setNotice(null);
     try {
@@ -227,6 +290,15 @@ function SchedulesSection() {
     }
   }
 
+  if (barbers.length === 0) {
+    return (
+      <div className="management__section">
+        <h3>Horarios</h3>
+        <p className="empty-state">Todavía no hay barberos activos para configurar.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="management__section">
       <h3>Horarios</h3>
@@ -236,7 +308,7 @@ function SchedulesSection() {
         <span className="management__field">
           <label htmlFor="mgmt-schedule-barber">Barbero</label>
           <select id="mgmt-schedule-barber" value={barberId} onChange={(e) => setBarberId(e.target.value)}>
-            {DEMO_BARBERS.map((barber) => (
+            {barbers.map((barber) => (
               <option key={barber.id} value={barber.id}>
                 {barber.name}
               </option>
@@ -279,14 +351,22 @@ function SchedulesSection() {
   );
 }
 
-function PricingSection() {
-  const [serviceId, setServiceId] = useState<string>(DEMO_SERVICES[0].id);
+interface PricingSectionProps {
+  readonly services: readonly PublicServiceResponse[];
+}
+
+function PricingSection({ services }: PricingSectionProps) {
+  const [firstService] = services;
+  const [serviceId, setServiceId] = useState<string>(firstService?.id ?? '');
   const [priceArs, setPriceArs] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!serviceId) {
+      return;
+    }
     setError(null);
     setNotice(null);
     try {
@@ -295,6 +375,15 @@ function PricingSection() {
     } catch (err) {
       setError(describeError(err));
     }
+  }
+
+  if (services.length === 0) {
+    return (
+      <div className="management__section">
+        <h3>Precios</h3>
+        <p className="empty-state">Todavía no hay servicios cargados.</p>
+      </div>
+    );
   }
 
   return (
@@ -306,7 +395,7 @@ function PricingSection() {
         <span className="management__field">
           <label htmlFor="mgmt-pricing-service">Servicio</label>
           <select id="mgmt-pricing-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
-            {DEMO_SERVICES.map((service) => (
+            {services.map((service) => (
               <option key={service.id} value={service.id}>
                 {service.name}
               </option>

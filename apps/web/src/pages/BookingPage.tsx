@@ -5,6 +5,10 @@ import type {
   CheckoutResponseBody,
   ConfirmReservationRequest,
   HoldResponse,
+  PublicBarberResponse,
+  PublicBarbersResponse,
+  PublicServiceResponse,
+  PublicServicesResponse,
 } from '@jc-barberia/contracts';
 
 import { AccessCodeNotice } from '../booking/AccessCodeNotice';
@@ -12,7 +16,7 @@ import { BookingFlowContainer } from '../booking/BookingFlowContainer';
 import { CheckoutStep } from '../booking/CheckoutStep';
 import { HoldCountdown } from '../booking/HoldCountdown';
 import { apiGet, apiPost, describeError } from '../shared/api-client';
-import { DEMO_BARBERS, DEMO_SERVICES } from '../shared/demo-data';
+import { formatPriceArs } from '../shared/money';
 import { nowMs } from '../shared/now';
 import { utcIsoToShopLocalTime } from '../shared/shop-time';
 import './BookingPage.css';
@@ -27,10 +31,20 @@ import './BookingPage.css';
  * steps OUTSIDE it and renders `HoldCountdown` + `CheckoutStep` directly,
  * exactly as that container's own doc comment expects of "a page-level
  * caller" deciding what comes next.
+ *
+ * datos-reales-en-ui: used to default `barberId`/`serviceId` to
+ * `shared/demo-data.ts`'s hardcoded first entries. Now fetches
+ * `GET /barbers` (active-only) and `GET /services` (real `priceCents`) on
+ * mount and defaults the selects to whatever comes back first — a
+ * deactivated barber can no longer even be selected, because it is never in
+ * the list to begin with.
  */
 export function BookingPage() {
-  const [barberId, setBarberId] = useState<string>(DEMO_BARBERS[0].id);
-  const [serviceId, setServiceId] = useState<string>(DEMO_SERVICES[0].id);
+  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
+  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [barberId, setBarberId] = useState('');
+  const [serviceId, setServiceId] = useState('');
   const [date, setDate] = useState('');
   const [slots, setSlots] = useState<readonly AvailabilitySlot[]>([]);
   // D.5: distinguishes "todavía no buscaste" from "buscaste y no hay" —
@@ -45,6 +59,39 @@ export function BookingPage() {
   const [checkout, setCheckout] = useState<CheckoutResponseBody | null>(null);
   const [tick, setTick] = useState(nowMs());
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [barbersResponse, servicesResponse] = await Promise.all([
+          apiGet<PublicBarbersResponse>('/barbers'),
+          apiGet<PublicServicesResponse>('/services'),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setBarbers(barbersResponse.barbers);
+        setServices(servicesResponse.services);
+        const [firstBarber] = barbersResponse.barbers;
+        const [firstService] = servicesResponse.services;
+        if (firstBarber) {
+          setBarberId(firstBarber.id);
+        }
+        if (firstService) {
+          setServiceId(firstService.id);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(describeError(err));
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // `HoldCountdown` needs a periodically-refreshed `nowMs` — this page is
   // the composer that owns the interval, per that component's own doc
@@ -117,6 +164,9 @@ export function BookingPage() {
     setHasSearched(false);
   }
 
+  const referenceDataReady = barbers !== null && services !== null && !loadError;
+  const referenceDataEmpty = referenceDataReady && (barbers.length === 0 || services.length === 0);
+
   return (
     <div className="booking-page container">
       <div className="booking-page__intro">
@@ -124,70 +174,81 @@ export function BookingPage() {
         <p>Elegí barbero, servicio y fecha para ver los horarios libres de hoy.</p>
       </div>
 
+      {loadError && <p role="alert">{loadError}</p>}
       {error && <p role="alert">{error}</p>}
 
-      {!hold && (
-        <form className="card booking-page__form" onSubmit={handleSearch}>
-          <label htmlFor="booking-barber">Barbero</label>
-          <select id="booking-barber" value={barberId} onChange={(e) => setBarberId(e.target.value)}>
-            {DEMO_BARBERS.map((barber) => (
-              <option key={barber.id} value={barber.id}>
-                {barber.name}
-              </option>
-            ))}
-          </select>
+      {!loadError && !referenceDataReady && <p className="empty-state">Cargando barberos y servicios...</p>}
 
-          <label htmlFor="booking-service">Servicio</label>
-          <select id="booking-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
-            {DEMO_SERVICES.map((service) => (
-              <option key={service.id} value={service.id}>
-                {service.name}
-              </option>
-            ))}
-          </select>
-
-          <label htmlFor="booking-date">Fecha</label>
-          <input id="booking-date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
-
-          <button type="submit">Ver horarios disponibles</button>
-        </form>
+      {referenceDataEmpty && (
+        <p className="empty-state">Todavía no hay barberos o servicios cargados. Contactá al local.</p>
       )}
 
-      {!clientId &&
-        (hold || hasSearched ? (
-          <div className="card booking-page__results">
-            <BookingFlowContainer
-              slots={slots}
-              hold={hold}
-              nowMs={tick}
-              onSelectSlot={handleSelectSlot}
-              onConfirmReservation={handleConfirmReservation}
-            />
-          </div>
-        ) : (
-          <p className="empty-state">
-            Todavía no buscaste: elegí un barbero, un servicio y una fecha para ver los horarios disponibles.
-          </p>
-        ))}
+      {referenceDataReady && !referenceDataEmpty && (
+        <>
+          {!hold && (
+            <form className="card booking-page__form" onSubmit={handleSearch}>
+              <label htmlFor="booking-barber">Barbero</label>
+              <select id="booking-barber" value={barberId} onChange={(e) => setBarberId(e.target.value)}>
+                {barbers.map((barber) => (
+                  <option key={barber.id} value={barber.id}>
+                    {barber.name}
+                  </option>
+                ))}
+              </select>
 
-      {hold && clientId && (
-        <div className="card booking-page__results">
-          <HoldCountdown expiresAt={hold.expiresAt} nowMs={tick} />
-          <CheckoutStep checkout={checkout} onStartCheckout={handleStartCheckout} />
-          {/* cuenta-cliente-persistente: shown as soon as the account exists,
-              because clicking "Pagar la seña ahora" (CheckoutStep) navigates
-              the browser AWAY to MercadoPago — this may be the client's only
-              chance to see this page again before that happens. */}
-          <AccessCodeNotice />
-        </div>
-      )}
+              <label htmlFor="booking-service">Servicio</label>
+              <select id="booking-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+                {services.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name} ({formatPriceArs(service.priceCents)})
+                  </option>
+                ))}
+              </select>
 
-      {(hold || checkout) && (
-        <p className="booking-page__restart">
-          <button type="button" className="btn-ghost" onClick={startOver}>
-            Empezar de nuevo
-          </button>
-        </p>
+              <label htmlFor="booking-date">Fecha</label>
+              <input id="booking-date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+
+              <button type="submit">Ver horarios disponibles</button>
+            </form>
+          )}
+
+          {!clientId &&
+            (hold || hasSearched ? (
+              <div className="card booking-page__results">
+                <BookingFlowContainer
+                  slots={slots}
+                  hold={hold}
+                  nowMs={tick}
+                  onSelectSlot={handleSelectSlot}
+                  onConfirmReservation={handleConfirmReservation}
+                />
+              </div>
+            ) : (
+              <p className="empty-state">
+                Todavía no buscaste: elegí un barbero, un servicio y una fecha para ver los horarios disponibles.
+              </p>
+            ))}
+
+          {hold && clientId && (
+            <div className="card booking-page__results">
+              <HoldCountdown expiresAt={hold.expiresAt} nowMs={tick} />
+              <CheckoutStep checkout={checkout} onStartCheckout={handleStartCheckout} />
+              {/* cuenta-cliente-persistente: shown as soon as the account exists,
+                  because clicking "Pagar la seña ahora" (CheckoutStep) navigates
+                  the browser AWAY to MercadoPago — this may be the client's only
+                  chance to see this page again before that happens. */}
+              <AccessCodeNotice />
+            </div>
+          )}
+
+          {(hold || checkout) && (
+            <p className="booking-page__restart">
+              <button type="button" className="btn-ghost" onClick={startOver}>
+                Empezar de nuevo
+              </button>
+            </p>
+          )}
+        </>
       )}
     </div>
   );

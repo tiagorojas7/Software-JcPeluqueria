@@ -27,9 +27,8 @@ function timeLabel(iso: string): string {
  * owner's own words: "poné cuándo inicia, no cuándo inicia y termina."
  * Every slot for one search shares the same duration (the service just
  * picked), so it is stated ONCE above the list instead, derived from the
- * first slot's own `startsAt`/`endsAt` — `DEMO_SERVICES` carries no
- * duration field of its own today, so this is the only source the frontend
- * actually has.
+ * first slot's own `startsAt`/`endsAt` rather than a prop this component
+ * would otherwise have to accept.
  */
 export function AvailabilityPicker({ slots, onSelectSlot }: AvailabilityPickerProps) {
   // Destructured rather than indexed: `noUncheckedIndexedAccess` does not

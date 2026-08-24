@@ -1,5 +1,12 @@
 import { Module, type OnApplicationShutdown } from '@nestjs/common';
-import { CheckoutUseCase, CreateHold, GetPublicAvailabilityUseCase, RegisterClientUseCase } from '@jc-barberia/application';
+import {
+  CheckoutUseCase,
+  CreateHold,
+  GetPublicAvailabilityUseCase,
+  ListPublicBarbersUseCase,
+  ListPublicServicesUseCase,
+  RegisterClientUseCase,
+} from '@jc-barberia/application';
 import {
   db,
   DrizzleBarberRepository,
@@ -31,6 +38,7 @@ import type {
 import { AccessControlModule } from '../access-control/access-control.module';
 import { AvailabilityController } from './availability.controller';
 import { HoldController } from './hold.controller';
+import { ListPublicBarbersController, ListPublicServicesController } from './public-offerings.controller';
 import {
   BARBER_REPOSITORY,
   CLIENT_ACCOUNT_REPOSITORY,
@@ -55,7 +63,7 @@ import {
  */
 @Module({
   imports: [AccessControlModule],
-  controllers: [AvailabilityController, HoldController],
+  controllers: [AvailabilityController, HoldController, ListPublicBarbersController, ListPublicServicesController],
   providers: [
     { provide: CLOCK, useFactory: () => new ShopClock() },
     { provide: BARBER_REPOSITORY, useFactory: () => new DrizzleBarberRepository(db) },
@@ -81,6 +89,16 @@ import {
         freeRangesQuery: FreeRangesQuery,
         clock: Clock,
       ) => new GetPublicAvailabilityUseCase(barbers, services, schedules, freeRangesQuery, clock),
+    },
+    {
+      provide: ListPublicBarbersUseCase,
+      inject: [BARBER_REPOSITORY],
+      useFactory: (barbers: BarberRepository) => new ListPublicBarbersUseCase(barbers),
+    },
+    {
+      provide: ListPublicServicesUseCase,
+      inject: [SERVICE_REPOSITORY],
+      useFactory: (services: ServiceRepository) => new ListPublicServicesUseCase(services),
     },
     {
       provide: CreateHold,

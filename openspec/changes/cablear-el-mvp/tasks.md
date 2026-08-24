@@ -653,3 +653,111 @@ Testcontainers real, 5/5) · `apps/api` (`day-board.spec.ts` +
 `reservado` con seña) sigue bloqueada por la falta de credenciales reales de
 prueba en este entorno, igual que en A.5/A.7/F.4 — no es un defecto
 introducido ni corregido por esta slice.
+
+## Slice H: Datos reales en vez de demo-data.ts
+
+Reportado por el dueño probando la app en vivo: `apps/web/src/shared/demo-data.ts`
+hardcodeaba barberos y servicios, con el precio horneado en el string de
+display (`'Corte clásico ($8.000)'`). Ninguna de las tres pantallas que lo
+importaban (`HomePage`, `BookingPage`, `PhoneAppointmentPage`) le preguntaba
+nunca a la base. Consecuencia exacta que el dueño reportó: desactivó a
+Facundo Díaz desde el panel y el sitio lo siguió listando y dejando
+elegirlo (mostraba cero horarios porque `GetPublicAvailabilityUseCase` sí
+respetaba la baja — la UI y la lógica estaban en desacuerdo); dio de alta a
+"roberto carlos" y quedó invisible en todos lados; cambió un precio y el
+sitio siguió mostrando el viejo.
+
+- [x] H.1 **Dos endpoints públicos nuevos, `GET /barbers` y `GET /services`**
+      (`@Public()`, sin `ActorContext`) — no existían, `AvailabilityController`
+      solo servía `/availability`. `BarberRepository.list()`/
+      `ServiceRepository.list()` ya existían en `packages/domain` con sus
+      adaptadores Drizzle ya implementados y ya cableados en `BookingModule`
+      (`BARBER_REPOSITORY`/`SERVICE_REPOSITORY`) — no hizo falta tocar
+      dominio ni infraestructura, solo dos casos de uso finos:
+      `ListPublicBarbersUseCase` (filtra `active`, la única regla — un
+      barbero dado de baja nunca llega al visitante) y
+      `ListPublicServicesUseCase` (pass-through: `Service` no tiene flag
+      `active`). Controllers en
+      `apps/api/src/booking/public-offerings.controller.ts`
+      (`ListPublicBarbersController`/`ListPublicServicesController`, dos
+      clases — cada una con su propio prefijo `barbers`/`services`, sin
+      colisionar con las rutas `:barberId/...` que ya existían en ese mismo
+      prefijo). Precio viaja como `priceCents` entero
+      (`PublicServiceResponse`, `packages/contracts/src/booking.ts`) — nunca
+      un string formateado. TDD real: RED en `18981a4`/`e2eed3e`, GREEN en
+      `5d5708c`/`1336606`.
+- [x] H.2 **Las cuatro pantallas que importaban `demo-data.ts` pasan a pedir
+      los dos endpoints al montar** — `HomePage`, `BookingPage`,
+      `PhoneAppointmentPage` (las tres nombradas en el reporte) y también
+      `ManagementPage` (no nombrada explícitamente, pero tenía el mismo bug:
+      es la pantalla donde el dueño da de baja un barbero y cambia precios,
+      y sus tres selects — dar de baja, horarios, precios — también leían de
+      `DEMO_BARBERS`/`DEMO_SERVICES`). Cada una maneja loading/error/vacío
+      explícitos — nunca un formulario vacío silencioso. `priceCents` se
+      formatea del lado del browser (`shared/money.ts`,
+      `formatPriceArs`) con separador de miles armado a mano
+      (`Math.round` + regex), no con `Number.prototype.toLocaleString()`:
+      esa llamada está prohibida por `no-restricted-syntax` en
+      `eslint.config.js` fuera de `ShopClock`/`FakeClock`, y el selector del
+      ESLint no distingue el receptor — cualquier `.toLocaleString()` cae la
+      regla. `PhoneAppointmentForm` no cambió de forma (`{id, name}`), solo
+      quién le da los datos. `shared/demo-data.ts` y sus cuatro imports se
+      borraron enteros. TDD real: rewire con specs reescritos en `1ce8d3c`
+      (las cuatro páginas mockean `apiGet` por path en vez de datos fijos).
+
+**Verificación real, contra Postgres real (puerto 5442), API en 3001, web en
+5175** — el intento de abrir el navegador (`mcp__claude-in-chrome__*`) se
+frenó ahí: la extensión reportó "Browser extension is not connected", así
+que la prueba visual del punto 5 del criterio de aceptación (turno
+telefónico con las mismas listas reales) no se hizo con captura de pantalla.
+Se cae al fallback explícito de la consigna — `curl` más SQL directa —, sin
+fabricar evidencia de pantalla que no se obtuvo:
+
+```
+POST /api/auth/staff-login  dueno@jcbarberia.test           → 200, role=owner
+GET  /api/barbers  (antes)  → Cristian Gómez, Facundo Díaz, Nahuel Torres
+
+POST /api/panel/barbers/<id-facundo>/deactivate              → {"deactivated":true}
+GET  /api/barbers  (después) → Cristian Gómez, Nahuel Torres        (Facundo ya no está)
+
+POST /api/panel/barbers  {"name":"Roberto Carlos", schedule:[...]}  → 201
+GET  /api/barbers  (después) → ...Nahuel Torres, Roberto Carlos     (aparece)
+
+PUT  /api/panel/services/<id-corte-clasico>/price  {"priceCents":950000} → {"configured":true}
+GET  /api/services (después) → "Corte clásico", priceCents: 950000  (el nuevo precio)
+
+GET  /api/availability?barberId=<id-facundo>&serviceId=...&date=2026-08-24
+                                                               → {"slots":[]}
+```
+
+SQL directa (`jc_barberia_test`) confirma que `barbers.active=false` para
+Facundo — la UI y `GetPublicAvailabilityUseCase` ahora están de acuerdo,
+que era el reclamo original del dueño. `curl http://localhost:5175/api/barbers`
+(a través del proxy de Vite, la misma ruta exacta que ve el browser) devuelve
+idéntico JSON que `curl http://localhost:3001/api/barbers` directo — el
+`VITE_API_ORIGIN` del proxy quedó bien apuntado.
+
+**Suites ejecutadas por separado, todas verdes**: `packages/application`
+(41/41 archivos, 198/198 tests, incluye `list-public-barbers.spec.ts` +
+`list-public-services.spec.ts`) · `apps/api` (18/18 archivos, 119/119 tests,
+incluye `public-offerings.spec.ts`) · `apps/web` (32/32 archivos, 138/138
+tests, incluye `HomePage.spec.tsx`/`BookingPage.spec.tsx`/
+`ManagementPage.spec.tsx`/`money.spec.ts` reescritos o nuevos).
+`pnpm typecheck` (7/7 paquetes), `pnpm lint` (`eslint .`, sin hallazgos) y
+`pnpm depcruise` (483 módulos, 1453 dependencias, sin violaciones) verdes en
+todo el workspace.
+
+**Nota de entorno, no de producto**: `apps/web`'s vitest suite fallaba por
+completo antes de empezar (`Cannot find module './xhr-sync-worker.js'`,
+jsdom) en este worktree — el archivo faltaba en el store de pnpm
+(`node_modules/.pnpm/jsdom@25.0.1.../lib/jsdom/living/xhr/`), y faltaba
+igual en los demás worktrees hermanos (`web-cliente`, `cuenta-cliente`),
+confirmando que no era nada de esta rama. Se bajó el archivo puntual desde
+el registry de npm y se copió a mano en el store local para poder correr la
+suite; no se tocó nada fuera de ese archivo de jsdom.
+
+**Abierto**: la verificación visual en navegador (paso 5 del criterio de
+aceptación) no se completó porque la extensión de Chrome no está conectada
+en este entorno — no es un defecto de este slice, es una limitación del
+entorno de verificación. La secuencia curl+SQL de arriba prueba el mismo
+camino de datos que el navegador vería (mismo proxy, misma respuesta).

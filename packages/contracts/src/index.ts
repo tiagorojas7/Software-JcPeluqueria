@@ -56,6 +56,10 @@ export type {
   CreateHoldRequest,
   GetAvailabilityQuery,
   HoldResponse,
+  PublicBarberResponse,
+  PublicBarbersResponse,
+  PublicServiceResponse,
+  PublicServicesResponse,
 } from './booking';
 export {
   CheckoutRequestSchema,

@@ -35,13 +35,13 @@ export function utcIsoToShopLocalTime(iso: string): string {
 
 /**
  * Minutes between two ISO UTC instants on the SAME `AvailabilitySlot`
- * (`startsAt`/`endsAt`) — the frontend's only source of a service's
- * duration today (`shared/demo-data.ts`'s `DEMO_SERVICES` carries no
- * duration field). Same pure string/number arithmetic as
- * `utcIsoToShopLocalTime` above, for the same ESLint reason: no `Date`
- * construction anywhere in this file. Wraps around a UTC-midnight crossing
- * the same defensive way that function already does, even though no
- * appointment slot is long enough to make that matter in practice.
+ * (`startsAt`/`endsAt`) — used where only the slot's own boundaries are on
+ * hand, even though `PublicServiceResponse.durationMinutes` now carries a
+ * service's real duration from `GET /services`. Same pure string/number
+ * arithmetic as `utcIsoToShopLocalTime` above, for the same ESLint reason:
+ * no `Date` construction anywhere in this file. Wraps around a UTC-midnight
+ * crossing the same defensive way that function already does, even though
+ * no appointment slot is long enough to make that matter in practice.
  */
 export function isoSlotDurationMinutes(startsAt: string, endsAt: string): number {
   const toMinutes = (iso: string) => Number(iso.slice(11, 13)) * 60 + Number(iso.slice(14, 16));
