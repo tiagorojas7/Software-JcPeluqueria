@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { AccountAppointmentResponse } from '@jc-barberia/contracts';
 
+import { nowMs } from '../shared/now';
 import { utcIsoToShopLocalTime } from '../shared/shop-time';
 
 export interface AccountAppointmentsListProps {
@@ -14,30 +16,82 @@ export interface AccountAppointmentsListProps {
 const CANCELLABLE_STATUS = 'reservado';
 
 /**
- * "Mi cuenta" (cablear-el-mvp Slice C, C.3/C.5): the client's own
- * appointments. Purely presentational — never calls the API itself, same
- * container/presentational split `DayBoard` already established: it only
- * draws what it receives and forwards a clicked id to its caller, who owns
- * the actual `POST /account/appointments/:id/cancel` call.
+ * Mirrors `SelfCancelAppointmentUseCase.SELF_CANCEL_WINDOW_MINUTES`
+ * (`packages/application/src/appointments/self-cancel-appointment.ts`) — this
+ * SPA never imports the application layer, so the number is restated here,
+ * the same duplication `shop-time.ts`'s `SHOP_UTC_OFFSET_MINUTES` already
+ * accepts for the identical reason.
+ */
+const SELF_CANCEL_WINDOW_MINUTES = 60;
+
+/**
+ * panel-usable: `SelfCancelAppointmentUseCase` blocks self-cancellation
+ * entirely once inside the last hour before the turno — it never cancels
+ * "late, no refund", it just refuses with `too-late`. That refusal used to
+ * only ever surface AFTER the client clicked "Cancelar" and the request came
+ * back. This estimates the SAME rule client-side (`nowMs()` vs
+ * `startsAt - SELF_CANCEL_WINDOW_MINUTES`, pure epoch-millisecond
+ * arithmetic — no `Date` construction, per the repo-wide Clock-only ESLint
+ * rule) so the client is told BEFORE confirming, not after: still in time
+ * (and a settled deposit refunds automatically, per
+ * `resolveDepositForCancellation`), or already too late to cancel from here
+ * at all. The server call in `onCancel` remains the one source of truth for
+ * the ACTUAL outcome — this estimate only decides what the confirmation step
+ * says and whether it offers a "Confirmar cancelación" button at all; it
+ * never skips the real request.
  */
 export function AccountAppointmentsList({ appointments, onCancel }: AccountAppointmentsListProps) {
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
   if (appointments.length === 0) {
     return <p>Todavía no tenés turnos.</p>;
   }
 
   return (
     <ul>
-      {appointments.map((appointment) => (
-        <li key={appointment.id}>
-          <span>{appointment.status}</span>{' '}
-          <span>{utcIsoToShopLocalTime(appointment.startsAt)}</span>
-          {appointment.status === CANCELLABLE_STATUS && (
-            <button type="button" onClick={() => onCancel(appointment.id)}>
-              Cancelar
-            </button>
-          )}
-        </li>
-      ))}
+      {appointments.map((appointment) => {
+        const isCancellable = appointment.status === CANCELLABLE_STATUS;
+        const isConfirming = confirmingId === appointment.id;
+        const cutoffMs = Date.parse(appointment.startsAt) - SELF_CANCEL_WINDOW_MINUTES * 60_000;
+        const stillWithinWindow = nowMs() < cutoffMs;
+
+        return (
+          <li key={appointment.id}>
+            <span>{appointment.status}</span> <span>{utcIsoToShopLocalTime(appointment.startsAt)}</span>
+            {isCancellable && !isConfirming && (
+              <button type="button" onClick={() => setConfirmingId(appointment.id)}>
+                Cancelar
+              </button>
+            )}
+            {isCancellable && isConfirming && (
+              <div className="account-appointments__confirm">
+                {stillWithinWindow ? (
+                  <p>Todavía estás a tiempo: si pagaste una seña, se te reembolsa automáticamente al cancelar.</p>
+                ) : (
+                  <p role="alert">
+                    Ya pasó el límite de {SELF_CANCEL_WINDOW_MINUTES} minutos antes del turno: no podés cancelarlo
+                    vos mismo. Contactá al local si lo necesitás.
+                  </p>
+                )}
+                {stillWithinWindow && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmingId(null);
+                      onCancel(appointment.id);
+                    }}
+                  >
+                    Confirmar cancelación
+                  </button>
+                )}
+                <button type="button" onClick={() => setConfirmingId(null)}>
+                  Volver
+                </button>
+              </div>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
