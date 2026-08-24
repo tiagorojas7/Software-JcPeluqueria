@@ -11,6 +11,32 @@ vi.mock('../shared/api-client', () => ({
   describeError: (err: unknown) => (err instanceof Error ? err.message : 'error desconocido'),
 }));
 
+const BARBERS_RESPONSE = { barbers: [{ id: 'barber-1', name: 'Cristian Gómez' }] };
+const SERVICES_RESPONSE = {
+  services: [{ id: 'service-1', name: 'Corte clásico', durationMinutes: 30, priceCents: 800000 }],
+};
+
+/**
+ * Every test here mocks `apiGet` by path: `/barbers`/`/services` resolve on
+ * mount (datos-reales-en-ui — the page fetches real reference data instead
+ * of importing `shared/demo-data.ts` now), `/availability` resolves however
+ * that specific test needs after the visitor searches.
+ */
+function mockReferenceData(availabilityResult?: unknown) {
+  vi.mocked(apiGet).mockImplementation((path: string) => {
+    if (path === '/barbers') {
+      return Promise.resolve(BARBERS_RESPONSE);
+    }
+    if (path === '/services') {
+      return Promise.resolve(SERVICES_RESPONSE);
+    }
+    if (path.startsWith('/availability') && availabilityResult !== undefined) {
+      return Promise.resolve(availabilityResult);
+    }
+    return Promise.reject(new Error(`unexpected apiGet path in test: ${path}`));
+  });
+}
+
 // D.5 RED — `AvailabilityPicker` (apps/web/src/booking/, not owned by this
 // slice) says "No hay horarios disponibles para esta selección" for ANY
 // empty `slots` array, including before the visitor ever searched — making
@@ -27,18 +53,35 @@ describe('BookingPage (D.5)', () => {
     vi.mocked(apiPost).mockReset();
   });
 
-  it('antes de la primera busqueda invita a buscar, y no dice que no hay horarios', () => {
+  it('antes de la primera busqueda invita a buscar, y no dice que no hay horarios', async () => {
+    mockReferenceData();
     render(<BookingPage />);
 
-    expect(screen.getByText(/todav.a no buscaste/i)).toBeInTheDocument();
+    expect(await screen.findByText(/todav.a no buscaste/i)).toBeInTheDocument();
     expect(screen.queryByText(/no hay horarios disponibles/i)).toBeNull();
   });
 
-  it('despues de buscar y no encontrar nada, ahora si distingue que no hay horarios', async () => {
-    vi.mocked(apiGet).mockResolvedValueOnce({ slots: [] });
+  it('mientras carga barberos y servicios, no muestra el formulario de busqueda todavia', () => {
+    vi.mocked(apiGet).mockImplementation(() => new Promise(() => {}));
     render(<BookingPage />);
 
-    fireEvent.change(screen.getByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
+    expect(screen.getByText(/cargando barberos y servicios/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^barbero$/i)).toBeNull();
+  });
+
+  it('si la carga de barberos o servicios falla, muestra el error en vez de un formulario vacio', async () => {
+    vi.mocked(apiGet).mockRejectedValue(new Error('No se pudo conectar con el servidor'));
+    render(<BookingPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo conectar/i);
+    expect(screen.queryByLabelText(/^barbero$/i)).toBeNull();
+  });
+
+  it('despues de buscar y no encontrar nada, ahora si distingue que no hay horarios', async () => {
+    mockReferenceData({ slots: [] });
+    render(<BookingPage />);
+
+    fireEvent.change(await screen.findByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
     fireEvent.click(screen.getByRole('button', { name: /ver horarios disponibles/i }));
 
     expect(await screen.findByText(/no hay horarios disponibles para esta selecci/i)).toBeInTheDocument();
@@ -46,12 +89,12 @@ describe('BookingPage (D.5)', () => {
   });
 
   it('despues de buscar y encontrar horarios, los muestra en vez del aviso', async () => {
-    vi.mocked(apiGet).mockResolvedValueOnce({
+    mockReferenceData({
       slots: [{ startsAt: '2026-08-20T12:00:00.000Z', endsAt: '2026-08-20T12:30:00.000Z' }],
     });
     render(<BookingPage />);
 
-    fireEvent.change(screen.getByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
+    fireEvent.change(await screen.findByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
     fireEvent.click(screen.getByRole('button', { name: /ver horarios disponibles/i }));
 
     // 12:00Z es 09:00 en el local (UTC-3): el visitante lee la hora a la que
@@ -67,7 +110,7 @@ describe('BookingPage (D.5)', () => {
   // access-code invitation must already be visible at this point, before he
   // ever clicks "pagar".
   it('apenas se crea la cuenta muestra el aviso para pedir un codigo de acceso, antes de pagar', async () => {
-    vi.mocked(apiGet).mockResolvedValueOnce({
+    mockReferenceData({
       slots: [{ startsAt: '2026-08-20T12:00:00.000Z', endsAt: '2026-08-20T12:30:00.000Z' }],
     });
     vi.mocked(apiPost)
@@ -79,7 +122,7 @@ describe('BookingPage (D.5)', () => {
       </RouterProvider>,
     );
 
-    fireEvent.change(screen.getByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
+    fireEvent.change(await screen.findByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
     fireEvent.click(screen.getByRole('button', { name: /ver horarios disponibles/i }));
     fireEvent.click(await screen.findByRole('button', { name: /^09:00$/i }));
 
