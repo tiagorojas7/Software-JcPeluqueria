@@ -1,6 +1,14 @@
 import { BadRequestException, Body, Controller, HttpCode, Inject, Post, Res } from '@nestjs/common';
-import { ClientLoginUseCase, RequestClientAccessUseCase, SessionService, StaffLoginUseCase } from '@jc-barberia/application';
 import {
+  ClientLoginByEmailUseCase,
+  ClientLoginUseCase,
+  RequestClientAccessUseCase,
+  SessionService,
+  StaffLoginUseCase,
+  type ClientLoginResult,
+} from '@jc-barberia/application';
+import {
+  ClientLoginByEmailRequestSchema,
   ClientLoginRequestSchema,
   RequestClientAccessRequestSchema,
   StaffLoginRequestSchema,
@@ -45,6 +53,7 @@ export class AuthController {
     // doc comment — this cost real debugging time once already).
     private readonly requestClientAccessUseCase: RequestClientAccessUseCase,
     private readonly clientLoginUseCase: ClientLoginUseCase,
+    private readonly clientLoginByEmailUseCase: ClientLoginByEmailUseCase,
     private readonly sessions: SessionService,
     @Inject(ACTOR_CONTEXT_REPOSITORY) private readonly actorContexts: ActorContextRepository,
     @Inject(CLIENT_CONTEXT_REPOSITORY) private readonly clientContexts: ClientContextRepository,
@@ -113,15 +122,23 @@ export class AuthController {
   }
 
   /**
-   * cablear-el-mvp Slice C (C.2): client-booking spec, "Cuenta sin
-   * contraseña creada al final del flujo" + "Código de acceso vencido".
-   * `@Public()` for the same reason as `requestClientAccess` above. On
-   * success, mints the session (`subject: 'client'`, the 30-day sliding TTL
-   * task 3a.19 established) and resolves it straight back through
-   * `ClientContextRepository` — the exact "create session, then resolve it
-   * immediately" shape `login()` above already established for staff, reused
-   * rather than invented twice. `clientId` here is `users.client_id`, never
-   * anything the request supplied.
+   * cablear-el-mvp Slice C (C.2), extended by fix/acceso-cliente-sin-id:
+   * client-booking spec, "Cuenta sin contraseña creada al final del flujo" +
+   * "Código de acceso vencido". `@Public()` for the same reason as
+   * `requestClientAccess` above.
+   *
+   * Accepts TWO body shapes, dispatched on which key is present rather than
+   * a discriminant field (neither request shape has room to spare one):
+   *   - `{ email, secret }` — the actual client-facing form. The email is
+   *     whatever the client typed one step earlier on the same screen, the
+   *     secret is the 6-digit code they just typed. No `challengeId` ever
+   *     reaches this endpoint from a human.
+   *   - `{ challengeId, secret }` — the magic-link path only. The link the
+   *     client-access-code email sends carries both as query params
+   *     (`client-access-code.template.ts`); nothing types this by hand.
+   * Both delegate to `finishClientLogin` for the identical "mint the
+   * session, resolve it back to a client, write the cookie" tail — never
+   * duplicated between the two shapes.
    */
   @Public()
   @Post('client-login')
@@ -130,12 +147,36 @@ export class AuthController {
     @Body() body: unknown,
     @Res({ passthrough: true }) res: CookieResponse,
   ): Promise<ClientLoginResponseBody> {
+    const isEmailShape = typeof body === 'object' && body !== null && 'email' in body;
+
+    if (isEmailShape) {
+      const parsed = ClientLoginByEmailRequestSchema.safeParse(body);
+      if (!parsed.success) {
+        throw new BadRequestException(parsed.error.flatten());
+      }
+      return this.finishClientLogin(await this.clientLoginByEmailUseCase.execute(parsed.data), res);
+    }
+
     const parsed = ClientLoginRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.flatten());
     }
+    return this.finishClientLogin(await this.clientLoginUseCase.execute(parsed.data), res);
+  }
 
-    const result = await this.clientLoginUseCase.execute(parsed.data);
+  /**
+   * The one place `POST /auth/client-login` mints a client session, shared
+   * by both request shapes above so neither can drift from the other:
+   * `subject: 'client'` (the 30-day sliding TTL task 3a.19 established),
+   * then resolved straight back through `ClientContextRepository` — the
+   * exact "create session, then resolve it immediately" shape `login()`
+   * above already established for staff. `clientId` is always
+   * `users.client_id`, never anything the request supplied.
+   */
+  private async finishClientLogin(
+    result: ClientLoginResult,
+    res: CookieResponse,
+  ): Promise<ClientLoginResponseBody> {
     if (result.outcome !== 'authenticated') {
       return result;
     }

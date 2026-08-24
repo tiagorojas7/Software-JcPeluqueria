@@ -32,6 +32,7 @@ export {
 } from './appointments';
 export type { BarberRevenueResponse, BarberStatsResponse } from './barbers';
 export type {
+  ClientLoginByEmailRequest,
   ClientLoginRequest,
   ClientLoginResponseBody,
   RequestClientAccessRequest,
@@ -39,7 +40,12 @@ export type {
   StaffLoginRequest,
   StaffLoginResponseBody,
 } from './identity';
-export { ClientLoginRequestSchema, RequestClientAccessRequestSchema, StaffLoginRequestSchema } from './identity';
+export {
+  ClientLoginByEmailRequestSchema,
+  ClientLoginRequestSchema,
+  RequestClientAccessRequestSchema,
+  StaffLoginRequestSchema,
+} from './identity';
 export type {
   AvailabilityResponse,
   AvailabilitySlot,

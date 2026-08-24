@@ -20,3 +20,5 @@ export { RegisterClientUseCase } from './register-client';
 export type { RegisterClientInput, RegisterClientResult } from './register-client';
 export { RequestClientAccessUseCase } from './request-client-access';
 export type { RequestClientAccessInput, RequestClientAccessResult } from './request-client-access';
+export { ClientLoginByEmailUseCase } from './client-login-by-email';
+export type { ClientLoginByEmailInput } from './client-login-by-email';

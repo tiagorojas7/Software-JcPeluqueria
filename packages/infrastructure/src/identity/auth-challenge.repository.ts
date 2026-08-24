@@ -5,7 +5,7 @@ import {
   type AuthChallengeRepository,
   type ConsumeChallengeResult,
 } from '@jc-barberia/domain';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import { authChallenges } from '../db/schema/identity';
@@ -113,5 +113,52 @@ export class DrizzleAuthChallengeRepository implements AuthChallengeRepository {
       return 'expired';
     }
     return state.attempts >= MAX_CHALLENGE_ATTEMPTS ? 'exhausted' : 'mismatch';
+  }
+
+  async findLatestActiveId(userId: string, purpose: AuthChallengePurpose): Promise<string | null> {
+    const rows = await this.db
+      .select({ id: authChallenges.id })
+      .from(authChallenges)
+      .where(
+        and(
+          eq(authChallenges.userId, userId),
+          eq(authChallenges.purpose, purpose),
+          isNull(authChallenges.consumedAt),
+          sql`${authChallenges.expiresAt} > now()`,
+          sql`${authChallenges.attempts} < ${MAX_CHALLENGE_ATTEMPTS}`,
+        ),
+      )
+      // Furthest-out expiry == issued last, since every purpose's window is a
+      // fixed duration (`EXPIRY_MINUTES_BY_PURPOSE`) — see this method's own
+      // doc comment on `AuthChallengeRepository`.
+      .orderBy(desc(authChallenges.expiresAt))
+      .limit(1);
+
+    return rows[0]?.id ?? null;
+  }
+
+  /**
+   * fix/acceso-cliente-sin-id, Decision 1: marks every still-alive
+   * `(userId, purpose)` row consumed, the exact same terminal state a real
+   * `consume()` produces — there is no separate "superseded" column. Scoped
+   * with the same liveness predicate `consume()`/`findLatestActiveId` use, so
+   * an already-dead row is left alone (no reason to touch what a caller can
+   * no longer learn anything new from). `ChallengeService.issue()` calls this
+   * BEFORE `create()`, so the challenge about to be created is never at risk
+   * of matching its own predicate.
+   */
+  async invalidateActive(userId: string, purpose: AuthChallengePurpose): Promise<void> {
+    await this.db
+      .update(authChallenges)
+      .set({ consumedAt: sql`now()` })
+      .where(
+        and(
+          eq(authChallenges.userId, userId),
+          eq(authChallenges.purpose, purpose),
+          isNull(authChallenges.consumedAt),
+          sql`${authChallenges.expiresAt} > now()`,
+          sql`${authChallenges.attempts} < ${MAX_CHALLENGE_ATTEMPTS}`,
+        ),
+      );
   }
 }

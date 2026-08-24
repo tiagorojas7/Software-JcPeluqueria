@@ -24,8 +24,14 @@ import { reminderWithoutDepositTemplate } from './reminder-without-deposit.templ
  * `booking_confirmed` (cablear-el-mvp item 1) renders the confirmation
  * `ProcessPaymentUseCase` enqueues the first time a web booking's deposit
  * settles — barber, service and the shop-local time, via the same clock.
+ *
+ * `publicBaseUrl` (fix/acceso-cliente-sin-id) is the same `PUBLIC_BASE_URL`
+ * `MercadoPagoPaymentAdapter` already reads (`apps/api/src/booking/booking.module.ts`)
+ * — one source of truth for where this deployment is publicly reachable,
+ * passed through only to `client_access_code`, the one template that
+ * currently needs a link back into the app.
  */
-export function createTemplateRegistry(clock: Clock): TemplateRegistry {
+export function createTemplateRegistry(clock: Clock, publicBaseUrl?: string): TemplateRegistry {
   return {
     staff_activation: accessTemplate,
     staff_password_reset: accessTemplate,
@@ -33,7 +39,7 @@ export function createTemplateRegistry(clock: Clock): TemplateRegistry {
     reminder_with_deposit: createReminderWithDepositTemplate(clock),
     reminder_without_deposit: reminderWithoutDepositTemplate,
     absence_reassignment_offer: createAbsenceReassignmentOfferTemplate(clock),
-    client_access_code: createClientAccessCodeTemplate(clock),
+    client_access_code: createClientAccessCodeTemplate(clock, publicBaseUrl),
     booking_confirmed: createBookingConfirmedTemplate(clock),
   };
 }
