@@ -4,6 +4,7 @@ import {
   FakeActorContextRepository,
   FakeAppointmentRepository,
   FakeClientContextRepository,
+  FakeClientRepository,
   FakeClock,
   FakeHoldExpireScheduler,
   FakePaymentPort,
@@ -15,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_COOKIE_NAME } from '../src/access-control/session-cookie';
 import { ACTOR_CONTEXT_REPOSITORY, CLIENT_CONTEXT_REPOSITORY } from '../src/access-control/tokens';
 import { HOLD_EXPIRE_SCHEDULER } from '../src/booking/tokens';
-import { APPOINTMENT_REPOSITORY, CLOCK, PAYMENT_PORT } from '../src/identity/tokens';
+import { APPOINTMENT_REPOSITORY, CLIENT_REPOSITORY, CLOCK, PAYMENT_PORT } from '../src/identity/tokens';
 import { AppModule } from '../src/app.module';
 
 // cablear-el-mvp Slice C (C.3/C.4): "Mi cuenta" — the client's own
@@ -27,6 +28,7 @@ import { AppModule } from '../src/app.module';
 
 const clientContexts = new FakeClientContextRepository();
 const appointments = new FakeAppointmentRepository();
+const clients = new FakeClientRepository();
 const paymentPort = new FakePaymentPort();
 // `new Date(...)` is off-limits outside `ShopClock`/`FakeClock` (the
 // repo-wide Clock-only ESLint rule) — `FakeClock.parseInstant` builds the
@@ -45,6 +47,7 @@ function newClientSession(): { sessionId: string; clientId: string } {
   const sessionId = `account-session-${n}`;
   const clientId = `account-client-${n}`;
   clientContexts.seed(sessionId, { userId: `account-user-${n}`, clientId, sessionExpiresAt: at('12:00') });
+  clients.seed({ id: clientId, name: `Cliente ${n}`, phone: `35100000${n}`, email: `cliente${n}@example.com`, age: 30 });
   return { sessionId, clientId };
 }
 
@@ -87,6 +90,8 @@ describe('GET /account/appointments + POST /account/appointments/:id/cancel (C.3
       .useValue(paymentPort)
       .overrideProvider(CLOCK)
       .useValue(clock)
+      .overrideProvider(CLIENT_REPOSITORY)
+      .useValue(clients)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -209,6 +214,27 @@ describe('GET /account/appointments + POST /account/appointments/:id/cancel (C.3
       expect(foreign.status).toBe(200);
       expect(foreign.body).toEqual({ outcome: 'not-yours' });
       expect(missing.body).toEqual(foreign.body);
+    });
+  });
+
+  // panel-usable: "a client who already has an account fills in name, email
+  // and phone again on every booking" — this is the plumbing the booking
+  // flow reads to prefill instead.
+  describe('GET /account/profile', () => {
+    it('rejects an anonymous request with 403 — deny by default applies here too', async () => {
+      const response = await request(app.getHttpServer()).get('/account/profile');
+
+      expect(response.status).toBe(403);
+    });
+
+    it("returns the authenticated client's own stored name/phone/email/age, never another client's", async () => {
+      const mine = newClientSession();
+
+      const response = await withSession(request(app.getHttpServer()).get('/account/profile'), mine.sessionId);
+      const stored = await clients.findById(mine.clientId);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ name: stored?.name, phone: stored?.phone, email: stored?.email, age: stored?.age });
     });
   });
 });

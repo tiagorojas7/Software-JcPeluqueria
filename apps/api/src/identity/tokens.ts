@@ -37,3 +37,11 @@ export const APPOINTMENT_REPOSITORY = Symbol('APPOINTMENT_REPOSITORY');
 /** DI token for the `PaymentPort` port (C.4: `SelfCancelAppointmentUseCase`
  *  refunds a settled seña as part of cancelling). */
 export const PAYMENT_PORT = Symbol('PAYMENT_PORT');
+
+/** DI token for the `ClientRepository` port. Re-added for `GetOwnProfileUseCase`
+ *  (panel-usable: "Mi cuenta"/booking-flow read back a returning client's own
+ *  stored details) — cuenta-cliente-persistente's own note on
+ *  `CLIENT_ACCOUNT_REPOSITORY` above says this module dropped the port once
+ *  already; this is a genuinely new consumer, not a regression of that
+ *  cleanup. */
+export const CLIENT_REPOSITORY = Symbol('CLIENT_REPOSITORY');

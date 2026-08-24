@@ -37,3 +37,19 @@ export type SelfCancelAppointmentResponseBody =
   | { readonly outcome: 'too-late'; readonly cutoff: string }
   | { readonly outcome: 'not-yours' }
   | { readonly outcome: 'not-cancellable' };
+
+/**
+ * panel-usable: "the owner wants their stored details filled in
+ * automatically, confirmed once, and then straight to paying the deposit"
+ * for a returning client — today they retype name/email/phone on every
+ * booking even though the shop already has them on file.
+ * `GET /account/profile` is the plumbing that reads them back, same
+ * session-only identity discipline as every other route on this
+ * controller.
+ */
+export interface AccountProfileResponse {
+  readonly name: string;
+  readonly phone: string;
+  readonly email: string | null;
+  readonly age: number | null;
+}

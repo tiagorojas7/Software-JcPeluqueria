@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type {
+  AccountProfileResponse,
   AvailabilityResponse,
   AvailabilitySlot,
   CheckoutResponseBody,
@@ -38,10 +39,20 @@ import './BookingPage.css';
  * mount and defaults the selects to whatever comes back first — a
  * deactivated barber can no longer even be selected, because it is never in
  * the list to begin with.
+ *
+ * panel-usable: also fetches `GET /account/profile` on mount, best-effort —
+ * a returning client (an existing client-session cookie) gets their stored
+ * name/phone/email/age handed to `AccountForm` so they confirm once instead
+ * of retyping them. ANY failure (403 "not logged in", the ordinary case for
+ * a first-time visitor; a genuine network error) is swallowed here and
+ * never surfaced as `loadError` — this is the one piece of reference data
+ * that is optional by construction: a client with no session keeps today's
+ * flow completely untouched.
  */
 export function BookingPage() {
   const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
   const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
+  const [accountProfile, setAccountProfile] = useState<AccountProfileResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [barberId, setBarberId] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -88,6 +99,26 @@ export function BookingPage() {
       }
     }
     void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Best-effort, independent of the barbers/services load above: a returning
+  // client's session is optional reference data, never something that can
+  // block or fail the booking flow (see this component's own doc comment).
+  useEffect(() => {
+    let cancelled = false;
+    apiGet<AccountProfileResponse>('/account/profile')
+      .then((profile) => {
+        if (!cancelled) {
+          setAccountProfile(profile);
+        }
+      })
+      .catch(() => {
+        // No session (403, the ordinary case) or any other failure: the
+        // visitor simply gets today's blank-form flow, never an error.
+      });
     return () => {
       cancelled = true;
     };
@@ -221,6 +252,7 @@ export function BookingPage() {
                   nowMs={tick}
                   onSelectSlot={handleSelectSlot}
                   onConfirmReservation={handleConfirmReservation}
+                  accountProfile={accountProfile}
                 />
               </div>
             ) : (

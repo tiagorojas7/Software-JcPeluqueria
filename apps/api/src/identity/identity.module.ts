@@ -3,6 +3,7 @@ import {
   ChallengeService,
   ClientLoginByEmailUseCase,
   ClientLoginUseCase,
+  GetOwnProfileUseCase,
   ListOwnAppointmentsUseCase,
   PasswordService,
   RequestClientAccessUseCase,
@@ -16,6 +17,7 @@ import {
   DrizzleAppointmentRepository,
   DrizzleAuthChallengeRepository,
   DrizzleClientAccountRepository,
+  DrizzleClientRepository,
   DrizzleNotificationOutboxRepository,
   DrizzleSessionRepository,
   DrizzleUserCredentialsRepository,
@@ -27,6 +29,7 @@ import type {
   AuthChallengeRepository,
   Clock,
   ClientAccountRepository,
+  ClientRepository,
   NotificationOutboxRepository,
   PasswordHasher,
   PaymentPort,
@@ -41,6 +44,7 @@ import {
   APPOINTMENT_REPOSITORY,
   AUTH_CHALLENGE_REPOSITORY,
   CLIENT_ACCOUNT_REPOSITORY,
+  CLIENT_REPOSITORY,
   CLOCK,
   NOTIFICATION_OUTBOX_REPOSITORY,
   PASSWORD_HASHER,
@@ -149,6 +153,18 @@ import {
       inject: [APPOINTMENT_REPOSITORY, PAYMENT_PORT, CLOCK],
       useFactory: (appointments: AppointmentRepository, paymentPort: PaymentPort, clock: Clock) =>
         new SelfCancelAppointmentUseCase(appointments, paymentPort, clock),
+    },
+    {
+      // panel-usable: "Mi cuenta"/booking-flow read back a returning
+      // client's own stored details — its own token instance, same
+      // one-token-per-module pattern every other repository above follows.
+      provide: CLIENT_REPOSITORY,
+      useFactory: () => new DrizzleClientRepository(db),
+    },
+    {
+      provide: GetOwnProfileUseCase,
+      inject: [CLIENT_REPOSITORY],
+      useFactory: (clients: ClientRepository) => new GetOwnProfileUseCase(clients),
     },
   ],
 })

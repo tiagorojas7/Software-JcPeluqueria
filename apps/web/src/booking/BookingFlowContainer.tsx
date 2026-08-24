@@ -1,4 +1,9 @@
-import type { AvailabilitySlot, ConfirmReservationRequest, HoldResponse } from '@jc-barberia/contracts';
+import type {
+  AccountProfileResponse,
+  AvailabilitySlot,
+  ConfirmReservationRequest,
+  HoldResponse,
+} from '@jc-barberia/contracts';
 
 import { AccountForm } from './AccountForm';
 import { AvailabilityPicker } from './AvailabilityPicker';
@@ -11,6 +16,8 @@ export interface BookingFlowContainerProps {
   readonly nowMs: number;
   readonly onSelectSlot: (slot: AvailabilitySlot) => void;
   readonly onConfirmReservation: (input: ConfirmReservationRequest) => void;
+  /** Forwarded to `AccountForm` unchanged — see its own doc comment. */
+  readonly accountProfile?: AccountProfileResponse | null;
 }
 
 /**
@@ -31,12 +38,13 @@ export function BookingFlowContainer({
   nowMs,
   onSelectSlot,
   onConfirmReservation,
+  accountProfile,
 }: BookingFlowContainerProps) {
   if (hold) {
     return (
       <div>
         <HoldCountdown expiresAt={hold.expiresAt} nowMs={nowMs} />
-        <AccountForm holdId={hold.holdId} onSubmit={onConfirmReservation} />
+        <AccountForm holdId={hold.holdId} onSubmit={onConfirmReservation} initialProfile={accountProfile} />
       </div>
     );
   }

@@ -3,6 +3,7 @@
 // only scaffolded in Phase 0.
 export type {
   AccountAppointmentResponse,
+  AccountProfileResponse,
   ListOwnAppointmentsResponse,
   SelfCancelAppointmentResponseBody,
 } from './account';

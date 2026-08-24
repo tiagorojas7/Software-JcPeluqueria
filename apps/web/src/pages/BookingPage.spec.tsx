@@ -1,15 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { apiGet, apiPost } from '../shared/api-client';
+import { apiGet, apiPost, ApiError } from '../shared/api-client';
 import { RouterProvider } from '../shared/router';
 import { BookingPage } from './BookingPage';
 
-vi.mock('../shared/api-client', () => ({
-  apiGet: vi.fn(),
-  apiPost: vi.fn(),
-  describeError: (err: unknown) => (err instanceof Error ? err.message : 'error desconocido'),
-}));
+vi.mock('../shared/api-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../shared/api-client')>();
+  return { ...actual, apiGet: vi.fn(), apiPost: vi.fn() };
+});
 
 const BARBERS_RESPONSE = { barbers: [{ id: 'barber-1', name: 'Cristian Gómez' }] };
 const SERVICES_RESPONSE = {
@@ -22,13 +21,22 @@ const SERVICES_RESPONSE = {
  * of importing `shared/demo-data.ts` now), `/availability` resolves however
  * that specific test needs after the visitor searches.
  */
-function mockReferenceData(availabilityResult?: unknown) {
+function mockReferenceData(availabilityResult?: unknown, accountProfile?: unknown) {
   vi.mocked(apiGet).mockImplementation((path: string) => {
     if (path === '/barbers') {
       return Promise.resolve(BARBERS_RESPONSE);
     }
     if (path === '/services') {
       return Promise.resolve(SERVICES_RESPONSE);
+    }
+    if (path === '/account/profile') {
+      // panel-usable: best-effort, independent of barbers/services — a 403
+      // ("not logged in", the ordinary case) must never block this page, so
+      // every test that does not care about a returning client rejects it
+      // by default rather than needing to remember to mock it.
+      return accountProfile !== undefined
+        ? Promise.resolve(accountProfile)
+        : Promise.reject(new ApiError(403, { message: 'not logged in' }));
     }
     if (path.startsWith('/availability') && availabilityResult !== undefined) {
       return Promise.resolve(availabilityResult);
@@ -134,5 +142,41 @@ describe('BookingPage (D.5)', () => {
     expect(await screen.findByText(/c.digo de acceso/i)).toBeInTheDocument();
     // The invitation appears alongside the "pagar" button, never instead of it.
     expect(screen.getByRole('button', { name: /pagar la se.a/i })).toBeInTheDocument();
+  });
+
+  // panel-usable: "a client who already has an account fills in name, email
+  // and phone again on every booking" — with a resolved GET /account/profile,
+  // the visitor confirms the stored details in one click instead of retyping
+  // them, and still lands on "straight to paying the deposit" exactly like
+  // the first-time-visitor test above.
+  it('un cliente que ya tiene cuenta confirma sus datos guardados en un clic, sin retipearlos', async () => {
+    mockReferenceData(
+      { slots: [{ startsAt: '2026-08-20T12:00:00.000Z', endsAt: '2026-08-20T12:30:00.000Z' }] },
+      { name: 'Ana', phone: '3511111111', email: 'ana@example.com', age: null },
+    );
+    vi.mocked(apiPost)
+      .mockResolvedValueOnce({ holdId: 'hold-1', expiresAt: '2026-08-20T12:15:00.000Z' })
+      .mockResolvedValueOnce({ clientId: 'client-1' });
+    render(
+      <RouterProvider>
+        <BookingPage />
+      </RouterProvider>,
+    );
+
+    fireEvent.change(await screen.findByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
+    fireEvent.click(screen.getByRole('button', { name: /ver horarios disponibles/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^09:00$/i }));
+
+    // No retyping: the confirm step, not the blank form.
+    expect(await screen.findByText(/confirmar y continuar/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^nombre$/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /confirmar y continuar/i }));
+
+    expect(await screen.findByText(/c.digo de acceso/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pagar la se.a/i })).toBeInTheDocument();
+    expect(apiPost).toHaveBeenCalledWith('/holds/confirm', {
+      holdId: 'hold-1',
+      client: { name: 'Ana', phone: '3511111111', email: 'ana@example.com', age: null },
+    });
   });
 });

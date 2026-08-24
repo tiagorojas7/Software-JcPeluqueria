@@ -1,7 +1,8 @@
-import { Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { ListOwnAppointmentsUseCase, SelfCancelAppointmentUseCase } from '@jc-barberia/application';
+import { Controller, Get, HttpCode, NotFoundException, Param, Post } from '@nestjs/common';
+import { GetOwnProfileUseCase, ListOwnAppointmentsUseCase, SelfCancelAppointmentUseCase } from '@jc-barberia/application';
 import type {
   AccountAppointmentResponse,
+  AccountProfileResponse,
   ListOwnAppointmentsResponse,
   SelfCancelAppointmentResponseBody,
 } from '@jc-barberia/contracts';
@@ -46,12 +47,30 @@ export class AccountController {
     // once already).
     private readonly listOwnAppointmentsUseCase: ListOwnAppointmentsUseCase,
     private readonly selfCancelAppointmentUseCase: SelfCancelAppointmentUseCase,
+    private readonly getOwnProfileUseCase: GetOwnProfileUseCase,
   ) {}
 
   @Get('appointments')
   async list(@CurrentClient() client: ClientContext): Promise<ListOwnAppointmentsResponse> {
     const appointments = await this.listOwnAppointmentsUseCase.execute({ clientId: client.clientId });
     return { appointments: appointments.map(toAccountAppointmentResponse) };
+  }
+
+  /**
+   * panel-usable: lets a returning client's booking flow prefill their own
+   * stored name/phone/email/age instead of asking them to retype it — see
+   * `GetOwnProfileUseCase`'s own doc comment. `null` is a data-integrity
+   * edge case (`@RequiresClientSession()` already guarantees "logged in" by
+   * the time this handler runs), so it becomes a plain 404 like any other
+   * "the id this session names does not resolve" case.
+   */
+  @Get('profile')
+  async profile(@CurrentClient() client: ClientContext): Promise<AccountProfileResponse> {
+    const profile = await this.getOwnProfileUseCase.execute({ clientId: client.clientId });
+    if (!profile) {
+      throw new NotFoundException({ message: 'No se encontró el perfil del cliente autenticado' });
+    }
+    return { name: profile.name, phone: profile.phone, email: profile.email, age: profile.age };
   }
 
   @Post('appointments/:id/cancel')

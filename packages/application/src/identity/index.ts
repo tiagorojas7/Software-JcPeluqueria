@@ -22,3 +22,5 @@ export { RequestClientAccessUseCase } from './request-client-access';
 export type { RequestClientAccessInput, RequestClientAccessResult } from './request-client-access';
 export { ClientLoginByEmailUseCase } from './client-login-by-email';
 export type { ClientLoginByEmailInput } from './client-login-by-email';
+export { GetOwnProfileUseCase } from './get-own-profile';
+export type { GetOwnProfileInput } from './get-own-profile';
