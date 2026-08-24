@@ -15,8 +15,10 @@ import {
   db,
   DrizzleAbsenceRecordRepository,
   DrizzleAppointmentRepository,
+  DrizzleBarberRepository,
   DrizzleClientRepository,
   DrizzleHoldRepository,
+  DrizzleNotificationOutboxRepository,
   DrizzleServiceRepository,
   DrizzleWalkInRepository,
   lazyJobSender,
@@ -30,10 +32,12 @@ import type {
   AbsenceRecordRepository,
   AppointmentReminderScheduler,
   AppointmentRepository,
+  BarberRepository,
   ClientRepository,
   Clock,
   HoldExpireScheduler,
   HoldRepository,
+  NotificationOutboxRepository,
   PaymentPort,
   ServiceRepository,
   WalkInRepository,
@@ -46,10 +50,12 @@ import {
   ABSENCE_RECORD_REPOSITORY,
   APPOINTMENT_REMINDER_SCHEDULER,
   APPOINTMENT_REPOSITORY,
+  BARBER_REPOSITORY,
   CLIENT_REPOSITORY,
   CLOCK,
   HOLD_EXPIRE_SCHEDULER,
   HOLD_REPOSITORY,
+  NOTIFICATION_OUTBOX_REPOSITORY,
   PAYMENT_PORT,
   SERVICE_REPOSITORY,
   WALK_IN_REPOSITORY,
@@ -123,6 +129,19 @@ import {
     },
     { provide: WALK_IN_REPOSITORY, useFactory: () => new DrizzleWalkInRepository(db) },
     {
+      // panel-usable: EditAppointmentUseCase's own read-only lookup for the
+      // barber name in the appointment_updated notification.
+      provide: BARBER_REPOSITORY,
+      useFactory: () => new DrizzleBarberRepository(db),
+    },
+    {
+      // panel-usable: where EditAppointmentUseCase writes the
+      // appointment_updated notification — same real adapter (migration
+      // 0011) Slice A already wired for every other outbox writer.
+      provide: NOTIFICATION_OUTBOX_REPOSITORY,
+      useFactory: () => new DrizzleNotificationOutboxRepository(db),
+    },
+    {
       provide: AdminMarkCompletedUseCase,
       inject: [APPOINTMENT_REPOSITORY],
       useFactory: (appointments: AppointmentRepository) => new AdminMarkCompletedUseCase(appointments),
@@ -146,9 +165,15 @@ import {
     },
     {
       provide: EditAppointmentUseCase,
-      inject: [APPOINTMENT_REPOSITORY, SERVICE_REPOSITORY, CLOCK],
-      useFactory: (appointments: AppointmentRepository, services: ServiceRepository, clock: Clock) =>
-        new EditAppointmentUseCase(appointments, services, clock),
+      inject: [APPOINTMENT_REPOSITORY, SERVICE_REPOSITORY, BARBER_REPOSITORY, CLIENT_REPOSITORY, NOTIFICATION_OUTBOX_REPOSITORY, CLOCK],
+      useFactory: (
+        appointments: AppointmentRepository,
+        services: ServiceRepository,
+        barbers: BarberRepository,
+        clients: ClientRepository,
+        outbox: NotificationOutboxRepository,
+        clock: Clock,
+      ) => new EditAppointmentUseCase(appointments, services, barbers, clients, outbox, clock),
     },
     {
       provide: AdminCancelAppointmentUseCase,

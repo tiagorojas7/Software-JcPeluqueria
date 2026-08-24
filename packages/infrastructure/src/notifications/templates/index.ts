@@ -3,6 +3,7 @@ import type { Clock } from '@jc-barberia/domain';
 import type { TemplateRegistry } from './types';
 import { accessTemplate } from './access.template';
 import { createAbsenceReassignmentOfferTemplate } from './absence-reassignment-offer.template';
+import { createAppointmentUpdatedTemplate } from './appointment-updated.template';
 import { createBookingConfirmedTemplate } from './booking-confirmed.template';
 import { createClientAccessCodeTemplate } from './client-access-code.template';
 import { cancellationWithRefundTemplate } from './cancellation-with-refund.template';
@@ -25,6 +26,10 @@ import { reminderWithoutDepositTemplate } from './reminder-without-deposit.templ
  * `ProcessPaymentUseCase` enqueues the first time a web booking's deposit
  * settles — barber, service and the shop-local time, via the same clock.
  *
+ * `appointment_updated` (panel-usable) renders the same "what is it now"
+ * shape for `EditAppointmentUseCase`'s notification whenever staff edit a
+ * turno's barbero, servicio or horario.
+ *
  * `publicBaseUrl` (fix/acceso-cliente-sin-id) is the same `PUBLIC_BASE_URL`
  * `MercadoPagoPaymentAdapter` already reads (`apps/api/src/booking/booking.module.ts`)
  * — one source of truth for where this deployment is publicly reachable,
@@ -41,6 +46,7 @@ export function createTemplateRegistry(clock: Clock, publicBaseUrl?: string): Te
     absence_reassignment_offer: createAbsenceReassignmentOfferTemplate(clock),
     client_access_code: createClientAccessCodeTemplate(clock, publicBaseUrl),
     booking_confirmed: createBookingConfirmedTemplate(clock),
+    appointment_updated: createAppointmentUpdatedTemplate(clock),
   };
 }
 

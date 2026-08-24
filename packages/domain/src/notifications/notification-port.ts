@@ -34,6 +34,13 @@
  * online ever receives before the reminder, so it carries what a real person
  * needs: which barber, which service, the shop-local time, and that the rest
  * of the price is paid at the shop.
+ *
+ * `appointment_updated` lands in panel-usable ("nobody tells the client
+ * their appointment changed"): `EditAppointmentUseCase` fires it every time
+ * staff edit a turno's barbero, servicio or horario. It carries the SAME
+ * "what is it now" shape `booking_confirmed` does — barber, service, the
+ * shop-local time — so the client always knows the turno's current state,
+ * never has to infer a diff from two separate messages.
  */
 export type NotificationTemplate =
   | 'staff_activation'
@@ -46,7 +53,8 @@ export type NotificationTemplate =
   // through a one-time code or link). Distinct from the two staff templates:
   // staff have passwords, clients never do.
   | 'client_access_code'
-  | 'booking_confirmed';
+  | 'booking_confirmed'
+  | 'appointment_updated';
 
 /**
  * A dispatch intention — deliberately transport-agnostic. `data` carries

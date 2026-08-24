@@ -2,7 +2,10 @@ import {
   AppointmentNotFoundError,
   type Appointment,
   type AppointmentRepository,
+  type BarberRepository,
   type Clock,
+  type ClientRepository,
+  type NotificationOutboxRepository,
   type ServiceRepository,
   type TimeWindow,
 } from '@jc-barberia/domain';
@@ -42,11 +45,23 @@ export interface EditAppointmentInput {
  * restriction, matching the spec's literal wording. Delegates the actual
  * write, and the exclusivity check against a conflicting target range, to
  * `AppointmentRepository.updateSchedule`.
+ *
+ * panel-usable: "nobody tells the client their appointment changed" —
+ * fires an `appointment_updated` notification on every successful edit, the
+ * same transactional-outbox pattern `ProcessPaymentUseCase.notifyBookingConfirmed`
+ * already established (writes to `NotificationOutboxRepository`, NEVER
+ * `NotificationPort` directly — the worker's consumer dispatches it). Gated
+ * on the client having an email registrado, same gate every other
+ * outbox-writing use case in this codebase already applies: no email, no
+ * dispatch, never a crash on the edit itself.
  */
 export class EditAppointmentUseCase {
   constructor(
     private readonly appointments: AppointmentRepository,
     private readonly services: ServiceRepository,
+    private readonly barbers: BarberRepository,
+    private readonly clients: ClientRepository,
+    private readonly outbox: NotificationOutboxRepository,
     private readonly clock: Clock,
   ) {}
 
@@ -73,6 +88,35 @@ export class EditAppointmentUseCase {
     };
     await this.appointments.updateSchedule(input.appointmentId, change, input.searchWindow);
 
+    await this.notifyAppointmentUpdated(existing.clientId, input.barberId, service.name, timeRange.start);
+
     return { ...existing, ...change };
+  }
+
+  /** Same "never crash the write over a notification" posture
+   *  `ProcessPaymentUseCase.notifyBookingConfirmed`/
+   *  `GenerateAbsenceReassignmentOffers.notifyClient` already establish: the
+   *  edit itself already succeeded by the time this runs, so a missing
+   *  client/email/barber degrades this to a no-op, never a thrown error. */
+  private async notifyAppointmentUpdated(
+    clientId: string,
+    barberId: string,
+    serviceName: string,
+    startsAt: Date,
+  ): Promise<void> {
+    const client = await this.clients.findById(clientId);
+    if (!client || !client.email) {
+      return;
+    }
+    const barber = await this.barbers.findById(barberId);
+    await this.outbox.enqueue({
+      notificationType: 'appointment_updated',
+      recipientEmail: client.email,
+      payload: {
+        barberName: barber?.name ?? '',
+        serviceName,
+        appointmentTime: startsAt.toISOString(),
+      },
+    });
   }
 }

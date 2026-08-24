@@ -68,4 +68,18 @@ describe('createTemplateRegistry (7.7) — una plantilla por evento existente', 
     expect(rendered.body).toContain('Cristian');
     expect(rendered.body).toContain('Corte clasico');
   });
+
+  // panel-usable — "nobody tells the client their appointment changed":
+  // EditAppointmentUseCase enqueues this whenever staff edit a turno's
+  // barbero, servicio or horario.
+  it('appointment_updated: turno modificado, con el barbero/servicio/hora vigentes', () => {
+    const rendered = registry['appointment_updated']({
+      barberName: 'Facundo',
+      serviceName: 'Corte + Barba',
+      appointmentTime: '2026-09-01T18:00:00.000Z',
+    });
+    expect(rendered.subject.length).toBeGreaterThan(0);
+    expect(rendered.body).toContain('Facundo');
+    expect(rendered.body).toContain('Corte + Barba');
+  });
 });

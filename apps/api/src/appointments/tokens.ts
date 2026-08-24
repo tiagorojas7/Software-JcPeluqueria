@@ -21,3 +21,11 @@ export const WALK_IN_REPOSITORY = Symbol('WALK_IN_REPOSITORY');
  *  to its own token here rather than reused across modules, same
  *  one-token-per-module pattern as every other repository above. */
 export const SERVICE_REPOSITORY = Symbol('SERVICE_REPOSITORY');
+/** panel-usable: `EditAppointmentUseCase`'s own read-only lookup for the
+ *  notification it fires on a successful edit (barber name for the email
+ *  body) — its own token instance, same one-token-per-module pattern. */
+export const BARBER_REPOSITORY = Symbol('BARBER_REPOSITORY');
+/** panel-usable: where `EditAppointmentUseCase` writes the `appointment_updated`
+ *  notification intent — never `NotificationPort` directly, the same
+ *  transactional-outbox pattern `ProcessPaymentUseCase` already uses. */
+export const NOTIFICATION_OUTBOX_REPOSITORY = Symbol('NOTIFICATION_OUTBOX_REPOSITORY');

@@ -1,14 +1,17 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
+  createBarber,
   createService,
   FakeAbsenceRecordRepository,
   FakeActorContextRepository,
   FakeAppointmentRepository,
+  FakeBarberRepository,
   FakeClientRepository,
   FakeClock,
   FakeHoldExpireScheduler,
   FakeHoldRepository,
+  FakeNotificationOutboxRepository,
   FakePaymentPort,
   FakeRolePermissionRepository,
   FakeServiceRepository,
@@ -25,10 +28,12 @@ import { AppModule } from '../src/app.module';
 import {
   ABSENCE_RECORD_REPOSITORY,
   APPOINTMENT_REPOSITORY,
+  BARBER_REPOSITORY,
   CLIENT_REPOSITORY,
   CLOCK,
   HOLD_EXPIRE_SCHEDULER,
   HOLD_REPOSITORY,
+  NOTIFICATION_OUTBOX_REPOSITORY,
   PAYMENT_PORT,
   SERVICE_REPOSITORY,
   WALK_IN_REPOSITORY,
@@ -108,6 +113,8 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
   let walkIns: FakeWalkInRepository;
   let services: FakeServiceRepository;
   let clients: FakeClientRepository;
+  let barbers: FakeBarberRepository;
+  let outbox: FakeNotificationOutboxRepository;
 
   beforeAll(async () => {
     appointments = new FakeAppointmentRepository();
@@ -118,6 +125,9 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
       createService({ id: SERVICE_ID, name: 'Corte clasico', durationMinutes: SERVICE_DURATION_MINUTES, priceCents: 500000 }),
     );
     clients = new FakeClientRepository();
+    barbers = new FakeBarberRepository();
+    barbers.create(createBarber({ id: BARBER_B_ID, name: 'Facundo Diaz', active: true }));
+    outbox = new FakeNotificationOutboxRepository();
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ROLE_PERMISSION_REPOSITORY)
@@ -147,6 +157,13 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
       // real service to find by id.
       .overrideProvider(SERVICE_REPOSITORY)
       .useValue(services)
+      // panel-usable: EditAppointmentUseCase fires appointment_updated on a
+      // successful edit — needs a barber to name in the email and an outbox
+      // to write to (never NotificationPort directly).
+      .overrideProvider(BARBER_REPOSITORY)
+      .useValue(barbers)
+      .overrideProvider(NOTIFICATION_OUTBOX_REPOSITORY)
+      .useValue(outbox)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -260,6 +277,36 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
       barberId: BARBER_B_ID,
       startsAt: at('15:00').toISOString(),
       endsAt: at('15:30').toISOString(),
+    });
+  });
+
+  // panel-usable: "nobody tells the client their appointment changed" —
+  // this is the actual end-to-end wiring (HTTP -> use case -> outbox).
+  it('notifies the client through the outbox when a successful edit changes their turno', async () => {
+    clients.seed({ id: 'client-with-email', name: 'Marcos', phone: '3511234567', email: 'marcos@example.com', age: null });
+    appointments.seed(anAppointment({ id: 'edit-notify', clientId: 'client-with-email' }));
+    const enqueuedBefore = outbox.enqueued.length;
+
+    const response = await withSession(
+      request(app.getHttpServer()).put('/appointments/edit-notify'),
+      OWNER_SESSION,
+    ).send({
+      barberId: BARBER_B_ID,
+      serviceId: SERVICE_ID,
+      calendarDate: '2026-09-01',
+      startTime: '16:00',
+    });
+
+    expect(response.status).toBe(200);
+    expect(outbox.enqueued.length).toBe(enqueuedBefore + 1);
+    expect(outbox.enqueued.at(-1)).toEqual({
+      notificationType: 'appointment_updated',
+      recipientEmail: 'marcos@example.com',
+      payload: {
+        barberName: 'Facundo Diaz',
+        serviceName: 'Corte clasico',
+        appointmentTime: at('16:00').toISOString(),
+      },
     });
   });
 
