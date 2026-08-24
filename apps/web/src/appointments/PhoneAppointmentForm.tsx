@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import type { CreatePhoneAppointmentRequest } from '@jc-barberia/contracts';
 
+import { StartTimeField } from '../shared/StartTimeField';
+
 export interface PhoneAppointmentBarberOption {
   readonly id: string;
   readonly name: string;
@@ -26,8 +28,13 @@ export interface PhoneAppointmentFormProps {
  * fields, matching `CreatePhoneAppointmentRequestSchema` exactly — email and
  * age stay optional and are sent as `null` rather than omitted or blocking
  * submission (admin-operations spec, "Turno telefónico creado sin email").
- * Purely presentational: it reports the built request to `onSubmit`, never
- * calls the API itself — same container/presentational split as `DayBoard`.
+ * Purely presentational except for one read-only lookup: same
+ * container/presentational split as `DayBoard` for the POST, but `startTime`
+ * needs `GET /availability` to know which horarios are actually free for the
+ * barbero/servicio/fecha chosen ABOVE it, and that state lives in this form,
+ * not in `PhoneAppointmentPage` — so `StartTimeField` (which owns that fetch)
+ * is composed in here rather than the page lifting barberId/serviceId/date up
+ * just to own a request this form's own fields already determine.
  *
  * paneles-y-turno-telefonico: barbero/servicio are real `<select>`s over the
  * names the page already loaded, not a free-text UUID field a secretary
@@ -36,6 +43,10 @@ export interface PhoneAppointmentFormProps {
  * `CreatePhoneAppointmentUseCase` derives it server-side from the selected
  * service's `durationMinutes`, so no caller can create a turno whose
  * duration disagrees with its service.
+ *
+ * panel-usable: `startTime` used to be free text validated against
+ * `^\d{2}:\d{2}$` — anything else was a 400 with no explanation. Now it can
+ * only ever be a time `GET /availability` actually reported as free.
  */
 export function PhoneAppointmentForm({ barbers, services, onSubmit }: PhoneAppointmentFormProps) {
   const [name, setName] = useState('');
@@ -49,6 +60,9 @@ export function PhoneAppointmentForm({ barbers, services, onSubmit }: PhoneAppoi
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!startTime) {
+      return;
+    }
     onSubmit({
       barberId,
       serviceId,
@@ -78,7 +92,15 @@ export function PhoneAppointmentForm({ barbers, services, onSubmit }: PhoneAppoi
       <input id="phone-appt-age" type="number" value={age} onChange={(e) => setAge(e.target.value)} />
 
       <label htmlFor="phone-appt-barber">Barbero</label>
-      <select id="phone-appt-barber" required value={barberId} onChange={(e) => setBarberId(e.target.value)}>
+      <select
+        id="phone-appt-barber"
+        required
+        value={barberId}
+        onChange={(e) => {
+          setBarberId(e.target.value);
+          setStartTime('');
+        }}
+      >
         {barbers.map((barber) => (
           <option key={barber.id} value={barber.id}>
             {barber.name}
@@ -87,7 +109,15 @@ export function PhoneAppointmentForm({ barbers, services, onSubmit }: PhoneAppoi
       </select>
 
       <label htmlFor="phone-appt-service">Servicio</label>
-      <select id="phone-appt-service" required value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+      <select
+        id="phone-appt-service"
+        required
+        value={serviceId}
+        onChange={(e) => {
+          setServiceId(e.target.value);
+          setStartTime('');
+        }}
+      >
         {services.map((service) => (
           <option key={service.id} value={service.id}>
             {service.name}
@@ -101,13 +131,23 @@ export function PhoneAppointmentForm({ barbers, services, onSubmit }: PhoneAppoi
         type="date"
         required
         value={calendarDate}
-        onChange={(e) => setCalendarDate(e.target.value)}
+        onChange={(e) => {
+          setCalendarDate(e.target.value);
+          setStartTime('');
+        }}
       />
 
-      <label htmlFor="phone-appt-start">Hora de inicio</label>
-      <input id="phone-appt-start" required value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+      <StartTimeField
+        barberId={barberId}
+        serviceId={serviceId}
+        calendarDate={calendarDate}
+        value={startTime}
+        onChange={setStartTime}
+      />
 
-      <button type="submit">Guardar turno</button>
+      <button type="submit" disabled={!startTime}>
+        Guardar turno
+      </button>
     </form>
   );
 }

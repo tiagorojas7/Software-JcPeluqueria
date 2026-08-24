@@ -1,15 +1,29 @@
 import { useState, type FormEvent } from 'react';
 import type { EditAppointmentRequest } from '@jc-barberia/contracts';
 
+import { StartTimeField } from '../shared/StartTimeField';
+
+export interface EditAppointmentBarberOption {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface EditAppointmentServiceOption {
+  readonly id: string;
+  readonly name: string;
+}
+
 export interface EditAppointmentFormValues {
   readonly barberId: string;
   readonly serviceId: string;
   readonly calendarDate: string;
   readonly startTime: string;
-  readonly endTime: string;
 }
 
 export interface EditAppointmentFormProps {
+  /** Real names to pick from — never a raw id a staff member has to paste. */
+  readonly barbers: readonly EditAppointmentBarberOption[];
+  readonly services: readonly EditAppointmentServiceOption[];
   readonly onSubmit: (input: EditAppointmentRequest) => void;
   readonly onCancel: () => void;
   /** The slot being edited, so the staff member edits FROM its current
@@ -23,46 +37,103 @@ const BLANK: EditAppointmentFormValues = {
   serviceId: '',
   calendarDate: '',
   startTime: '',
-  endTime: '',
 };
 
 /**
  * B.3's "Editar turno (servicio, barbero, horario)" — matches
- * `EditAppointmentRequestSchema` exactly. Purely presentational, same
- * container/presentational split as `PhoneAppointmentForm`/`DayBoard`: it
- * never calls the API itself, only reports the built request to `onSubmit`.
+ * `EditAppointmentRequestSchema` minus `endTime`. Same container/presentational
+ * split as `PhoneAppointmentForm`/`DayBoard`: it never POSTs/PUTs itself,
+ * only reports the built request to `onSubmit`.
+ *
+ * panel-usable: barbero/servicio were plain text `<input>`s where staff had
+ * to paste a raw UUID — the same developer's harness already removed from
+ * every other screen. Now real `<select>`s over the barbers/services the
+ * page already loads, a real date input, and `startTime` picked from
+ * `GET /availability` through `StartTimeField` instead of typed free text.
+ * There is no `endTime` field at all — `EditAppointmentUseCase` derives it
+ * from the target service's `durationMinutes`, the same rule
+ * `CreatePhoneAppointmentUseCase` already applies.
+ *
+ * `startTime` starts pre-filled from `initialValues` (the turno's OWN
+ * current horario) and is only cleared when the staff member actively
+ * changes barbero/servicio/fecha — see `StartTimeField`'s own doc comment
+ * for why this form does not try to make that current horario reappear in
+ * the picker itself.
  */
-export function EditAppointmentForm({ onSubmit, onCancel, initialValues }: EditAppointmentFormProps) {
+export function EditAppointmentForm({ barbers, services, onSubmit, onCancel, initialValues }: EditAppointmentFormProps) {
   const start = initialValues ?? BLANK;
   const [barberId, setBarberId] = useState(start.barberId);
   const [serviceId, setServiceId] = useState(start.serviceId);
   const [calendarDate, setCalendarDate] = useState(start.calendarDate);
   const [startTime, setStartTime] = useState(start.startTime);
-  const [endTime, setEndTime] = useState(start.endTime);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    onSubmit({ barberId, serviceId, calendarDate, startTime, endTime });
+    if (!startTime) {
+      return;
+    }
+    onSubmit({ barberId, serviceId, calendarDate, startTime });
   }
 
   return (
     <form onSubmit={handleSubmit}>
       <label htmlFor="edit-appt-barber">Barbero</label>
-      <input id="edit-appt-barber" required value={barberId} onChange={(e) => setBarberId(e.target.value)} />
+      <select
+        id="edit-appt-barber"
+        required
+        value={barberId}
+        onChange={(e) => {
+          setBarberId(e.target.value);
+          setStartTime('');
+        }}
+      >
+        {barbers.map((barber) => (
+          <option key={barber.id} value={barber.id}>
+            {barber.name}
+          </option>
+        ))}
+      </select>
 
       <label htmlFor="edit-appt-service">Servicio</label>
-      <input id="edit-appt-service" required value={serviceId} onChange={(e) => setServiceId(e.target.value)} />
+      <select
+        id="edit-appt-service"
+        required
+        value={serviceId}
+        onChange={(e) => {
+          setServiceId(e.target.value);
+          setStartTime('');
+        }}
+      >
+        {services.map((service) => (
+          <option key={service.id} value={service.id}>
+            {service.name}
+          </option>
+        ))}
+      </select>
 
       <label htmlFor="edit-appt-date">Fecha</label>
-      <input id="edit-appt-date" required value={calendarDate} onChange={(e) => setCalendarDate(e.target.value)} />
+      <input
+        id="edit-appt-date"
+        type="date"
+        required
+        value={calendarDate}
+        onChange={(e) => {
+          setCalendarDate(e.target.value);
+          setStartTime('');
+        }}
+      />
 
-      <label htmlFor="edit-appt-start">Hora de inicio</label>
-      <input id="edit-appt-start" required value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+      <StartTimeField
+        barberId={barberId}
+        serviceId={serviceId}
+        calendarDate={calendarDate}
+        value={startTime}
+        onChange={setStartTime}
+      />
 
-      <label htmlFor="edit-appt-end">Hora de fin</label>
-      <input id="edit-appt-end" required value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-
-      <button type="submit">Guardar cambios</button>
+      <button type="submit" disabled={!startTime}>
+        Guardar cambios
+      </button>
       <button type="button" onClick={onCancel}>
         Cancelar edición
       </button>

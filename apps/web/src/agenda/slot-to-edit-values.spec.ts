@@ -19,12 +19,17 @@ function aSlot(overrides: Partial<DayBoardSlot> = {}): DayBoardSlot {
 
 // B.6: `AdminDayBoardPanel` pre-fills `EditAppointmentForm` from the slot
 // the staff member clicked "Editar" on, instead of an empty form — this is
-// the pure conversion from the slot's UTC `startsAt`/`endsAt` (the only
-// shape `DayBoardSlot` carries) to the shop-local `calendarDate`/
-// `startTime`/`endTime` triple `EditAppointmentRequestSchema` expects, the
-// same `utcIsoToShopLocalTime` offset every other panel form already uses.
+// the pure conversion from the slot's UTC `startsAt` (the only field
+// `EditAppointmentFormValues` still needs a conversion for) to the
+// shop-local `calendarDate`/`startTime` pair `EditAppointmentRequestSchema`
+// expects, the same `utcIsoToShopLocalTime` offset every other panel form
+// already uses.
+//
+// panel-usable: no more `endTime` — `EditAppointmentUseCase` derives it
+// server-side from the target service's `durationMinutes`, so this
+// conversion has nothing to compute it from (or for) any more.
 describe('slotToEditValues', () => {
-  it('converts a slot into shop-local calendarDate/startTime/endTime, keeping barberId/serviceId', () => {
+  it('converts a slot into shop-local calendarDate/startTime, keeping barberId/serviceId, and never an endTime', () => {
     const slot = aSlot();
 
     expect(slotToEditValues(slot)).toEqual({
@@ -32,11 +37,10 @@ describe('slotToEditValues', () => {
       serviceId: 'service-1',
       calendarDate: '2026-09-01',
       startTime: '10:00',
-      endTime: '10:30',
     });
   });
 
-  it('never crosses midnight for a shop slot — same calendarDate for start and end', () => {
+  it('never crosses midnight for a shop slot — the UTC date slice IS the shop-local calendarDate', () => {
     const slot = aSlot({ startsAt: '2026-09-01T22:45:00.000Z', endsAt: '2026-09-01T23:15:00.000Z' });
 
     expect(slotToEditValues(slot)).toEqual({
@@ -44,7 +48,6 @@ describe('slotToEditValues', () => {
       serviceId: 'service-1',
       calendarDate: '2026-09-01',
       startTime: '19:45',
-      endTime: '20:15',
     });
   });
 });

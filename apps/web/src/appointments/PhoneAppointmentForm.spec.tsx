@@ -1,8 +1,14 @@
 import type { CreatePhoneAppointmentRequest } from '@jc-barberia/contracts';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PhoneAppointmentForm } from './PhoneAppointmentForm';
+import { apiGet } from '../shared/api-client';
+
+vi.mock('../shared/api-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../shared/api-client')>();
+  return { ...actual, apiGet: vi.fn() };
+});
 
 const barbers = [
   { id: 'barber-1', name: 'Cristian Gomez' },
@@ -14,6 +20,21 @@ const services = [
   { id: 'service-2', name: 'Corte + Barba ($12.000)' },
 ];
 
+// 13:00Z is 10:00 shop-local (UTC-3) — the same offset every other spec in
+// this codebase uses (BookingPage.spec.tsx, AvailabilityPicker.spec.tsx).
+const AVAILABLE_SLOTS = {
+  slots: [{ startsAt: '2026-09-01T13:00:00.000Z', endsAt: '2026-09-01T13:30:00.000Z' }],
+};
+
+async function fillRequiredFieldsAndPickStartTime() {
+  fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Marcos' } });
+  fireEvent.change(screen.getByLabelText('Teléfono'), { target: { value: '3511234567' } });
+  fireEvent.change(screen.getByLabelText('Barbero'), { target: { value: 'barber-1' } });
+  fireEvent.change(screen.getByLabelText('Servicio'), { target: { value: 'service-1' } });
+  fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-09-01' } });
+  fireEvent.click(await screen.findByRole('button', { name: '10:00' }));
+}
+
 // admin-operations spec, "Creación de turnos telefónicos sin seña": only
 // nombre y teléfono are required; email/edad stay optional and never block
 // the submission, matching CreatePhoneAppointmentRequestSchema exactly.
@@ -22,21 +43,20 @@ const services = [
 // pasted UUID) and there is no endTime field at all — the secretary never
 // has that information, CreatePhoneAppointmentUseCase derives it from the
 // selected service's durationMinutes server-side.
+//
+// panel-usable: startTime is no longer free text — it can only be one of
+// the horarios GET /availability actually reports as free.
 describe('PhoneAppointmentForm', () => {
-  function fillRequiredFields() {
-    fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Marcos' } });
-    fireEvent.change(screen.getByLabelText('Teléfono'), { target: { value: '3511234567' } });
-    fireEvent.change(screen.getByLabelText('Barbero'), { target: { value: 'barber-1' } });
-    fireEvent.change(screen.getByLabelText('Servicio'), { target: { value: 'service-1' } });
-    fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-09-01' } });
-    fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '10:00' } });
-  }
+  beforeEach(() => {
+    vi.mocked(apiGet).mockReset();
+    vi.mocked(apiGet).mockResolvedValue(AVAILABLE_SLOTS);
+  });
 
-  it('submits with only the required fields, leaving email and age out, and no endTime at all', () => {
+  it('submits with only the required fields, leaving email and age out, and no endTime at all', async () => {
     const onSubmit = vi.fn();
     render(<PhoneAppointmentForm barbers={barbers} services={services} onSubmit={onSubmit} />);
 
-    fillRequiredFields();
+    await fillRequiredFieldsAndPickStartTime();
     fireEvent.click(screen.getByRole('button', { name: 'Guardar turno' }));
 
     const expected: CreatePhoneAppointmentRequest = {
@@ -50,11 +70,11 @@ describe('PhoneAppointmentForm', () => {
     expect(vi.mocked(onSubmit).mock.calls[0]?.[0]).not.toHaveProperty('endTime');
   });
 
-  it('includes email and age when the staff member loads them', () => {
+  it('includes email and age when the staff member loads them', async () => {
     const onSubmit = vi.fn();
     render(<PhoneAppointmentForm barbers={barbers} services={services} onSubmit={onSubmit} />);
 
-    fillRequiredFields();
+    await fillRequiredFieldsAndPickStartTime();
     fireEvent.change(screen.getByLabelText('Email (opcional)'), { target: { value: 'marcos@example.com' } });
     fireEvent.change(screen.getByLabelText('Edad (opcional)'), { target: { value: '30' } });
     fireEvent.click(screen.getByRole('button', { name: 'Guardar turno' }));
@@ -102,5 +122,33 @@ describe('PhoneAppointmentForm', () => {
     render(<PhoneAppointmentForm barbers={barbers} services={services} onSubmit={onSubmit} />);
 
     expect(screen.getByLabelText('Fecha')).toHaveAttribute('type', 'date');
+  });
+
+  // The actual bug the shop owner hit: typing "10" or "10:00 am" into a free
+  // text field was a 400 with no explanation. Now there is no text field at
+  // all — only the horarios the server itself reports as free.
+  it('offers only the start times GET /availability reports as free, never a free-text field', async () => {
+    const onSubmit = vi.fn();
+    render(<PhoneAppointmentForm barbers={barbers} services={services} onSubmit={onSubmit} />);
+
+    expect(screen.queryByLabelText('Hora de inicio')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-09-01' } });
+
+    await waitFor(() =>
+      expect(apiGet).toHaveBeenCalledWith('/availability?barberId=barber-1&serviceId=service-1&date=2026-09-01'),
+    );
+    expect(await screen.findByRole('button', { name: '10:00' })).toBeInTheDocument();
+  });
+
+  it('keeps Guardar turno disabled until a start time is actually picked', async () => {
+    const onSubmit = vi.fn();
+    render(<PhoneAppointmentForm barbers={barbers} services={services} onSubmit={onSubmit} />);
+
+    expect(screen.getByRole('button', { name: 'Guardar turno' })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-09-01' } });
+    fireEvent.click(await screen.findByRole('button', { name: '10:00' }));
+
+    expect(screen.getByRole('button', { name: 'Guardar turno' })).not.toBeDisabled();
   });
 });

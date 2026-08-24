@@ -13,6 +13,11 @@ import { apiGet, apiPost, apiPut } from '../shared/api-client';
 // action into the matching HTTP call, and reloads the board from the server
 // afterward — `allowedActions` is server-computed (design.md, "Frontend"),
 // so re-fetching is the only correct way to know what a slot allows next.
+//
+// panel-usable: `EditAppointmentForm`/`WalkInForm` now need real
+// barbero/servicio names, so this panel fetches `GET /barbers`/`GET /services`
+// on mount too — every test here has to resolve those paths before the edit
+// or walk-in form can render at all.
 vi.mock('../shared/api-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../shared/api-client')>();
   return { ...actual, apiGet: vi.fn(), apiPost: vi.fn(), apiPut: vi.fn() };
@@ -40,16 +45,43 @@ const reloadedBoard: DayBoardResponse = {
   slots: [{ ...baseSlot, status: 'realizado', allowedActions: [] }],
 };
 
+const BARBERS_RESPONSE = { barbers: [{ id: 'barber-1', name: 'Juan' }] };
+const SERVICES_RESPONSE = { services: [{ id: 'service-1', name: 'Corte clasico', durationMinutes: 30, priceCents: 800000 }] };
+// 18:00Z is 15:00 shop-local (UTC-3).
+const AVAILABLE_SLOTS_AT_15 = { slots: [{ startsAt: '2026-09-01T18:00:00.000Z', endsAt: '2026-09-01T18:30:00.000Z' }] };
+
+/** Every test mocks `apiGet` by path: `/barbers`/`/services` resolve on
+ *  mount, `/agenda/day-board` resolves to `reloadedBoard` after a write,
+ *  `/availability` resolves to whatever this suite's own picker interactions
+ *  need. */
+function mockReferenceData() {
+  vi.mocked(apiGet).mockImplementation((path: string) => {
+    if (path === '/barbers') {
+      return Promise.resolve(BARBERS_RESPONSE);
+    }
+    if (path === '/services') {
+      return Promise.resolve(SERVICES_RESPONSE);
+    }
+    if (path.startsWith('/availability')) {
+      return Promise.resolve(AVAILABLE_SLOTS_AT_15);
+    }
+    if (path.startsWith('/agenda/day-board')) {
+      return Promise.resolve(reloadedBoard);
+    }
+    return Promise.reject(new Error(`unexpected apiGet path in test: ${path}`));
+  });
+}
+
 describe('AdminDayBoardPanel', () => {
   beforeEach(() => {
     vi.mocked(apiGet).mockReset();
     vi.mocked(apiPost).mockReset();
     vi.mocked(apiPut).mockReset();
+    mockReferenceData();
   });
 
   it('marks a turno as realizado through the endpoint and reloads the board from the server', async () => {
     vi.mocked(apiPost).mockResolvedValue({ id: 'slot-1', status: 'realizado' });
-    vi.mocked(apiGet).mockResolvedValue(reloadedBoard);
 
     render(<AdminDayBoardPanel dayBoard={initialBoard} />);
     fireEvent.click(screen.getByRole('button', { name: 'Marcar realizado' }));
@@ -62,7 +94,6 @@ describe('AdminDayBoardPanel', () => {
 
   it('cancels a turno through the endpoint', async () => {
     vi.mocked(apiPost).mockResolvedValue({ id: 'slot-1', status: 'cancelado' });
-    vi.mocked(apiGet).mockResolvedValue(reloadedBoard);
 
     render(<AdminDayBoardPanel dayBoard={initialBoard} />);
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
@@ -76,7 +107,6 @@ describe('AdminDayBoardPanel', () => {
       slots: [{ ...baseSlot, status: 'sin_registrado', allowedActions: ['mark-completed', 'confirm-absence'] }],
     };
     vi.mocked(apiPost).mockResolvedValue({ appointment: { id: 'slot-1', status: 'ausente' } });
-    vi.mocked(apiGet).mockResolvedValue(reloadedBoard);
 
     render(<AdminDayBoardPanel dayBoard={boardWithAbsence} />);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar ausencia' }));
@@ -86,14 +116,13 @@ describe('AdminDayBoardPanel', () => {
 
   it('opens EditAppointmentForm pre-filled from the clicked slot, and PUTs the edited fields on submit', async () => {
     vi.mocked(apiPut).mockResolvedValue({ id: 'slot-1', status: 'reservado' });
-    vi.mocked(apiGet).mockResolvedValue(reloadedBoard);
 
     render(<AdminDayBoardPanel dayBoard={initialBoard} />);
     fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
 
-    expect(screen.getByLabelText('Barbero')).toHaveValue('barber-1');
+    expect(await screen.findByLabelText('Barbero')).toHaveValue('barber-1');
     expect(screen.getByLabelText('Fecha')).toHaveValue('2026-09-01');
-    fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '15:00' } });
+    fireEvent.click(await screen.findByRole('button', { name: '15:00' }));
     fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
 
     const expected: EditAppointmentRequest = {
@@ -101,17 +130,16 @@ describe('AdminDayBoardPanel', () => {
       serviceId: 'service-1',
       calendarDate: '2026-09-01',
       startTime: '15:00',
-      endTime: '10:30',
     };
     await waitFor(() => expect(apiPut).toHaveBeenCalledWith('/appointments/slot-1', expected));
     await waitFor(() => expect(screen.queryByLabelText('Barbero')).not.toBeInTheDocument());
   });
 
-  it('closes the edit form without calling the API when the staff member backs out', () => {
+  it('closes the edit form without calling the API when the staff member backs out', async () => {
     render(<AdminDayBoardPanel dayBoard={initialBoard} />);
     fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar edición' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancelar edición' }));
 
     expect(screen.queryByLabelText('Barbero')).not.toBeInTheDocument();
     expect(apiPut).not.toHaveBeenCalled();
@@ -119,36 +147,53 @@ describe('AdminDayBoardPanel', () => {
 
   it('loads a walk-in through the endpoint and hides the form again', async () => {
     vi.mocked(apiPost).mockResolvedValue({ id: 'walkin-1', status: 'realizado' });
-    vi.mocked(apiGet).mockResolvedValue(reloadedBoard);
 
     render(<AdminDayBoardPanel dayBoard={initialBoard} />);
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo walk-in' }));
-    fireEvent.change(screen.getByLabelText('Barbero'), { target: { value: 'barber-1' } });
+    fireEvent.change(await screen.findByLabelText('Barbero'), { target: { value: 'barber-1' } });
     fireEvent.change(screen.getByLabelText('Servicio'), { target: { value: 'service-1' } });
     fireEvent.change(screen.getByLabelText('Fecha'), { target: { value: '2026-09-01' } });
-    fireEvent.change(screen.getByLabelText('Hora de inicio'), { target: { value: '11:00' } });
-    fireEvent.change(screen.getByLabelText('Hora de fin'), { target: { value: '11:30' } });
+    fireEvent.click(await screen.findByRole('button', { name: '15:00' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cargar walk-in' }));
 
     const expected: CreateWalkInRequest = {
       barberId: 'barber-1',
       serviceId: 'service-1',
-      clientId: null,
+      clientPhone: null,
       calendarDate: '2026-09-01',
-      startTime: '11:00',
-      endTime: '11:30',
+      startTime: '15:00',
     };
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/appointments/walk-in', expected));
-    await waitFor(() => expect(screen.queryByLabelText('Cliente (opcional)')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText('Teléfono del cliente (opcional)')).not.toBeInTheDocument());
   });
 
   it('shows the API error message and never reloads the board when an action fails', async () => {
-    vi.mocked(apiPost).mockRejectedValue(new Error('El horario ya no está disponible'));
+    vi.mocked(apiPost).mockImplementation((path: string) => {
+      if (path === '/appointments/slot-1/cancel') {
+        return Promise.reject(new Error('El horario ya no está disponible'));
+      }
+      return Promise.reject(new Error(`unexpected apiPost path in test: ${path}`));
+    });
 
     render(<AdminDayBoardPanel dayBoard={initialBoard} />);
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('El horario ya no está disponible');
-    expect(apiGet).not.toHaveBeenCalled();
+    expect(apiGet).not.toHaveBeenCalledWith('/agenda/day-board?date=2026-09-01');
+  });
+
+  it('shows a loading hint instead of the form while barbers/services are still loading', () => {
+    vi.mocked(apiGet).mockImplementation((path: string) => {
+      if (path === '/barbers' || path === '/services') {
+        return new Promise(() => {});
+      }
+      return Promise.reject(new Error(`unexpected apiGet path in test: ${path}`));
+    });
+
+    render(<AdminDayBoardPanel dayBoard={initialBoard} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+
+    expect(screen.queryByLabelText('Barbero')).not.toBeInTheDocument();
+    expect(screen.getByText('Cargando barberos y servicios...')).toBeInTheDocument();
   });
 });

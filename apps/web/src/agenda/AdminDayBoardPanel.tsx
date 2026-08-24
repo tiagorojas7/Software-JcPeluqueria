@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import type { CreateWalkInRequest, DayBoardResponse, EditAppointmentRequest, SlotAction } from '@jc-barberia/contracts';
+import type {
+  CreateWalkInRequest,
+  DayBoardResponse,
+  EditAppointmentRequest,
+  PublicBarberResponse,
+  PublicBarbersResponse,
+  PublicServiceResponse,
+  PublicServicesResponse,
+  SlotAction,
+} from '@jc-barberia/contracts';
 
 import { AdminDayBoardContainer } from './AdminDayBoardContainer';
 import { EditAppointmentForm } from './EditAppointmentForm';
@@ -29,12 +38,21 @@ const ACTION_PATH: Partial<Record<SlotAction, string>> = {
  * `EditAppointmentForm` pre-filled from the clicked slot instead.
  * `walkin:create` (B.5) has no slot of its own to click, so its toggle lives
  * here directly rather than inside `DayBoard`.
+ *
+ * panel-usable: `EditAppointmentForm`/`WalkInForm` need real barbero/servicio
+ * names to fill their `<select>`s (no more raw-UUID text inputs), so this
+ * panel fetches `GET /barbers`/`GET /services` on mount — same `apiGet` and
+ * same active-only/no-filter shape `PhoneAppointmentPage` already uses for
+ * the same reference data.
  */
 export function AdminDayBoardPanel({ dayBoard: dayBoardProp }: AdminDayBoardPanelProps) {
   const [dayBoard, setDayBoard] = useState(dayBoardProp);
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
+  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
+  const [referenceDataError, setReferenceDataError] = useState<string | null>(null);
 
   // Keeps this panel in sync when the page above fetches a different date
   // into the SAME mounted instance — internal reloads never touch the
@@ -42,6 +60,31 @@ export function AdminDayBoardPanel({ dayBoard: dayBoardProp }: AdminDayBoardPane
   useEffect(() => {
     setDayBoard(dayBoardProp);
   }, [dayBoardProp]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [barbersResponse, servicesResponse] = await Promise.all([
+          apiGet<PublicBarbersResponse>('/barbers'),
+          apiGet<PublicServicesResponse>('/services'),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setBarbers(barbersResponse.barbers);
+        setServices(servicesResponse.services);
+      } catch (err) {
+        if (!cancelled) {
+          setReferenceDataError(describeError(err));
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function reload() {
     const fresh = await apiGet<DayBoardResponse>(`/agenda/day-board?date=${encodeURIComponent(dayBoard.date)}`);
@@ -90,22 +133,34 @@ export function AdminDayBoardPanel({ dayBoard: dayBoardProp }: AdminDayBoardPane
   }
 
   const editingSlot = dayBoard.slots.find((slot) => slot.id === editingSlotId);
+  const referenceDataReady = barbers !== null && services !== null && !referenceDataError;
 
   return (
     <div>
       {error && <p role="alert">{error}</p>}
+      {referenceDataError && <p role="alert">{referenceDataError}</p>}
       <AdminDayBoardContainer dayBoard={dayBoard} onSlotAction={handleSlotAction} />
-      {editingSlot && (
-        <EditAppointmentForm
-          initialValues={slotToEditValues(editingSlot)}
-          onSubmit={handleEditSubmit}
-          onCancel={() => setEditingSlotId(null)}
-        />
-      )}
+      {editingSlot &&
+        (referenceDataReady ? (
+          <EditAppointmentForm
+            barbers={barbers}
+            services={services}
+            initialValues={slotToEditValues(editingSlot)}
+            onSubmit={handleEditSubmit}
+            onCancel={() => setEditingSlotId(null)}
+          />
+        ) : (
+          <p className="empty-state">Cargando barberos y servicios...</p>
+        ))}
       <button type="button" onClick={() => setWalkInOpen((open) => !open)}>
         {walkInOpen ? 'Cerrar walk-in' : 'Nuevo walk-in'}
       </button>
-      {walkInOpen && <WalkInForm onSubmit={handleWalkInSubmit} />}
+      {walkInOpen &&
+        (referenceDataReady ? (
+          <WalkInForm barbers={barbers} services={services} onSubmit={handleWalkInSubmit} />
+        ) : (
+          <p className="empty-state">Cargando barberos y servicios...</p>
+        ))}
     </div>
   );
 }
