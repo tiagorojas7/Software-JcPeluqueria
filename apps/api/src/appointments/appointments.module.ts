@@ -146,8 +146,9 @@ import {
     },
     {
       provide: EditAppointmentUseCase,
-      inject: [APPOINTMENT_REPOSITORY],
-      useFactory: (appointments: AppointmentRepository) => new EditAppointmentUseCase(appointments),
+      inject: [APPOINTMENT_REPOSITORY, SERVICE_REPOSITORY, CLOCK],
+      useFactory: (appointments: AppointmentRepository, services: ServiceRepository, clock: Clock) =>
+        new EditAppointmentUseCase(appointments, services, clock),
     },
     {
       provide: AdminCancelAppointmentUseCase,
@@ -157,8 +158,9 @@ import {
     },
     {
       provide: CreateWalkInUseCase,
-      inject: [WALK_IN_REPOSITORY],
-      useFactory: (walkIns: WalkInRepository) => new CreateWalkInUseCase(walkIns),
+      inject: [WALK_IN_REPOSITORY, CLIENT_REPOSITORY, SERVICE_REPOSITORY, CLOCK],
+      useFactory: (walkIns: WalkInRepository, clients: ClientRepository, services: ServiceRepository, clock: Clock) =>
+        new CreateWalkInUseCase(walkIns, clients, services, clock),
     },
   ],
 })

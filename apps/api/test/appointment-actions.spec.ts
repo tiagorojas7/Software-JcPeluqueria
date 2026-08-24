@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
+  createService,
   FakeAbsenceRecordRepository,
   FakeActorContextRepository,
   FakeAppointmentRepository,
@@ -10,6 +11,7 @@ import {
   FakeHoldRepository,
   FakePaymentPort,
   FakeRolePermissionRepository,
+  FakeServiceRepository,
   FakeWalkInRepository,
   type Appointment,
   type Permission,
@@ -28,6 +30,7 @@ import {
   HOLD_EXPIRE_SCHEDULER,
   HOLD_REPOSITORY,
   PAYMENT_PORT,
+  SERVICE_REPOSITORY,
   WALK_IN_REPOSITORY,
 } from '../src/appointments/tokens';
 
@@ -42,6 +45,7 @@ const BARBER_B_SESSION = 'session-barber-b-actions';
 const BARBER_A_ID = 'aaaaaaaa-1111-4000-8000-000000000a01';
 const BARBER_B_ID = 'aaaaaaaa-1111-4000-8000-000000000b02';
 const SERVICE_ID = 'bbbbbbbb-2222-4000-8000-000000000002';
+const SERVICE_DURATION_MINUTES = 30;
 
 const actorContexts = new FakeActorContextRepository();
 actorContexts.seed(OWNER_SESSION, { userId: 'owner-user-id', role: 'owner' });
@@ -102,11 +106,18 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
   let appointments: FakeAppointmentRepository;
   let absences: FakeAbsenceRecordRepository;
   let walkIns: FakeWalkInRepository;
+  let services: FakeServiceRepository;
+  let clients: FakeClientRepository;
 
   beforeAll(async () => {
     appointments = new FakeAppointmentRepository();
     absences = new FakeAbsenceRecordRepository();
     walkIns = new FakeWalkInRepository();
+    services = new FakeServiceRepository();
+    services.create(
+      createService({ id: SERVICE_ID, name: 'Corte clasico', durationMinutes: SERVICE_DURATION_MINUTES, priceCents: 500000 }),
+    );
+    clients = new FakeClientRepository();
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ROLE_PERMISSION_REPOSITORY)
@@ -124,13 +135,18 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
       .overrideProvider(CLOCK)
       .useValue(clock)
       .overrideProvider(CLIENT_REPOSITORY)
-      .useValue(new FakeClientRepository())
+      .useValue(clients)
       .overrideProvider(HOLD_REPOSITORY)
       .useValue(new FakeHoldRepository())
       // Mandatory for every Nest test building the app (see repo conventions):
       // the real provider reaches for pg-boss, which this suite is not about.
       .overrideProvider(HOLD_EXPIRE_SCHEDULER)
       .useValue(new FakeHoldExpireScheduler())
+      // panel-usable: EditAppointmentUseCase/CreateWalkInUseCase now derive
+      // endTime from the target service's durationMinutes, so both need a
+      // real service to find by id.
+      .overrideProvider(SERVICE_REPOSITORY)
+      .useValue(services)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -225,7 +241,7 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
     expect(absences.recordCalls.some((absence) => absence.appointmentId === 'barber-ca-colleague')).toBe(false);
   });
 
-  it('lets the owner edit service, barber and horario of any turno', async () => {
+  it('lets the owner edit service, barber and horario of any turno — endTime derived from the service, never sent', async () => {
     appointments.seed(anAppointment({ id: 'edit-1' }));
 
     const response = await withSession(
@@ -236,11 +252,31 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
       serviceId: SERVICE_ID,
       calendarDate: '2026-09-01',
       startTime: '15:00',
-      endTime: '15:30',
     });
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ id: 'edit-1', barberId: BARBER_B_ID });
+    expect(response.body).toMatchObject({
+      id: 'edit-1',
+      barberId: BARBER_B_ID,
+      startsAt: at('15:00').toISOString(),
+      endsAt: at('15:30').toISOString(),
+    });
+  });
+
+  it('rejects editing into a service that does not exist with a 400, not a 500', async () => {
+    appointments.seed(anAppointment({ id: 'edit-no-service' }));
+
+    const response = await withSession(
+      request(app.getHttpServer()).put('/appointments/edit-no-service'),
+      OWNER_SESSION,
+    ).send({
+      barberId: BARBER_B_ID,
+      serviceId: 'cccccccc-3333-4000-8000-000000000003',
+      calendarDate: '2026-09-01',
+      startTime: '15:00',
+    });
+
+    expect(response.status).toBe(400);
   });
 
   it('rejects a malformed edit body with 400 before ever calling the use case', async () => {
@@ -260,7 +296,7 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
     const response = await withSession(
       request(app.getHttpServer()).put('/appointments/edit-forbidden'),
       BARBER_A_SESSION,
-    ).send({ barberId: BARBER_A_ID, serviceId: SERVICE_ID, calendarDate: '2026-09-01', startTime: '16:00', endTime: '16:30' });
+    ).send({ barberId: BARBER_A_ID, serviceId: SERVICE_ID, calendarDate: '2026-09-01', startTime: '16:00' });
 
     expect(response.status).toBe(403);
   });
@@ -286,22 +322,60 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
     expect(response.status).toBe(404);
   });
 
-  it('lets the owner load a walk-in straight into realizado', async () => {
+  it('lets the owner load a walk-in straight into realizado — endTime derived from the service, never sent', async () => {
     const response = await withSession(
       request(app.getHttpServer()).post('/appointments/walk-in'),
       OWNER_SESSION,
     ).send({
       barberId: BARBER_A_ID,
       serviceId: SERVICE_ID,
-      clientId: null,
+      clientPhone: null,
       calendarDate: '2026-09-01',
       startTime: '11:00',
-      endTime: '11:30',
     });
 
     expect(response.status).toBe(201);
-    expect(response.body).toMatchObject({ barberId: BARBER_A_ID, channel: 'walk_in', status: 'realizado', clientId: null });
+    expect(response.body).toMatchObject({
+      barberId: BARBER_A_ID,
+      channel: 'walk_in',
+      status: 'realizado',
+      clientId: null,
+      startsAt: at('11:00').toISOString(),
+      endsAt: at('11:30').toISOString(),
+    });
     expect(walkIns.createCalls).toHaveLength(1);
+  });
+
+  it('links the walk-in to an existing client found by phone', async () => {
+    clients.seed({ id: 'client-9', name: 'Laura', phone: '3512223344', email: null, age: null });
+
+    const response = await withSession(
+      request(app.getHttpServer()).post('/appointments/walk-in'),
+      OWNER_SESSION,
+    ).send({
+      barberId: BARBER_A_ID,
+      serviceId: SERVICE_ID,
+      clientPhone: '3512223344',
+      calendarDate: '2026-09-01',
+      startTime: '13:00',
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ clientId: 'client-9' });
+  });
+
+  it('rejects a walk-in into a service that does not exist with a 400, not a 500', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).post('/appointments/walk-in'),
+      OWNER_SESSION,
+    ).send({
+      barberId: BARBER_A_ID,
+      serviceId: 'cccccccc-3333-4000-8000-000000000003',
+      calendarDate: '2026-09-01',
+      startTime: '12:00',
+    });
+
+    expect(response.status).toBe(400);
   });
 
   it('rejects a barber loading a walk-in — no walkin:create permission', async () => {
@@ -313,7 +387,6 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
       serviceId: SERVICE_ID,
       calendarDate: '2026-09-01',
       startTime: '12:00',
-      endTime: '12:30',
     });
 
     expect(response.status).toBe(403);

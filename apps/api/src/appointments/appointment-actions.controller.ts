@@ -16,7 +16,9 @@ import {
   BarberConfirmAbsenceUseCase,
   BarberMarkCompletedUseCase,
   CreateWalkInUseCase,
+  EditAppointmentServiceNotFoundError,
   EditAppointmentUseCase,
+  WalkInServiceNotFoundError,
 } from '@jc-barberia/application';
 import {
   CreateWalkInRequestSchema,
@@ -165,21 +167,23 @@ export class AppointmentActionsController {
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.flatten());
     }
-    const { barberId, serviceId, calendarDate, startTime, endTime } = parsed.data;
+    const { barberId, serviceId, calendarDate, startTime } = parsed.data;
 
     try {
       const appointment = await this.editAppointmentUseCase.execute({
         appointmentId: id,
         barberId,
         serviceId,
-        timeRange: {
-          start: this.clock.localTimeToUtc(calendarDate, startTime),
-          end: this.clock.localTimeToUtc(calendarDate, endTime),
-        },
+        // No endTime here on purpose: the use case derives it itself from the
+        // target service's durationMinutes, never from the request body.
+        startsAt: this.clock.localTimeToUtc(calendarDate, startTime),
         searchWindow: this.clock.businessDayBounds(calendarDate),
       });
       return toResponse(appointment);
     } catch (error) {
+      if (error instanceof EditAppointmentServiceNotFoundError) {
+        throw new BadRequestException(`No existe el servicio "${error.serviceId}"`);
+      }
       rethrowAsHttp(error);
     }
   }
@@ -204,22 +208,24 @@ export class AppointmentActionsController {
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.flatten());
     }
-    const { barberId, serviceId, clientId, calendarDate, startTime, endTime } = parsed.data;
+    const { barberId, serviceId, clientPhone, calendarDate, startTime } = parsed.data;
 
     try {
       const walkIn = await this.createWalkInUseCase.execute({
         id: crypto.randomUUID(),
         barberId,
         serviceId,
-        clientId: clientId ?? null,
-        timeRange: {
-          start: this.clock.localTimeToUtc(calendarDate, startTime),
-          end: this.clock.localTimeToUtc(calendarDate, endTime),
-        },
+        clientPhone: clientPhone ?? null,
+        // No endTime here on purpose: the use case derives it itself from the
+        // selected service's durationMinutes, never from the request body.
+        startsAt: this.clock.localTimeToUtc(calendarDate, startTime),
         searchWindow: this.clock.businessDayBounds(calendarDate),
       });
       return toWalkInResponse(walkIn);
     } catch (error) {
+      if (error instanceof WalkInServiceNotFoundError) {
+        throw new BadRequestException(`No existe el servicio "${error.serviceId}"`);
+      }
       rethrowAsHttp(error);
     }
   }

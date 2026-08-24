@@ -67,13 +67,20 @@ export interface AppointmentResponse {
  * B.3's "Editar turno (servicio, barbero, horario)". Time travels as
  * `calendarDate` + local `HH:mm`, same shape every other wire contract in
  * this codebase uses.
+ *
+ * panel-usable: `endTime` is nobody's to restate — it is a property of
+ * whichever service the edit targets, the same reasoning
+ * `CreatePhoneAppointmentRequestSchema` already applies. Optional and, even
+ * when present, ignored: `EditAppointmentUseCase` always derives it from the
+ * target service's `durationMinutes`, so an edit can never leave a turno
+ * whose stored duration disagrees with its service.
  */
 export const EditAppointmentRequestSchema = z.object({
   barberId: z.string().uuid(),
   serviceId: z.string().uuid(),
   calendarDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato esperado: YYYY-MM-DD'),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm'),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm'),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm').optional(),
 });
 
 export type EditAppointmentRequest = z.infer<typeof EditAppointmentRequestSchema>;
@@ -97,17 +104,30 @@ export interface ConfirmAbsenceResponseBody {
 
 /**
  * B.5's "Carga de walk-ins" — only `barberId`/`serviceId` are required
- * (admin-operations spec, "servicio y barbero" only); `clientId` stays
- * `nullable().optional()` for the unidentified-customer case, the same
- * shape `CreateWalkInInput.clientId` already expects.
+ * (admin-operations spec, "servicio y barbero" only).
+ *
+ * panel-usable: `clientId` used to be a raw UUID the front desk had nowhere
+ * to get — a developer's harness, not something reachable from the walk-in
+ * screen. Replaced with `clientPhone`, the same identifier every other
+ * client-facing lookup in this codebase already uses: `CreateWalkInUseCase`
+ * looks up an existing client by it (`ClientRepository.findByPhone`) and
+ * leaves the walk-in unidentified (`clientId: null`) when it does not match
+ * — it never fabricates a client record from a phone number alone. Stays
+ * `nullable().optional()` for the unidentified-customer case
+ * (appointment-lifecycle spec, "Los walk-ins ingresan directamente como
+ * realizado" covers a customer with no client record at all).
+ *
+ * `endTime` is optional and ignored for the same reason
+ * `EditAppointmentRequestSchema.endTime` is: it is the target service's
+ * `durationMinutes`, never something the front desk restates.
  */
 export const CreateWalkInRequestSchema = z.object({
   barberId: z.string().uuid(),
   serviceId: z.string().uuid(),
-  clientId: z.string().uuid().nullable().optional(),
+  clientPhone: z.string().min(1).nullable().optional(),
   calendarDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato esperado: YYYY-MM-DD'),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm'),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm'),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm').optional(),
 });
 
 export type CreateWalkInRequest = z.infer<typeof CreateWalkInRequestSchema>;

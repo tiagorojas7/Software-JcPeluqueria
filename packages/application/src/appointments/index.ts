@@ -4,12 +4,12 @@ export {
   PhoneAppointmentServiceNotFoundError,
 } from './create-phone-appointment';
 export type { CreatePhoneAppointmentInput } from './create-phone-appointment';
-export { EditAppointmentUseCase } from './edit-appointment';
+export { EditAppointmentServiceNotFoundError, EditAppointmentUseCase } from './edit-appointment';
 export type { EditAppointmentInput } from './edit-appointment';
 export { AdminCancelAppointmentUseCase } from './admin-cancel-appointment';
 export { AdminMarkCompletedUseCase } from './admin-mark-completed';
 export { AdminConfirmAbsenceUseCase } from './admin-confirm-absence';
-export { CreateWalkInUseCase } from './create-walk-in';
+export { CreateWalkInUseCase, WalkInServiceNotFoundError } from './create-walk-in';
 export type { CreateWalkInInput, WalkIn } from './create-walk-in';
 export { SELF_CANCEL_WINDOW_MINUTES, SelfCancelAppointmentUseCase } from './self-cancel-appointment';
 export type { SelfCancelInput, SelfCancelResult } from './self-cancel-appointment';
