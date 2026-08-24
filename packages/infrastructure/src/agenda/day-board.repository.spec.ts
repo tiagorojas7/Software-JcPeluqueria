@@ -111,6 +111,36 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
     );
   });
 
+  // El dueño dio de baja a un barbero desde el panel y la agenda le siguio
+  // dando columna. La baja tiene que respetarse, pero no a costa de esconder
+  // trabajo: un barbero dado de baja puede tener turnos ya agendados de antes,
+  // y el local necesita verlos para resolverlos. La columna sobrevive solo
+  // mientras haya algo en ella ese dia.
+  it('deja de dar columna a un barbero dado de baja que no tiene turnos ese dia', async () => {
+    const [retirado] = await client<{ id: string }[]>`
+      insert into barbers (name, active) values ('Retirado sin turnos', false) returning id`;
+
+    const result = await repository.findDayBoard(DAY, OWNER);
+
+    expect(result.columns.map((c) => c.barberId)).not.toContain(retirado!.id);
+  });
+
+  it('conserva la columna de un barbero dado de baja que todavia tiene un turno ese dia', async () => {
+    const [retirado] = await client<{ id: string }[]>`
+      insert into barbers (name, active) values ('Retirado con turno', false) returning id`;
+    await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
+                 values (${retirado!.id}, ${serviceId}, 'telefonico', 'reservado', ${range(DAY, '16:00', '16:30')}::tstzrange)`;
+
+    const result = await repository.findDayBoard(DAY, OWNER);
+
+    expect(result.columns).toEqual(
+      expect.arrayContaining([{ barberId: retirado!.id, barberName: 'Retirado con turno' }]),
+    );
+    expect(result.slots).toEqual(
+      expect.arrayContaining([expect.objectContaining({ barberId: retirado!.id, status: 'reservado' })]),
+    );
+  });
+
   it("narrows both columns and slots to the actor's own barberId — never a post-fetch filter (task 8.7)", async () => {
     const barberActor: ActorContext = { userId: 'barber-a-user', role: 'barber', barberId: barberAId };
 

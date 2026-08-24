@@ -1,5 +1,5 @@
 import type { ActorContext, Clock, DayBoardQueryResult, DayBoardRepository } from '@jc-barberia/domain';
-import { and, eq, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import { barbers, services } from '../db/schema/availability';
@@ -24,21 +24,49 @@ export class DrizzleDayBoardRepository implements DayBoardRepository {
     const { start, end } = this.clock.businessDayBounds(calendarDate);
     const rangeLiteral = `[${start.toISOString()},${end.toISOString()})`;
 
-    const columns =
-      actor.barberId !== undefined
-        ? await this.selectColumns().where(eq(barbers.id, actor.barberId))
-        : await this.selectColumns();
-
     const inWindow = and(
       notInArray(slotOccupancies.status, [...EXCLUDED_STATUSES]),
       sql`${slotOccupancies.timeRange} && ${rangeLiteral}::tstzrange`,
     );
+    // Los slots se resuelven PRIMERO porque las columnas dependen de ellos:
+    // ver `columnsFor`.
     const slots =
       actor.barberId !== undefined
         ? await this.selectSlots().where(and(inWindow, eq(slotOccupancies.barberId, actor.barberId)))
         : await this.selectSlots().where(inWindow);
 
+    const columns = await this.columnsFor(actor, slots);
+
     return { columns, slots };
+  }
+
+  /**
+   * Un barbero merece columna si sigue activo, o si —aun dado de baja— tiene
+   * algo agendado ese dia.
+   *
+   * Filtrar solo por `active` parecia lo obvio y escondia trabajo real: dar
+   * de baja a alguien que renuncio no borra los turnos que ya tenia tomados,
+   * y el local necesita verlos para resolverlos. Al reves, mostrar a todos
+   * los inactivos para siempre hacia que la baja no significara nada en
+   * pantalla — que es lo que reporto el dueño.
+   *
+   * Los ids salen de los slots ya resueltos, asi que la ventana del dia y el
+   * recorte por `actor.barberId` que esa consulta ya aplico se heredan
+   * gratis: un barbero nunca puede ganar la columna de un colega por esta
+   * via.
+   */
+  private async columnsFor(actor: ActorContext, slots: readonly { barberId: string }[]) {
+    if (actor.barberId !== undefined) {
+      return this.selectColumns().where(eq(barbers.id, actor.barberId));
+    }
+
+    const withSlots = [...new Set(slots.map((slot) => slot.barberId))];
+    const visible =
+      withSlots.length > 0
+        ? or(eq(barbers.active, true), inArray(barbers.id, withSlots))
+        : eq(barbers.active, true);
+
+    return this.selectColumns().where(visible);
   }
 
   private selectColumns() {
