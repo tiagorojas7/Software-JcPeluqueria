@@ -40,6 +40,20 @@ export class AppointmentStateMachine {
     return VALID_TRANSITIONS[from].includes(to);
   }
 
+  /**
+   * Whether the appointment has reached a state with no outgoing edges —
+   * `realizado`, `cancelado` and `ausente`. Derived from the same
+   * `VALID_TRANSITIONS` table the transitions themselves read, so a future
+   * edge added there is reflected here for free and the two can never drift.
+   *
+   * Callers that decide what a human may still DO with an appointment (the
+   * day board's `allowedActions`) ask this instead of listing terminal
+   * states again: the lifecycle is defined once, in this file.
+   */
+  static isTerminal(status: AppointmentStatus): boolean {
+    return VALID_TRANSITIONS[status].length === 0;
+  }
+
   static transition(from: AppointmentStatus, to: AppointmentStatus): AppointmentStatus {
     if (!AppointmentStateMachine.canTransition(from, to)) {
       throw new InvalidAppointmentTransitionError(from, to);

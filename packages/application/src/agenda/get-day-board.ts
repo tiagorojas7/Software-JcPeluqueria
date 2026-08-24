@@ -1,10 +1,20 @@
+import { APPOINTMENT_STATUSES, AppointmentStateMachine } from '@jc-barberia/domain';
 import type {
   ActorContext,
+  AppointmentStatus,
   DayBoardRepository,
   DayBoardSlotRecord,
   RolePermissionRepository,
 } from '@jc-barberia/domain';
 import type { DayBoardResponse, DayBoardSlot, SlotAction } from '@jc-barberia/contracts';
+
+/** `DayBoardSlotRecord.status` is the raw `slot_occupancies.status` string,
+ *  which also carries the hold states (`held`/`liberado`) that are not part
+ *  of the appointment lifecycle. Returns `null` for those rather than
+ *  pretending every row is an appointment. */
+function toAppointmentStatus(status: string): AppointmentStatus | null {
+  return (APPOINTMENT_STATUSES as readonly string[]).includes(status) ? (status as AppointmentStatus) : null;
+}
 
 /**
  * "El servidor devuelve `allowedActions` por slot" (design.md, Frontend) —
@@ -54,23 +64,46 @@ export class GetDayBoardUseCase {
     };
   }
 
-  /** Direct translation of access-control's permission matrix onto one
-   *  slot: `edit`/`cancel` are all-or-nothing per role (`appointment:update`
-   *  /`appointment:cancel`); `mark-completed` additionally opens through
-   *  `:own` when the slot belongs to the acting barber, matching "Marcar
-   *  realizado / resolver pendientes ... Solo los propios" for the barber
-   *  row of that matrix. `confirm-absence` reuses the exact same
-   *  `mark-completed:any`/`:own` grant (no separate permission exists for
-   *  it) but additionally requires `status === 'sin_registrado'` —
-   *  `AppointmentStateMachine` only allows the `ausente` edge from there,
-   *  never from `reservado` (packages/domain's five-state lifecycle). */
+  /**
+   * An action is offered only when BOTH gates open: the actor's role grants
+   * it, AND the appointment's current state still admits it.
+   *
+   * The second gate was missing, and the panel paid for it: a `realizado`
+   * turno still advertised "Cancelar", the client clicked it, and the API
+   * answered `500` because no valid transition could satisfy the request.
+   * Offering an action that cannot succeed is a defect in this read model,
+   * not in the button.
+   *
+   * The state half is asked of `AppointmentStateMachine`, never restated
+   * here — it already owns the five-state lifecycle, so `cancel` is exactly
+   * "may become `cancelado`" and `mark-completed` is exactly "may become
+   * `realizado`". That also derives, rather than hardcodes, the rule that
+   * `confirm-absence` only appears on a `sin_registrado` turno: `ausente`
+   * has a single incoming edge, which is what makes "the system never marks
+   * an absence on its own" structural.
+   *
+   * Permission side (access-control's matrix): `edit`/`cancel` are
+   * all-or-nothing per role; `mark-completed` and `confirm-absence` also
+   * open through `:own` when the slot belongs to the acting barber ("Marcar
+   * realizado / resolver pendientes ... Solo los propios").
+   */
   private async allowedActionsFor(slot: DayBoardSlotRecord, actor: ActorContext): Promise<SlotAction[]> {
+    const status = toAppointmentStatus(slot.status);
+    // A hold (`held`/`liberado`) is not an appointment at all, and a
+    // terminal one is finished: neither offers anything to do.
+    if (!status || AppointmentStateMachine.isTerminal(status)) {
+      return [];
+    }
+
     const actions: SlotAction[] = [];
 
     if (await this.rolePermissions.hasPermission(actor.role, 'appointment:update')) {
       actions.push('edit');
     }
-    if (await this.rolePermissions.hasPermission(actor.role, 'appointment:cancel')) {
+    if (
+      AppointmentStateMachine.canTransition(status, 'cancelado') &&
+      (await this.rolePermissions.hasPermission(actor.role, 'appointment:cancel'))
+    ) {
       actions.push('cancel');
     }
 
@@ -81,8 +114,10 @@ export class GetDayBoardUseCase {
       actor.barberId === slot.barberId &&
       (await this.rolePermissions.hasPermission(actor.role, 'appointment:mark-completed:own'));
     if (canMarkAny || canMarkOwn) {
-      actions.push('mark-completed');
-      if (slot.status === 'sin_registrado') {
+      if (AppointmentStateMachine.canTransition(status, 'realizado')) {
+        actions.push('mark-completed');
+      }
+      if (AppointmentStateMachine.canTransition(status, 'ausente')) {
         actions.push('confirm-absence');
       }
     }

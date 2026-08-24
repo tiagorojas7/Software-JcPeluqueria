@@ -29,6 +29,7 @@ import {
 } from '@jc-barberia/contracts';
 import {
   AppointmentNotFoundError,
+  InvalidAppointmentTransitionError,
   SlotUnavailableError,
   type ActorContext,
   type Appointment,
@@ -90,6 +91,20 @@ function rethrowAsHttp(error: unknown): never {
     throw new ConflictException({
       message: 'El horario ya no está disponible',
       alternatives: error.alternatives.map((w) => ({ start: w.start.toISOString(), end: w.end.toISOString() })),
+    });
+  }
+  // Resolver un turno que ya esta resuelto es un desenlace de negocio
+  // esperado, no una falla del servidor. Llegaba aca sin mapear y salia como
+  // 500: el dueño toco "Cancelar" sobre un turno ya realizado y la pantalla
+  // le mostro un error interno. El day board ya no ofrece esas acciones
+  // (`GetDayBoardUseCase` las deriva de `AppointmentStateMachine`), pero dos
+  // pestañas abiertas o una peticion directa siguen pudiendo pedirlo, asi
+  // que la respuesta tiene que ser igualmente clara.
+  if (error instanceof InvalidAppointmentTransitionError) {
+    throw new ConflictException({
+      message: `El turno ya está ${error.from} y no admite esta acción.`,
+      from: error.from,
+      to: error.to,
     });
   }
   throw error;

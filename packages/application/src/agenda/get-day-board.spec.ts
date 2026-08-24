@@ -65,6 +65,63 @@ function seedOneSlot(
 // hardcoded per role: always read fresh from RolePermissionRepository, the
 // same port PermissionsGuard uses (3b.13's "no cachear" rule applies here
 // too).
+// El dueño toco "Cancelar" sobre un turno ya realizado y la API respondio 500.
+// La causa: `allowedActions` traducia SOLO la matriz de permisos del rol e
+// ignoraba por completo el estado del turno, asi que el panel ofrecia botones
+// que ninguna transicion valida podia satisfacer. `AppointmentStateMachine`
+// ya es la unica fuente de verdad de que transiciones existen (realizado,
+// cancelado y ausente son terminales); estos casos exigen que las acciones
+// se deriven de ahi en vez de repetir las reglas por segunda vez.
+describe('GetDayBoardUseCase — las acciones respetan el estado del turno', () => {
+  it('no ofrece ninguna accion sobre un turno realizado, aunque el rol tenga todos los permisos', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'realizado');
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const board = await useCase.execute('2026-08-20', OWNER);
+
+    expect(board.slots[0]?.allowedActions).toEqual([]);
+  });
+
+  it('tampoco sobre uno cancelado ni sobre uno ausente — los tres son estados terminales', async () => {
+    for (const terminal of ['cancelado', 'ausente']) {
+      const repository = new FakeDayBoardRepository();
+      seedOneSlot(repository, terminal);
+      const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+      const board = await useCase.execute('2026-08-20', OWNER);
+
+      expect(board.slots[0]?.allowedActions).toEqual([]);
+    }
+  });
+
+  it('sobre un turno reservado ofrece editar, cancelar y marcar realizado, pero nunca confirmar ausencia', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'reservado');
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const board = await useCase.execute('2026-08-20', OWNER);
+
+    // `ausente` tiene una unica arista de entrada, desde `sin_registrado`:
+    // el sistema nunca marca una ausencia por su cuenta.
+    expect(board.slots[0]?.allowedActions).toEqual(['edit', 'cancel', 'mark-completed']);
+  });
+
+  it('sobre uno sin registrar ofrece resolverlo en cualquiera de sus dos salidas, pero ya no cancelarlo', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'sin_registrado');
+    const useCase = new GetDayBoardUseCase(repository, realisticRolePermissions());
+
+    const board = await useCase.execute('2026-08-20', OWNER);
+
+    const actions = board.slots[0]?.allowedActions ?? [];
+    expect(actions).toContain('mark-completed');
+    expect(actions).toContain('confirm-absence');
+    // `sin_registrado` solo transiciona a `realizado` o `ausente`.
+    expect(actions).not.toContain('cancel');
+  });
+});
+
 describe('GetDayBoardUseCase', () => {
   it('grants edit, cancel and mark-completed on every slot for an owner (holds appointment:update/cancel/mark-completed:any)', async () => {
     const repository = new FakeDayBoardRepository();
@@ -118,7 +175,12 @@ describe('GetDayBoardUseCase', () => {
     expect(result.slots).toEqual([
       expect.objectContaining({
         id: 'slot-1',
-        allowedActions: ['edit', 'cancel', 'mark-completed', 'confirm-absence'],
+        // Sin `cancel`: `sin_registrado` solo transiciona a `realizado` o a
+        // `ausente`, asi que cancelarlo nunca fue una operacion posible. La
+        // version anterior de este caso lo listaba porque las acciones se
+        // derivaban solo del rol; ofrecer un boton que la maquina de estados
+        // va a rechazar es justamente el defecto que se corrigio.
+        allowedActions: ['edit', 'mark-completed', 'confirm-absence'],
       }),
     ]);
   });
