@@ -87,4 +87,26 @@ export interface AuthChallengeRepository {
     purpose: AuthChallengePurpose,
     candidateHash: string,
   ): Promise<ConsumeChallengeResult>;
+
+  /**
+   * fix/acceso-cliente-sin-id: resolves EMAIL -> the one challenge to check a
+   * typed code against, without the client ever typing an opaque
+   * `challengeId` (see `ClientLoginRequestSchema`'s own doc comment in
+   * `packages/contracts` for why a bare code alone cannot do this safely).
+   *
+   * Nothing invalidates an older `client_login` challenge when a new one is
+   * issued for the same user, so two can genuinely be alive at once (the
+   * client clicked "pedir código" twice). This always resolves to the MOST
+   * RECENTLY issued one that is still alive — same liveness `consume()`
+   * itself enforces: unconsumed, unexpired, under the attempt limit — never a
+   * scan matching the candidate secret against every outstanding row (that
+   * would mean charging a failed attempt against a DIFFERENT challenge than
+   * the one the guess was meant for). `null` when none qualifies.
+   *
+   * Ordering by `expiresAt DESC` is equivalent to ordering by issuance time
+   * without a separate `createdAt` column: every purpose's expiry window is a
+   * fixed duration (`EXPIRY_MINUTES_BY_PURPOSE`), so the row with the
+   * furthest-out expiry is also the one issued last.
+   */
+  findLatestActiveId(userId: string, purpose: AuthChallengePurpose): Promise<string | null>;
 }

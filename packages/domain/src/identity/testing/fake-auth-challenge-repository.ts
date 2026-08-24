@@ -89,4 +89,27 @@ export class FakeAuthChallengeRepository implements AuthChallengeRepository {
     entry.consumed = true;
     return { consumed: true, userId };
   }
+
+  /**
+   * Same "alive" test `consume()` applies (not consumed, not expired, not
+   * exhausted), scoped to `userId` + `purpose`, picking whichever qualifying
+   * entry has the LATEST `expiresAt` — the fake's stand-in for "most recently
+   * issued", mirroring `DrizzleAuthChallengeRepository`'s `ORDER BY expires_at
+   * DESC LIMIT 1` without needing a real clock.
+   */
+  async findLatestActiveId(userId: string, purpose: AuthChallengePurpose): Promise<string | null> {
+    let latest: { id: string; expiresAt: Date } | null = null;
+    for (const [id, entry] of this.stored) {
+      if (entry.challenge.userId !== userId || entry.challenge.purpose !== purpose) {
+        continue;
+      }
+      if (entry.consumed || entry.expired || entry.exhausted) {
+        continue;
+      }
+      if (!latest || entry.challenge.expiresAt > latest.expiresAt) {
+        latest = { id, expiresAt: entry.challenge.expiresAt };
+      }
+    }
+    return latest?.id ?? null;
+  }
 }

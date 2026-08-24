@@ -205,3 +205,119 @@ describe('auth challenge consumption (Testcontainers)', () => {
     expect(finalTry).toEqual({ consumed: false, reason: 'exhausted' });
   });
 });
+
+// fix/acceso-cliente-sin-id RED: `ClientLoginByEmailUseCase` needs to resolve
+// EMAIL -> the one challenge to check a typed code against, without the
+// client ever typing a `challengeId`. Two outstanding `client_login`
+// challenges for the SAME user CAN coexist (nothing invalidates an older
+// request when a new one is issued) — `findLatestActiveId` is what keeps that
+// resolution unambiguous: always the most recently issued STILL-ALIVE one,
+// never a scan matching a bare code across every live challenge.
+describe('findLatestActiveId (fix/acceso-cliente-sin-id)', () => {
+  let container: StartedPostgreSqlContainer;
+  let client: ReturnType<typeof postgres>;
+  let db: PostgresJsDatabase;
+
+  const clock = new ShopClock();
+  const FAR_FUTURE = clock.localTimeToUtc('2026-09-01', '12:00');
+  const LATER = clock.addMinutes(FAR_FUTURE, 5);
+  const PAST = clock.localTimeToUtc('2020-01-01', '12:00');
+
+  const newUser = async (): Promise<string> => {
+    const id = randomUUID();
+    await client`insert into users (id, email) values (${id}, ${`${id}@example.com`})`;
+    return id;
+  };
+
+  const issueChallenge = async (
+    userId: string,
+    overrides: Partial<{ purpose: AuthChallenge['purpose']; expiresAt: Date }> = {},
+  ): Promise<string> => {
+    const challenge: AuthChallenge = {
+      id: randomUUID(),
+      userId,
+      purpose: overrides.purpose ?? 'client_login',
+      codeHash: sha256Hex('123456'),
+      tokenHash: sha256Hex(randomUUID()),
+      expiresAt: overrides.expiresAt ?? FAR_FUTURE,
+    };
+    await new DrizzleAuthChallengeRepository(db).create(challenge);
+    return challenge.id;
+  };
+
+  beforeAll(async () => {
+    container = await new PostgreSqlContainer('postgres:16')
+      .withDatabase('jc_barberia_test')
+      .withUsername('jc_barberia')
+      .withPassword('jc_barberia')
+      .withStartupTimeout(240_000)
+      .start();
+
+    client = postgres(container.getConnectionUri(), { max: POOL_SIZE });
+    db = drizzle(client);
+    await migrate(db, { migrationsFolder: './src/db/migrations' });
+  }, 300_000);
+
+  afterAll(async () => {
+    await client?.end();
+    await container?.stop();
+  }, 60_000);
+
+  it('returns null when the user has no challenge at all', async () => {
+    const userId = await newUser();
+
+    const result = await new DrizzleAuthChallengeRepository(db).findLatestActiveId(userId, 'client_login');
+
+    expect(result).toBeNull();
+  });
+
+  it('picks the most recently issued challenge when two are alive at once', async () => {
+    const userId = await newUser();
+    await issueChallenge(userId, { expiresAt: FAR_FUTURE });
+    const latest = await issueChallenge(userId, { expiresAt: LATER });
+
+    const result = await new DrizzleAuthChallengeRepository(db).findLatestActiveId(userId, 'client_login');
+
+    expect(result).toBe(latest);
+  });
+
+  it('skips a consumed challenge and falls back to the older still-alive one', async () => {
+    const userId = await newUser();
+    const older = await issueChallenge(userId, { expiresAt: FAR_FUTURE });
+    const newer = await issueChallenge(userId, { expiresAt: LATER });
+    const repo = new DrizzleAuthChallengeRepository(db);
+    await repo.consume(newer, 'client_login', sha256Hex('123456'));
+
+    const result = await repo.findLatestActiveId(userId, 'client_login');
+
+    expect(result).toBe(older);
+  });
+
+  it('never returns an expired challenge, even when it is the only one', async () => {
+    const userId = await newUser();
+    await issueChallenge(userId, { expiresAt: PAST });
+
+    const result = await new DrizzleAuthChallengeRepository(db).findLatestActiveId(userId, 'client_login');
+
+    expect(result).toBeNull();
+  });
+
+  it('never returns a challenge issued for a different purpose', async () => {
+    const userId = await newUser();
+    await issueChallenge(userId, { purpose: 'staff_password_reset', expiresAt: FAR_FUTURE });
+
+    const result = await new DrizzleAuthChallengeRepository(db).findLatestActiveId(userId, 'client_login');
+
+    expect(result).toBeNull();
+  });
+
+  it('never returns another user\'s challenge', async () => {
+    const owner = await newUser();
+    const someoneElse = await newUser();
+    await issueChallenge(someoneElse, { expiresAt: FAR_FUTURE });
+
+    const result = await new DrizzleAuthChallengeRepository(db).findLatestActiveId(owner, 'client_login');
+
+    expect(result).toBeNull();
+  });
+});

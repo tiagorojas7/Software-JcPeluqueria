@@ -76,4 +76,14 @@ export class ChallengeService {
     const candidateHash = sha256Hex(input.secret);
     return this.challenges.consume(input.challengeId, input.purpose, candidateHash);
   }
+
+  /**
+   * fix/acceso-cliente-sin-id: the seam `ClientLoginByEmailUseCase` needs to
+   * resolve an EMAIL-scoped account down to the one challenge to check a
+   * typed code against — never a `challengeId` the client had to type. Pure
+   * pass-through to the repository; no hashing involved, unlike `consume()`.
+   */
+  async findLatestActiveChallengeId(userId: string, purpose: AuthChallengePurpose): Promise<string | null> {
+    return this.challenges.findLatestActiveId(userId, purpose);
+  }
 }

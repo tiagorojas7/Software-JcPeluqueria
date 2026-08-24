@@ -5,7 +5,7 @@ import {
   type AuthChallengeRepository,
   type ConsumeChallengeResult,
 } from '@jc-barberia/domain';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import { authChallenges } from '../db/schema/identity';
@@ -113,5 +113,27 @@ export class DrizzleAuthChallengeRepository implements AuthChallengeRepository {
       return 'expired';
     }
     return state.attempts >= MAX_CHALLENGE_ATTEMPTS ? 'exhausted' : 'mismatch';
+  }
+
+  async findLatestActiveId(userId: string, purpose: AuthChallengePurpose): Promise<string | null> {
+    const rows = await this.db
+      .select({ id: authChallenges.id })
+      .from(authChallenges)
+      .where(
+        and(
+          eq(authChallenges.userId, userId),
+          eq(authChallenges.purpose, purpose),
+          isNull(authChallenges.consumedAt),
+          sql`${authChallenges.expiresAt} > now()`,
+          sql`${authChallenges.attempts} < ${MAX_CHALLENGE_ATTEMPTS}`,
+        ),
+      )
+      // Furthest-out expiry == issued last, since every purpose's window is a
+      // fixed duration (`EXPIRY_MINUTES_BY_PURPOSE`) — see this method's own
+      // doc comment on `AuthChallengeRepository`.
+      .orderBy(desc(authChallenges.expiresAt))
+      .limit(1);
+
+    return rows[0]?.id ?? null;
   }
 }
