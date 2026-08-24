@@ -1,12 +1,10 @@
 import {
   BadRequestException,
   Body,
-  ConflictException,
   Controller,
   ForbiddenException,
   HttpCode,
   Inject,
-  NotFoundException,
   Param,
   Post,
   Put,
@@ -27,19 +25,17 @@ import {
   type ConfirmAbsenceResponseBody,
   type WalkInResponse,
 } from '@jc-barberia/contracts';
-import {
-  AppointmentNotFoundError,
-  InvalidAppointmentTransitionError,
-  SlotUnavailableError,
-  type ActorContext,
-  type Appointment,
-  type ConfirmAbsenceResult,
-  type Clock,
+import type {
+  ActorContext,
+  Appointment,
+  ConfirmAbsenceResult,
+  Clock,
 } from '@jc-barberia/domain';
 import type { WalkIn } from '@jc-barberia/application';
 
 import { CurrentActor } from '../access-control/decorators/current-actor.decorator';
 import { RequiresPermission } from '../access-control/decorators/requires-permission.decorator';
+import { rethrowAppointmentErrorAsHttp } from './appointment-http-errors';
 import { CLOCK } from './tokens';
 
 function toResponse(appointment: Appointment): AppointmentResponse {
@@ -80,35 +76,14 @@ function toWalkInResponse(walkIn: WalkIn): WalkInResponse {
   };
 }
 
-/** Translates the two errors these use cases can throw into ordinary HTTP
- *  responses, the same pattern `HoldController` already established for
- *  `SlotUnavailableError` — never a bare 500 for an expected outcome. */
-function rethrowAsHttp(error: unknown): never {
-  if (error instanceof AppointmentNotFoundError) {
-    throw new NotFoundException(`No existe un turno con id "${error.appointmentId}"`);
-  }
-  if (error instanceof SlotUnavailableError) {
-    throw new ConflictException({
-      message: 'El horario ya no está disponible',
-      alternatives: error.alternatives.map((w) => ({ start: w.start.toISOString(), end: w.end.toISOString() })),
-    });
-  }
-  // Resolver un turno que ya esta resuelto es un desenlace de negocio
-  // esperado, no una falla del servidor. Llegaba aca sin mapear y salia como
-  // 500: el dueño toco "Cancelar" sobre un turno ya realizado y la pantalla
-  // le mostro un error interno. El day board ya no ofrece esas acciones
-  // (`GetDayBoardUseCase` las deriva de `AppointmentStateMachine`), pero dos
-  // pestañas abiertas o una peticion directa siguen pudiendo pedirlo, asi
-  // que la respuesta tiene que ser igualmente clara.
-  if (error instanceof InvalidAppointmentTransitionError) {
-    throw new ConflictException({
-      message: `El turno ya está ${error.from} y no admite esta acción.`,
-      from: error.from,
-      to: error.to,
-    });
-  }
-  throw error;
-}
+/** Cancelling reaches the same refund path the client's own route does, so
+ *  the translation lives in one place both share — see
+ *  `appointment-http-errors.ts`.
+ *
+ *  The `=> never` annotation is not decoration: without it TypeScript widens
+ *  the alias to `=> void` and every handler that ends in this call stops
+ *  type-checking as exhaustive. */
+const rethrowAsHttp: (error: unknown) => never = rethrowAppointmentErrorAsHttp;
 
 /**
  * Slice B (cablear-el-mvp, B.1-B.5): the controller task 10.11 said existed

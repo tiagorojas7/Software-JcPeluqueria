@@ -7,6 +7,7 @@ import type {
 } from '@jc-barberia/contracts';
 import type { Appointment, ClientContext } from '@jc-barberia/domain';
 
+import { rethrowAppointmentErrorAsHttp } from '../appointments/appointment-http-errors';
 import { CurrentClient } from '../access-control/decorators/current-client.decorator';
 import { RequiresClientSession } from '../access-control/decorators/requires-client-session.decorator';
 
@@ -59,10 +60,13 @@ export class AccountController {
     @Param('id') appointmentId: string,
     @CurrentClient() client: ClientContext,
   ): Promise<SelfCancelAppointmentResponseBody> {
-    const result = await this.selfCancelAppointmentUseCase.execute({
-      appointmentId,
-      clientId: client.clientId,
-    });
+    // Cancelling inside the 1h window refunds the deposit, so this reaches
+    // MercadoPago. Without this translation a refund the provider rejected
+    // surfaced to the client as a bare "Internal server error" — the exact
+    // thing the shop owner reported from "Mi cuenta".
+    const result = await this.selfCancelAppointmentUseCase
+      .execute({ appointmentId, clientId: client.clientId })
+      .catch(rethrowAppointmentErrorAsHttp);
 
     switch (result.outcome) {
       case 'cancelled':
