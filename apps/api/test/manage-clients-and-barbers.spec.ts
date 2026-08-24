@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
+  createBarber,
   FakeActorContextRepository,
   FakeBarberRepository,
   FakeClientRepository,
@@ -60,10 +61,12 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
   let app: INestApplication;
   let barbers: FakeBarberRepository;
   let clients: FakeClientRepository;
+  let schedules: FakeScheduleRepository;
 
   beforeAll(async () => {
     barbers = new FakeBarberRepository();
     clients = new FakeClientRepository();
+    schedules = new FakeScheduleRepository();
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ROLE_PERMISSION_REPOSITORY)
@@ -75,7 +78,7 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
       .overrideProvider(BARBER_REPOSITORY)
       .useValue(barbers)
       .overrideProvider(SCHEDULE_REPOSITORY)
-      .useValue(new FakeScheduleRepository())
+      .useValue(schedules)
       .overrideProvider(SERVICE_REPOSITORY)
       .useValue(new FakeServiceRepository())
       .compile();
@@ -142,5 +145,64 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
     );
 
     expect(response.status).toBe(404);
+  });
+
+  // panel-usable: the actual product bug — configuring a week took five
+  // separate PUTs and the panel only ever made one, so every barber ended up
+  // with a single `barber_schedules` row. This is the one-call fix.
+  it("lets the owner set a barber's whole week in one request — one row per working day", async () => {
+    await barbers.create(createBarber({ id: 'week-barber', name: 'Semana', active: true }));
+
+    const response = await withSession(
+      request(app.getHttpServer()).put('/panel/barbers/week-barber/schedule/week'),
+      OWNER_SESSION,
+    ).send({
+      schedule: [
+        { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
+        { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
+        { dayOfWeek: 3, opensAt: '09:00', closesAt: '18:00' },
+        { dayOfWeek: 4, opensAt: '09:00', closesAt: '18:00' },
+        { dayOfWeek: 5, opensAt: '09:00', closesAt: '17:00' },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ configured: true });
+    const stored = await schedules.listBarberSchedule('week-barber');
+    expect(stored).toHaveLength(5);
+  });
+
+  it('MUST reject the secretary configuring a week — schedule:configure is owner-only', async () => {
+    await barbers.create(createBarber({ id: 'week-barber-2', name: 'Semana', active: true }));
+
+    const response = await withSession(
+      request(app.getHttpServer()).put('/panel/barbers/week-barber-2/schedule/week'),
+      SECRETARY_SESSION,
+    ).send({ schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }] });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects an empty week with 400 before ever touching the schedule repository', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).put('/panel/barbers/week-barber-3/schedule/week'),
+      OWNER_SESSION,
+    ).send({ schedule: [] });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('the per-day schedule endpoint keeps working unmodified for a single-day caller', async () => {
+    await barbers.create(createBarber({ id: 'day-barber', name: 'Un Dia', active: true }));
+
+    const response = await withSession(
+      request(app.getHttpServer()).put('/panel/barbers/day-barber/schedule'),
+      OWNER_SESSION,
+    ).send({ dayOfWeek: 3, opensAt: '10:00', closesAt: '19:00' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ configured: true });
+    const stored = await schedules.listBarberSchedule('day-barber');
+    expect(stored).toHaveLength(1);
   });
 });

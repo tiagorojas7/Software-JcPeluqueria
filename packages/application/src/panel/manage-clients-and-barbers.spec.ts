@@ -192,4 +192,48 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     );
     expect(own).toHaveLength(2); // day 1 was replaced in place, never duplicated
   });
+
+  // panel-usable: a barber created through the panel ended up with exactly
+  // ONE `barber_schedules` row no matter how many days the owner meant to
+  // configure, because the panel only ever made one PUT with one day. This
+  // is the fix's actual claim: one call, many rows.
+  it('configures a whole week in a single call — one row per working day, never just one', async () => {
+    const { useCase, schedules } = buildUseCase();
+    await useCase.addBarber({ id: 'barber-5', name: 'Semana Completa', schedule: [] });
+
+    await useCase.configureBarberWeek('barber-5', [
+      { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 3, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 4, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 5, opensAt: '09:00', closesAt: '17:00' },
+    ]);
+
+    const own = await schedules.listBarberSchedule('barber-5');
+    expect(own).toHaveLength(5);
+    expect(own.map((day) => day.dayOfWeek).sort()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('configuring a week updates a day already on file instead of duplicating it', async () => {
+    const { useCase, schedules } = buildUseCase();
+    await useCase.addBarber({
+      id: 'barber-6',
+      name: 'Con Un Dia',
+      schedule: [{ dayOfWeek: 1, opensAt: '08:00', closesAt: '12:00' }],
+    });
+
+    await useCase.configureBarberWeek('barber-6', [
+      { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
+    ]);
+
+    const own = await schedules.listBarberSchedule('barber-6');
+    expect(own).toHaveLength(2);
+    expect(own).toEqual(
+      expect.arrayContaining([
+        createBarberSchedule({ barberId: 'barber-6', dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
+        createBarberSchedule({ barberId: 'barber-6', dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' }),
+      ]),
+    );
+  });
 });

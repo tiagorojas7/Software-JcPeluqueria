@@ -47,6 +47,23 @@ export const ConfigureBarberScheduleRequestSchema = BarberScheduleDaySchema;
 
 export type ConfigureBarberScheduleRequest = z.infer<typeof ConfigureBarberScheduleRequestSchema>;
 
+/**
+ * panel-usable: the per-day endpoint above (`ConfigureBarberScheduleRequestSchema`,
+ * `PUT /panel/barbers/:barberId/schedule`) is what the panel used to call —
+ * once per day, five times for a five-day week. Verified against the
+ * database: every barber created or scheduled through the panel ended up
+ * with exactly ONE `barber_schedules` row no matter how many working days
+ * the owner actually meant to configure, because the panel only ever made
+ * one call. This lets the panel set a barber's WHOLE week in a single
+ * request; the per-day endpoint stays exactly as it was, unremoved, for any
+ * other caller that relies on configuring one day at a time.
+ */
+export const ConfigureBarberWeekRequestSchema = z.object({
+  schedule: z.array(BarberScheduleDaySchema).min(1, 'El horario semanal es obligatorio'),
+});
+
+export type ConfigureBarberWeekRequest = z.infer<typeof ConfigureBarberWeekRequestSchema>;
+
 export const ConfigureServicePriceRequestSchema = z.object({
   priceCents: z.number().int().positive('El precio debe ser mayor a cero'),
 });

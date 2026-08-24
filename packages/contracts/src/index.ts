@@ -73,10 +73,12 @@ export type {
   ClientRecordResponse,
   ClientsListResponse,
   ConfigureBarberScheduleRequest,
+  ConfigureBarberWeekRequest,
   ConfigureServicePriceRequest,
 } from './panel';
 export {
   AddBarberRequestSchema,
   ConfigureBarberScheduleRequestSchema,
+  ConfigureBarberWeekRequestSchema,
   ConfigureServicePriceRequestSchema,
 } from './panel';

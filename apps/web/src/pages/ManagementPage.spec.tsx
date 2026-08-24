@@ -86,21 +86,47 @@ describe('ManagementPage (D.3)', () => {
     expect(apiGet).toHaveBeenCalledWith('/panel/clients');
   });
 
-  it('da de alta un barbero con nombre y un dia de horario base', async () => {
+  it('da de alta un barbero con nombre y una semana completa de horario base, en un solo pedido', async () => {
     vi.mocked(apiPost).mockResolvedValueOnce({ id: 'new-barber', name: 'Nuevo Barbero', active: true });
-    render(<ManagementPage actor={OWNER} />);
+    const { container } = render(<ManagementPage actor={OWNER} />);
 
+    // Scoped by id (mgmt-barber-week-*, WeekScheduleFields' own idPrefix for
+    // this section) rather than by label text: SchedulesSection renders its
+    // OWN "Lunes"/"Martes"/... checkboxes on the same page, so plain label
+    // text would be ambiguous between the two sections.
     fireEvent.change(await screen.findByLabelText(/nombre del barbero/i), { target: { value: 'Nuevo Barbero' } });
-    fireEvent.change(screen.getByLabelText(/d.a \(alta\)/i), { target: { value: '1' } });
-    fireEvent.change(screen.getByLabelText(/abre \(alta\)/i), { target: { value: '09:00' } });
-    fireEvent.change(screen.getByLabelText(/cierra \(alta\)/i), { target: { value: '18:00' } });
+    fireEvent.click(container.querySelector('#mgmt-barber-week-1-enabled')!);
+    fireEvent.click(container.querySelector('#mgmt-barber-week-2-enabled')!);
+    fireEvent.click(container.querySelector('#mgmt-barber-week-3-enabled')!);
+    fireEvent.click(container.querySelector('#mgmt-barber-week-4-enabled')!);
+    fireEvent.click(container.querySelector('#mgmt-barber-week-5-enabled')!);
     fireEvent.click(screen.getByRole('button', { name: /dar de alta/i }));
 
     expect(await screen.findByText(/nuevo barbero.*dado de alta/i)).toBeInTheDocument();
+    // Un solo POST con las cinco filas — no cinco llamadas separadas. Los
+    // horarios quedan en el default (09:00-18:00) porque el test nunca los
+    // toca, y eso es exactamente lo que se manda.
+    expect(apiPost).toHaveBeenCalledTimes(1);
     expect(apiPost).toHaveBeenCalledWith('/panel/barbers', {
       name: 'Nuevo Barbero',
-      schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }],
+      schedule: [
+        { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
+        { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
+        { dayOfWeek: 3, opensAt: '09:00', closesAt: '18:00' },
+        { dayOfWeek: 4, opensAt: '09:00', closesAt: '18:00' },
+        { dayOfWeek: 5, opensAt: '09:00', closesAt: '18:00' },
+      ],
     });
+  });
+
+  it('no da de alta un barbero sin al menos un dia de trabajo elegido', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    fireEvent.change(await screen.findByLabelText(/nombre del barbero/i), { target: { value: 'Sin Dias' } });
+    fireEvent.click(screen.getByRole('button', { name: /dar de alta/i }));
+
+    expect(await screen.findByText(/eleg.\s*al menos un d.a de trabajo/i)).toBeInTheDocument();
+    expect(apiPost).not.toHaveBeenCalled();
   });
 
   it('da de baja un barbero existente', async () => {
@@ -113,21 +139,42 @@ describe('ManagementPage (D.3)', () => {
     expect(apiPost).toHaveBeenCalledWith('/panel/barbers/b1/deactivate');
   });
 
-  it('configura el horario base de un barbero existente', async () => {
+  it('configura la semana completa de un barbero existente en un solo pedido — el bug que reporto el dueno', async () => {
     vi.mocked(apiPut).mockResolvedValueOnce({ configured: true });
-    render(<ManagementPage actor={OWNER} />);
+    const { container } = render(<ManagementPage actor={OWNER} />);
 
-    fireEvent.change(await screen.findByLabelText(/d.a \(horario\)/i), { target: { value: '2' } });
-    fireEvent.change(screen.getByLabelText(/abre \(horario\)/i), { target: { value: '10:00' } });
-    fireEvent.change(screen.getByLabelText(/cierra \(horario\)/i), { target: { value: '19:00' } });
+    // Two "Horarios" sections would collide on plain label text ("Lunes",
+    // "Abre", "Cierra" repeat per day) — scoped to this section's own ids,
+    // same idPrefix WeekScheduleFields uses (mgmt-schedule-week-*).
+    await screen.findByRole('heading', { name: /horarios/i });
+    fireEvent.click(container.querySelector('#mgmt-schedule-week-2-enabled')!);
+    fireEvent.change(container.querySelector('#mgmt-schedule-week-2-opens')!, { target: { value: '10:00' } });
+    fireEvent.change(container.querySelector('#mgmt-schedule-week-2-closes')!, { target: { value: '19:00' } });
+    fireEvent.click(container.querySelector('#mgmt-schedule-week-4-enabled')!);
     fireEvent.click(screen.getByRole('button', { name: /guardar horario/i }));
 
     expect(await screen.findByText(/horario actualizado/i)).toBeInTheDocument();
-    expect(apiPut).toHaveBeenCalledWith('/panel/barbers/b1/schedule', {
-      dayOfWeek: 2,
-      opensAt: '10:00',
-      closesAt: '19:00',
+    // Antes: una llamada PUT por dia (hasta cinco). Ahora: una sola, con
+    // todos los dias elegidos adentro — la causa exacta del bug reportado
+    // ("al dar de alta un barbero... no se estan cargando correctamente los
+    // horarios").
+    expect(apiPut).toHaveBeenCalledTimes(1);
+    expect(apiPut).toHaveBeenCalledWith('/panel/barbers/b1/schedule/week', {
+      schedule: [
+        { dayOfWeek: 2, opensAt: '10:00', closesAt: '19:00' },
+        { dayOfWeek: 4, opensAt: '09:00', closesAt: '18:00' },
+      ],
     });
+  });
+
+  it('no guarda un horario sin al menos un dia de trabajo elegido', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByRole('button', { name: /guardar horario/i });
+    fireEvent.click(screen.getByRole('button', { name: /guardar horario/i }));
+
+    expect(await screen.findByText(/eleg.\s*al menos un d.a de trabajo/i)).toBeInTheDocument();
+    expect(apiPut).not.toHaveBeenCalledWith('/panel/barbers/b1/schedule/week', expect.anything());
   });
 
   it('configura el precio de un servicio en centavos', async () => {

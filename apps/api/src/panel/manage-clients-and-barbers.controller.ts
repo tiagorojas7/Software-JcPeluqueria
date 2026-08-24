@@ -3,6 +3,7 @@ import { ManageClientsAndBarbersUseCase } from '@jc-barberia/application';
 import {
   AddBarberRequestSchema,
   ConfigureBarberScheduleRequestSchema,
+  ConfigureBarberWeekRequestSchema,
   ConfigureServicePriceRequestSchema,
   type BarberResponse,
   type ClientsListResponse,
@@ -85,6 +86,29 @@ export class ManageClientsAndBarbersController {
       ...parsed.data,
       dayOfWeek: asDayOfWeek(parsed.data.dayOfWeek),
     });
+    return { configured: true };
+  }
+
+  /**
+   * panel-usable: lets the panel set a barber's whole week in one request
+   * instead of one PUT per day — the per-day route above stays untouched for
+   * any other caller.
+   */
+  @RequiresPermission('schedule:configure')
+  @Put('barbers/:barberId/schedule/week')
+  @HttpCode(200)
+  async configureBarberWeek(
+    @Param('barberId') barberId: string,
+    @Body() body: unknown,
+  ): Promise<{ configured: true }> {
+    const parsed = ConfigureBarberWeekRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    await this.manage.configureBarberWeek(
+      barberId,
+      parsed.data.schedule.map((day) => ({ ...day, dayOfWeek: asDayOfWeek(day.dayOfWeek) })),
+    );
     return { configured: true };
   }
 

@@ -90,6 +90,26 @@ export class ManageClientsAndBarbersUseCase {
     }
   }
 
+  /**
+   * panel-usable: lets the panel set a barber's WHOLE week in one call —
+   * configuring day-by-day through `configureBarberSchedule` used to be the
+   * panel's only option, and it only ever made ONE such call, which is why
+   * every barber created or rescheduled through the panel ended up with a
+   * single `barber_schedules` row. Loops the exact same create-or-update
+   * fallback `configureBarberSchedule` already applies, one day at a time,
+   * so this is not a second way of writing a schedule row — it is that same
+   * write, repeated for every day the caller sends.
+   *
+   * Never deletes a day's row for a day left OUT of `days` — neither this
+   * method nor `configureBarberSchedule` has ever been able to remove a
+   * working day, only create or update one.
+   */
+  async configureBarberWeek(barberId: string, days: readonly Omit<BarberSchedule, 'barberId'>[]): Promise<void> {
+    for (const day of days) {
+      await this.configureBarberSchedule({ barberId, ...day });
+    }
+  }
+
   /** "precios de servicios" — `false` means no service with that id exists. */
   async configureServicePrice(serviceId: string, priceCents: number): Promise<boolean> {
     return this.services.updatePrice(serviceId, priceCents);

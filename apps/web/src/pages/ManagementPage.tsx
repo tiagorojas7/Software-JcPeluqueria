@@ -139,6 +139,91 @@ function ClientsSection() {
   );
 }
 
+/** ISO-8601-ish weekday order this codebase already uses everywhere else
+ *  (`DAY_OF_WEEK_OPTIONS` below, `BarberScheduleDaySchema`): 0=domingo. */
+interface WeekDayEntry {
+  readonly dayOfWeek: number;
+  readonly label: string;
+  readonly enabled: boolean;
+  readonly opensAt: string;
+  readonly closesAt: string;
+}
+
+function buildDefaultWeek(): WeekDayEntry[] {
+  return DAY_OF_WEEK_OPTIONS.map((option) => ({
+    dayOfWeek: Number(option.value),
+    label: option.label,
+    enabled: false,
+    opensAt: '09:00',
+    closesAt: '18:00',
+  }));
+}
+
+/** Only the checked days become rows — matches
+ *  `ConfigureBarberWeekRequestSchema`/`AddBarberRequestSchema.schedule`
+ *  exactly. */
+function weekToScheduleDays(week: readonly WeekDayEntry[]) {
+  return week
+    .filter((day) => day.enabled)
+    .map((day) => ({ dayOfWeek: day.dayOfWeek, opensAt: day.opensAt, closesAt: day.closesAt }));
+}
+
+interface WeekScheduleFieldsProps {
+  readonly idPrefix: string;
+  readonly week: readonly WeekDayEntry[];
+  readonly onChange: (week: readonly WeekDayEntry[]) => void;
+}
+
+/**
+ * panel-usable: shared by `BarbersSection` (alta) and `SchedulesSection`
+ * (edición) so BOTH send the barber's whole week in one request instead of
+ * one day at a time — verified against the database: seeded barbers have
+ * 4-5 `barber_schedules` rows, every barber created or scheduled through the
+ * panel had exactly 1, because the panel only ever offered one day-of-week
+ * selector per call. One checkbox + horario per day of the week; only the
+ * checked days are sent.
+ */
+function WeekScheduleFields({ idPrefix, week, onChange }: WeekScheduleFieldsProps) {
+  function updateDay(index: number, patch: Partial<WeekDayEntry>) {
+    onChange(week.map((day, i) => (i === index ? { ...day, ...patch } : day)));
+  }
+
+  return (
+    <fieldset className="management__week">
+      <legend>Días de trabajo</legend>
+      {week.map((day, index) => (
+        <div className="management__week-day" key={day.dayOfWeek}>
+          <label htmlFor={`${idPrefix}-${day.dayOfWeek}-enabled`}>
+            <input
+              id={`${idPrefix}-${day.dayOfWeek}-enabled`}
+              type="checkbox"
+              checked={day.enabled}
+              onChange={(e) => updateDay(index, { enabled: e.target.checked })}
+            />
+            {day.label}
+          </label>
+          <label htmlFor={`${idPrefix}-${day.dayOfWeek}-opens`}>Abre</label>
+          <input
+            id={`${idPrefix}-${day.dayOfWeek}-opens`}
+            type="time"
+            disabled={!day.enabled}
+            value={day.opensAt}
+            onChange={(e) => updateDay(index, { opensAt: e.target.value })}
+          />
+          <label htmlFor={`${idPrefix}-${day.dayOfWeek}-closes`}>Cierra</label>
+          <input
+            id={`${idPrefix}-${day.dayOfWeek}-closes`}
+            type="time"
+            disabled={!day.enabled}
+            value={day.closesAt}
+            onChange={(e) => updateDay(index, { closesAt: e.target.value })}
+          />
+        </div>
+      ))}
+    </fieldset>
+  );
+}
+
 interface BarbersSectionProps {
   readonly barbers: readonly PublicBarberResponse[];
 }
@@ -146,9 +231,7 @@ interface BarbersSectionProps {
 function BarbersSection({ barbers }: BarbersSectionProps) {
   const [firstBarber] = barbers;
   const [name, setName] = useState('');
-  const [dayOfWeek, setDayOfWeek] = useState('1');
-  const [opensAt, setOpensAt] = useState('09:00');
-  const [closesAt, setClosesAt] = useState('18:00');
+  const [week, setWeek] = useState<readonly WeekDayEntry[]>(buildDefaultWeek);
   const [barberToDeactivate, setBarberToDeactivate] = useState<string>(firstBarber?.id ?? '');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,13 +240,19 @@ function BarbersSection({ barbers }: BarbersSectionProps) {
     event.preventDefault();
     setError(null);
     setNotice(null);
+    const schedule = weekToScheduleDays(week);
+    if (schedule.length === 0) {
+      setError('Elegí al menos un día de trabajo.');
+      return;
+    }
     try {
       const created = await apiPost<{ id: string; name: string; active: boolean }>('/panel/barbers', {
         name,
-        schedule: [{ dayOfWeek: Number(dayOfWeek), opensAt, closesAt }],
+        schedule,
       });
       setNotice(`${created.name} dado de alta correctamente. Recargá la página para verlo en los selectores.`);
       setName('');
+      setWeek(buildDefaultWeek());
     } catch (err) {
       setError(describeError(err));
     }
@@ -194,36 +283,7 @@ function BarbersSection({ barbers }: BarbersSectionProps) {
           <label htmlFor="mgmt-barber-name">Nombre del barbero</label>
           <input id="mgmt-barber-name" required value={name} onChange={(e) => setName(e.target.value)} />
         </span>
-        <span className="management__field">
-          <label htmlFor="mgmt-barber-day">Día (alta)</label>
-          <select id="mgmt-barber-day" value={dayOfWeek} onChange={(e) => setDayOfWeek(e.target.value)}>
-            {DAY_OF_WEEK_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </span>
-        <span className="management__field">
-          <label htmlFor="mgmt-barber-opens">Abre (alta)</label>
-          <input
-            id="mgmt-barber-opens"
-            type="time"
-            required
-            value={opensAt}
-            onChange={(e) => setOpensAt(e.target.value)}
-          />
-        </span>
-        <span className="management__field">
-          <label htmlFor="mgmt-barber-closes">Cierra (alta)</label>
-          <input
-            id="mgmt-barber-closes"
-            type="time"
-            required
-            value={closesAt}
-            onChange={(e) => setClosesAt(e.target.value)}
-          />
-        </span>
+        <WeekScheduleFields idPrefix="mgmt-barber-week" week={week} onChange={setWeek} />
         <button type="submit">Dar de alta</button>
       </form>
 
@@ -262,12 +322,21 @@ interface SchedulesSectionProps {
   readonly barbers: readonly PublicBarberResponse[];
 }
 
+/**
+ * panel-usable: used to PUT one day at a time to `/panel/barbers/:id/schedule`
+ * — configuring a five-day week took five separate submits, and the panel
+ * only ever made one, which is exactly why a newly created or rescheduled
+ * barber ended up with a single `barber_schedules` row (the owner's own
+ * words: "al dar de alta un barbero, aparece, pero no se están cargando
+ * correctamente los horarios"). Now PUTs the whole checked week in one
+ * request to `/panel/barbers/:id/schedule/week` — same `WeekScheduleFields`
+ * `BarbersSection` uses for alta, so both screens configure a week the same
+ * way.
+ */
 function SchedulesSection({ barbers }: SchedulesSectionProps) {
   const [firstBarber] = barbers;
   const [barberId, setBarberId] = useState<string>(firstBarber?.id ?? '');
-  const [dayOfWeek, setDayOfWeek] = useState('1');
-  const [opensAt, setOpensAt] = useState('09:00');
-  const [closesAt, setClosesAt] = useState('18:00');
+  const [week, setWeek] = useState<readonly WeekDayEntry[]>(buildDefaultWeek);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -276,14 +345,16 @@ function SchedulesSection({ barbers }: SchedulesSectionProps) {
     if (!barberId) {
       return;
     }
+    const schedule = weekToScheduleDays(week);
+    if (schedule.length === 0) {
+      setError('Elegí al menos un día de trabajo.');
+      setNotice(null);
+      return;
+    }
     setError(null);
     setNotice(null);
     try {
-      await apiPut(`/panel/barbers/${barberId}/schedule`, {
-        dayOfWeek: Number(dayOfWeek),
-        opensAt,
-        closesAt,
-      });
+      await apiPut(`/panel/barbers/${barberId}/schedule/week`, { schedule });
       setNotice('Horario actualizado correctamente.');
     } catch (err) {
       setError(describeError(err));
@@ -315,36 +386,7 @@ function SchedulesSection({ barbers }: SchedulesSectionProps) {
             ))}
           </select>
         </span>
-        <span className="management__field">
-          <label htmlFor="mgmt-schedule-day">Día (horario)</label>
-          <select id="mgmt-schedule-day" value={dayOfWeek} onChange={(e) => setDayOfWeek(e.target.value)}>
-            {DAY_OF_WEEK_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </span>
-        <span className="management__field">
-          <label htmlFor="mgmt-schedule-opens">Abre (horario)</label>
-          <input
-            id="mgmt-schedule-opens"
-            type="time"
-            required
-            value={opensAt}
-            onChange={(e) => setOpensAt(e.target.value)}
-          />
-        </span>
-        <span className="management__field">
-          <label htmlFor="mgmt-schedule-closes">Cierra (horario)</label>
-          <input
-            id="mgmt-schedule-closes"
-            type="time"
-            required
-            value={closesAt}
-            onChange={(e) => setClosesAt(e.target.value)}
-          />
-        </span>
+        <WeekScheduleFields idPrefix="mgmt-schedule-week" week={week} onChange={setWeek} />
         <button type="submit">Guardar horario</button>
       </form>
     </div>
