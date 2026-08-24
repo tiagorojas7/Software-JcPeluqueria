@@ -74,3 +74,29 @@ export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
 export type CheckoutResponseBody =
   | { readonly outcome: 'created'; readonly initPoint: string }
   | { readonly outcome: 'hold-expired' };
+
+/**
+ * client-booking spec, "Exploración sin cuenta". `priceCents` is the real,
+ * integer value the panel writes (`configureServicePrice`) — never a
+ * formatted string baked in server-side. Formatting for display is the
+ * browser's job, not this contract's.
+ */
+export interface PublicBarberResponse {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface PublicBarbersResponse {
+  readonly barbers: readonly PublicBarberResponse[];
+}
+
+export interface PublicServiceResponse {
+  readonly id: string;
+  readonly name: string;
+  readonly durationMinutes: number;
+  readonly priceCents: number;
+}
+
+export interface PublicServicesResponse {
+  readonly services: readonly PublicServiceResponse[];
+}
