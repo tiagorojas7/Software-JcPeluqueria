@@ -94,19 +94,41 @@ export interface AuthChallengeRepository {
    * `challengeId` (see `ClientLoginRequestSchema`'s own doc comment in
    * `packages/contracts` for why a bare code alone cannot do this safely).
    *
-   * Nothing invalidates an older `client_login` challenge when a new one is
-   * issued for the same user, so two can genuinely be alive at once (the
-   * client clicked "pedir código" twice). This always resolves to the MOST
-   * RECENTLY issued one that is still alive — same liveness `consume()`
-   * itself enforces: unconsumed, unexpired, under the attempt limit — never a
-   * scan matching the candidate secret against every outstanding row (that
-   * would mean charging a failed attempt against a DIFFERENT challenge than
-   * the one the guess was meant for). `null` when none qualifies.
+   * `ChallengeService.issue()` calls `invalidateActive` before creating a new
+   * challenge, so at most one `(userId, purpose)` pair is ever alive at once
+   * — this never has to break a tie between two challenges issued in the
+   * same instant (there is no `createdAt` column, and two challenges issued
+   * back-to-back can share the exact same `expiresAt`). This always resolves
+   * to the one still-alive challenge — same liveness `consume()` itself
+   * enforces: unconsumed, unexpired, under the attempt limit — never a scan
+   * matching the candidate secret against every outstanding row (that would
+   * mean charging a failed attempt against a DIFFERENT challenge than the one
+   * the guess was meant for). `null` when none qualifies.
    *
-   * Ordering by `expiresAt DESC` is equivalent to ordering by issuance time
-   * without a separate `createdAt` column: every purpose's expiry window is a
-   * fixed duration (`EXPIRY_MINUTES_BY_PURPOSE`), so the row with the
-   * furthest-out expiry is also the one issued last.
+   * Ordering by `expiresAt DESC` still breaks ties correctly in the adapter
+   * even though only one row is ever expected alive — belt and suspenders,
+   * not load-bearing.
    */
   findLatestActiveId(userId: string, purpose: AuthChallengePurpose): Promise<string | null>;
+
+  /**
+   * fix/acceso-cliente-sin-id, Decision 1: invalidates every still-live
+   * challenge already outstanding for this `(userId, purpose)` pair, so the
+   * one about to be created via `create()` is the only one left alive.
+   *
+   * Without this, a client who taps "pedir código" twice — an ordinary thing
+   * to do — leaves two live challenges with no reliable way to tell which is
+   * newest (see `findLatestActiveId`'s doc comment): the fresh code could get
+   * rejected AND burn a failed attempt against the WRONG challenge. Called by
+   * `ChallengeService.issue()` before persisting the new challenge, never
+   * after — invalidating the challenge this call is about to create would be
+   * a bug.
+   *
+   * "Invalidate" reuses the exact same `consumed` state `consume()` already
+   * produces for a genuinely spent challenge — there is no separate
+   * "superseded" status. A stale magic-link click on an invalidated challenge
+   * therefore reports `must-request-new-code` with reason `consumed`, which
+   * is honest: that row can never authenticate again either way.
+   */
+  invalidateActive(userId: string, purpose: AuthChallengePurpose): Promise<void>;
 }

@@ -208,11 +208,15 @@ describe('auth challenge consumption (Testcontainers)', () => {
 
 // fix/acceso-cliente-sin-id RED: `ClientLoginByEmailUseCase` needs to resolve
 // EMAIL -> the one challenge to check a typed code against, without the
-// client ever typing a `challengeId`. Two outstanding `client_login`
-// challenges for the SAME user CAN coexist (nothing invalidates an older
-// request when a new one is issued) — `findLatestActiveId` is what keeps that
-// resolution unambiguous: always the most recently issued STILL-ALIVE one,
-// never a scan matching a bare code across every live challenge.
+// client ever typing a `challengeId`. `ChallengeService.issue()` calls
+// `invalidateActive` before persisting a new challenge (Decision 1 below),
+// so in practice at most one `client_login` challenge is ever alive per
+// user — but this repository method is exercised directly here, bypassing
+// that guarantee, to prove `findLatestActiveId` still behaves correctly
+// (and would, even if a caller other than `ChallengeService` ever created
+// two live rows some other way): always the most recently issued
+// STILL-ALIVE one, never a scan matching a bare code across every live
+// challenge.
 describe('findLatestActiveId (fix/acceso-cliente-sin-id)', () => {
   let container: StartedPostgreSqlContainer;
   let client: ReturnType<typeof postgres>;
@@ -319,5 +323,134 @@ describe('findLatestActiveId (fix/acceso-cliente-sin-id)', () => {
     const result = await new DrizzleAuthChallengeRepository(db).findLatestActiveId(owner, 'client_login');
 
     expect(result).toBeNull();
+  });
+});
+
+// fix/acceso-cliente-sin-id, Decision 1: `ChallengeService.issue()` calls
+// this BEFORE persisting a new challenge so at most one `(userId, purpose)`
+// pair is ever alive at once — a client tapping "pedir código" twice must
+// never leave two live rows with an ambiguous "newest".
+describe('invalidateActive (fix/acceso-cliente-sin-id)', () => {
+  let container: StartedPostgreSqlContainer;
+  let client: ReturnType<typeof postgres>;
+  let db: PostgresJsDatabase;
+
+  const clock = new ShopClock();
+  const FAR_FUTURE = clock.localTimeToUtc('2026-09-01', '12:00');
+  const PAST = clock.localTimeToUtc('2020-01-01', '12:00');
+
+  const newUser = async (): Promise<string> => {
+    const id = randomUUID();
+    await client`insert into users (id, email) values (${id}, ${`${id}@example.com`})`;
+    return id;
+  };
+
+  const issueChallenge = async (
+    userId: string,
+    overrides: Partial<{ purpose: AuthChallenge['purpose']; expiresAt: Date }> = {},
+  ): Promise<string> => {
+    const challenge: AuthChallenge = {
+      id: randomUUID(),
+      userId,
+      purpose: overrides.purpose ?? 'client_login',
+      codeHash: sha256Hex('123456'),
+      tokenHash: sha256Hex(randomUUID()),
+      expiresAt: overrides.expiresAt ?? FAR_FUTURE,
+    };
+    await new DrizzleAuthChallengeRepository(db).create(challenge);
+    return challenge.id;
+  };
+
+  beforeAll(async () => {
+    container = await new PostgreSqlContainer('postgres:16')
+      .withDatabase('jc_barberia_test')
+      .withUsername('jc_barberia')
+      .withPassword('jc_barberia')
+      .withStartupTimeout(240_000)
+      .start();
+
+    client = postgres(container.getConnectionUri(), { max: POOL_SIZE });
+    db = drizzle(client);
+    await migrate(db, { migrationsFolder: './src/db/migrations' });
+  }, 300_000);
+
+  afterAll(async () => {
+    await client?.end();
+    await container?.stop();
+  }, 60_000);
+
+  it('marks a still-alive challenge consumed, so it can never authenticate afterwards', async () => {
+    const userId = await newUser();
+    const id = await issueChallenge(userId);
+    const repo = new DrizzleAuthChallengeRepository(db);
+
+    await repo.invalidateActive(userId, 'client_login');
+
+    const rows = await client`select consumed_at from auth_challenges where id = ${id}`;
+    expect(rows[0]?.consumed_at).not.toBeNull();
+    // Same terminal state a real consume() produces — a stale magic-link
+    // click on the invalidated row reports the honest `consumed` reason.
+    const result = await repo.consume(id, 'client_login', sha256Hex('123456'));
+    expect(result).toEqual({ consumed: false, reason: 'consumed' });
+  });
+
+  it('leaves an already-consumed challenge untouched', async () => {
+    const userId = await newUser();
+    const id = await issueChallenge(userId);
+    const repo = new DrizzleAuthChallengeRepository(db);
+    await repo.consume(id, 'client_login', sha256Hex('123456'));
+    const before = await client`select consumed_at from auth_challenges where id = ${id}`;
+
+    await repo.invalidateActive(userId, 'client_login');
+
+    const after = await client`select consumed_at from auth_challenges where id = ${id}`;
+    expect(after[0]?.consumed_at).toEqual(before[0]?.consumed_at);
+  });
+
+  it('leaves an already-expired challenge untouched', async () => {
+    const userId = await newUser();
+    const id = await issueChallenge(userId, { expiresAt: PAST });
+    const repo = new DrizzleAuthChallengeRepository(db);
+
+    await repo.invalidateActive(userId, 'client_login');
+
+    const rows = await client`select consumed_at from auth_challenges where id = ${id}`;
+    expect(rows[0]?.consumed_at).toBeNull();
+  });
+
+  it('never touches a challenge issued for a different purpose', async () => {
+    const userId = await newUser();
+    const id = await issueChallenge(userId, { purpose: 'staff_password_reset' });
+    const repo = new DrizzleAuthChallengeRepository(db);
+
+    await repo.invalidateActive(userId, 'client_login');
+
+    const rows = await client`select consumed_at from auth_challenges where id = ${id}`;
+    expect(rows[0]?.consumed_at).toBeNull();
+  });
+
+  it('never touches another user\'s challenge', async () => {
+    const owner = await newUser();
+    const someoneElse = await newUser();
+    const id = await issueChallenge(someoneElse);
+    const repo = new DrizzleAuthChallengeRepository(db);
+
+    await repo.invalidateActive(owner, 'client_login');
+
+    const rows = await client`select consumed_at from auth_challenges where id = ${id}`;
+    expect(rows[0]?.consumed_at).toBeNull();
+  });
+
+  it('leaves the newest challenge alone when only the older one is invalidated in between', async () => {
+    const userId = await newUser();
+    const older = await issueChallenge(userId);
+    const repo = new DrizzleAuthChallengeRepository(db);
+    await repo.invalidateActive(userId, 'client_login');
+    const newer = await issueChallenge(userId);
+
+    const oldRow = await client`select consumed_at from auth_challenges where id = ${older}`;
+    const newRow = await client`select consumed_at from auth_challenges where id = ${newer}`;
+    expect(oldRow[0]?.consumed_at).not.toBeNull();
+    expect(newRow[0]?.consumed_at).toBeNull();
   });
 });

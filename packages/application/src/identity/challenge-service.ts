@@ -54,6 +54,15 @@ export class ChallengeService {
     const token = randomBytes(32).toString('hex');
     const expiresAt = this.clock.addMinutes(this.clock.now(), EXPIRY_MINUTES_BY_PURPOSE[input.purpose]);
 
+    // fix/acceso-cliente-sin-id, Decision 1: kill any challenge still alive
+    // for this (userId, purpose) BEFORE creating the new one, so at most one
+    // is ever alive at a time. A client tapping "pedir código" twice is
+    // ordinary, not an attack — without this, two live challenges with equal
+    // expiresAt (no createdAt column to break the tie) leave
+    // `findLatestActiveId` unable to reliably pick the newest, and a correct
+    // guess could get rejected while burning an attempt on the wrong row.
+    await this.challenges.invalidateActive(input.userId, input.purpose);
+
     const challenge: AuthChallenge = {
       id: challengeId,
       userId: input.userId,

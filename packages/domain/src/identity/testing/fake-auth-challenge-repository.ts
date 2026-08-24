@@ -112,4 +112,23 @@ export class FakeAuthChallengeRepository implements AuthChallengeRepository {
     }
     return latest?.id ?? null;
   }
+
+  /**
+   * fix/acceso-cliente-sin-id, Decision 1: marks every still-alive entry
+   * for this `(userId, purpose)` pair `consumed`, the same terminal state
+   * `consume()` produces for a genuinely spent challenge — mirroring
+   * `DrizzleAuthChallengeRepository.invalidateActive`'s reuse of the
+   * `consumed_at` column rather than inventing a distinct fake-only state.
+   */
+  async invalidateActive(userId: string, purpose: AuthChallengePurpose): Promise<void> {
+    for (const entry of this.stored.values()) {
+      if (entry.challenge.userId !== userId || entry.challenge.purpose !== purpose) {
+        continue;
+      }
+      if (entry.consumed || entry.expired || entry.exhausted) {
+        continue;
+      }
+      entry.consumed = true;
+    }
+  }
 }

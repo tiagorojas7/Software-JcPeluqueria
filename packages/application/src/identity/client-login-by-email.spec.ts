@@ -81,7 +81,25 @@ describe('ClientLoginByEmailUseCase (fix/acceso-cliente-sin-id)', () => {
     expect(result).toEqual({ outcome: 'rejected' });
   });
 
-  it('reports an expired challenge as must-request-new-code, same mapping ClientLoginUseCase already owns', async () => {
+  // Decision 2 (fix/acceso-cliente-sin-id): NOT `must-request-new-code`. This
+  // endpoint is email-keyed and deliberately non-disclosing, exactly like
+  // `RequestClientAccessUseCase` (see this use case's own doc comment). If an
+  // expired challenge reported `must-request-new-code` here, an attacker
+  // could request a code for `victim@example.com` (accepted unconditionally
+  // by that endpoint), wait for it to expire, then call this one:
+  // `must-request-new-code` would prove the address is a customer, while
+  // `rejected` proves it is not — an enumeration oracle. `findLatestActiveId`
+  // only ever resolves to a genuinely alive challenge, so an expired one is
+  // indistinguishable from no challenge at all, which is indistinguishable
+  // from a wrong code — all three collapse to `rejected`. The legitimate
+  // client is never stranded by this: the login screen always offers "pedir
+  // un código nuevo" regardless of outcome, so a client whose code expired is
+  // one tap from a fresh one without the server ever confirming their email
+  // is on file. The precise `must-request-new-code` mapping still applies on
+  // the magic-link path, which carries its own `challengeId` and goes
+  // through `ClientLoginUseCase` directly — that path is not email-keyed and
+  // has nothing to disclose.
+  it('rejects an expired challenge exactly like a wrong code, so an email cannot be enumerated by waiting it out', async () => {
     const { accounts, challenges, challengeService, useCase } = build();
     const account = await accounts.create({ clientId: 'client-1', email: 'sofia@example.com' });
     const issued = await challengeService.issue({ userId: account.id, purpose: 'client_login' });
@@ -89,6 +107,6 @@ describe('ClientLoginByEmailUseCase (fix/acceso-cliente-sin-id)', () => {
 
     const result = await useCase.execute({ email: 'sofia@example.com', secret: issued.code });
 
-    expect(result).toEqual({ outcome: 'must-request-new-code', reason: 'expired' });
+    expect(result).toEqual({ outcome: 'rejected' });
   });
 });

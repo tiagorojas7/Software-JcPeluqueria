@@ -136,4 +136,29 @@ export class DrizzleAuthChallengeRepository implements AuthChallengeRepository {
 
     return rows[0]?.id ?? null;
   }
+
+  /**
+   * fix/acceso-cliente-sin-id, Decision 1: marks every still-alive
+   * `(userId, purpose)` row consumed, the exact same terminal state a real
+   * `consume()` produces — there is no separate "superseded" column. Scoped
+   * with the same liveness predicate `consume()`/`findLatestActiveId` use, so
+   * an already-dead row is left alone (no reason to touch what a caller can
+   * no longer learn anything new from). `ChallengeService.issue()` calls this
+   * BEFORE `create()`, so the challenge about to be created is never at risk
+   * of matching its own predicate.
+   */
+  async invalidateActive(userId: string, purpose: AuthChallengePurpose): Promise<void> {
+    await this.db
+      .update(authChallenges)
+      .set({ consumedAt: sql`now()` })
+      .where(
+        and(
+          eq(authChallenges.userId, userId),
+          eq(authChallenges.purpose, purpose),
+          isNull(authChallenges.consumedAt),
+          sql`${authChallenges.expiresAt} > now()`,
+          sql`${authChallenges.attempts} < ${MAX_CHALLENGE_ATTEMPTS}`,
+        ),
+      );
+  }
 }
