@@ -48,43 +48,84 @@ describe('MercadoPago webhook (App Nest levantada en memoria)', () => {
     await app?.close();
   });
 
-  it('rejects an invalid signature with 401, recording the event but enqueueing nothing', async () => {
+  it('asienta la firma invalida en la auditoria, sin usarla como filtro', async () => {
     const response = await request(app.getHttpServer())
       .post('/webhooks/mercadopago?data.id=123456')
       .set('x-signature', 'ts=1700000000,v1=deadbeef')
       .send({ action: 'payment.updated' });
 
-    expect(response.status).toBe(401);
-    expect(queue.enqueuedPaymentIds).toEqual([]);
+    expect(response.status).toBe(200);
     expect(events.records).toEqual([
       { paymentId: '123456', rawPayload: { action: 'payment.updated' }, signatureValid: false },
     ]);
   });
 
-  it('rejects a notification carrying no data.id with 401, never touching the event log', async () => {
-    // Found by pointing a real tunnel at this endpoint: without `data.id` the
-    // handler used to reach `events.record({ paymentId: undefined })`, which
-    // the `payment_events` NOT NULL constraint turned into a 500. On a public,
-    // unauthenticated endpoint that is a crash any stray POST can trigger, and
-    // it buries real failures in the same noise. MercadoPago always appends
-    // `data.id` to `notification_url` (that is the value its own SDKs sign
-    // against), so its absence means the caller is not MercadoPago — 401, and
-    // no audit row, because there is no resource id to key one on.
-    // The fakes are shared across this suite's cases, so what matters is the
-    // delta this one call produced, not the absolute contents.
+  it('responde 200 y no encola nada cuando la notificacion no nombra un pago', async () => {
+    // Un `merchant_order` — o cualquier POST perdido — no trae un id que se
+    // le pueda preguntar a `/v1/payments/{id}`. Se responde 200 a proposito:
+    // un 4xx haria que MercadoPago reintente para siempre algo que no nos
+    // sirve. Tampoco hay fila de auditoria, porque esa tabla se indexa por id
+    // de pago y aca no hay ninguno.
+    // Los dobles se comparten entre los casos de esta suite, asi que lo que
+    // importa es el delta de esta llamada, no el contenido absoluto.
     const recordsBefore = events.records.length;
+    const enqueuedBefore = queue.enqueuedPaymentIds.length;
 
     const response = await request(app.getHttpServer())
-      .post('/webhooks/mercadopago')
+      .post('/webhooks/mercadopago?id=43900907080&topic=merchant_order')
       .set('x-signature', 'ts=1700000000,v1=deadbeef')
-      .send({ type: 'payment' });
+      .send({ resource: 'https://api.mercadolibre.com/merchant_orders/43900907080' });
 
-    expect(response.status).toBe(401);
-    expect(queue.enqueuedPaymentIds).toEqual([]);
+    expect(response.status).toBe(200);
+    expect(queue.enqueuedPaymentIds).toHaveLength(enqueuedBefore);
     expect(events.records).toHaveLength(recordsBefore);
   });
 
+  // MercadoPago manda por DOS formatos y del ultimo pago real solo llego el
+  // viejo, que este endpoint rechazaba. Verificado contra el trafico real
+  // capturado por ngrok:
+  //   ?data.id=<id>&type=payment        (moderno, el unico que se aceptaba)
+  //   ?id=<id>&topic=payment            (IPN legacy)
+  //   ?id=<merchant_order_id>&topic=merchant_order
+  // Un pago aprobado cuyo aviso llega solo por el canal viejo se quedaba sin
+  // confirmar para siempre.
+  it('acepta el formato viejo id+topic=payment y encola el mismo id', async () => {
+    const before = queue.enqueuedPaymentIds.length;
+
+    const response = await request(app.getHttpServer())
+      .post('/webhooks/mercadopago?id=778899&topic=payment')
+      .set('x-signature', signatureHeaderFor('778899', 1700000000, 'req-ipn'))
+      .set('x-request-id', 'req-ipn')
+      .send({ action: 'payment.created' });
+
+    expect(response.status).toBe(200);
+    expect(queue.enqueuedPaymentIds.slice(before)).toEqual(['778899']);
+  });
+
+  // La firma deja de ser la unica autenticacion. Prueba QUIEN habla; no
+  // prueba el hecho. Quien lo prueba es `PaymentPort.getPayment`, que
+  // `ProcessPaymentUseCase` ya consulta antes de tocar nada — el propio
+  // puerto lo documenta: "the webhook's data.id is never trusted directly".
+  // Encolar no confirma ningun turno: solo agenda la pregunta a MercadoPago.
+  it('encola igual cuando la firma no valida, pero lo deja asentado como invalido', async () => {
+    const before = queue.enqueuedPaymentIds.length;
+
+    const response = await request(app.getHttpServer())
+      .post('/webhooks/mercadopago?data.id=445566&type=payment')
+      .set('x-signature', 'ts=1700000000,v1=deadbeef')
+      .set('x-request-id', 'req-invalida')
+      .send({ action: 'payment.updated' });
+
+    expect(response.status).toBe(200);
+    expect(queue.enqueuedPaymentIds.slice(before)).toEqual(['445566']);
+    // El registro de auditoria conserva que esa firma no validaba.
+    expect(events.records.at(-1)).toEqual(
+      expect.objectContaining({ paymentId: '445566', signatureValid: false }),
+    );
+  });
+
   it('accepts a validly signed payload with 200 and enqueues the payment id for async processing', async () => {
+    const before = queue.enqueuedPaymentIds.length;
     const ts = 1700000001;
     const response = await request(app.getHttpServer())
       .post('/webhooks/mercadopago?data.id=654321')
@@ -93,17 +134,26 @@ describe('MercadoPago webhook (App Nest levantada en memoria)', () => {
       .send({ action: 'payment.updated' });
 
     expect(response.status).toBe(200);
-    expect(queue.enqueuedPaymentIds).toEqual(['654321']);
+    expect(queue.enqueuedPaymentIds.slice(before)).toEqual(['654321']);
   });
 
-  it('rejects a forged "approved" payload carrying no valid signature — never reaches the queue', async () => {
+  it('un payload que se declara approved sin firma valida no confirma nada por si mismo', async () => {
+    // Antes este caso probaba que la firma lo frenaba en la puerta. Ya no la
+    // usamos como filtro, asi que lo que hay que probar es lo que de verdad
+    // protege: encolar NO es confirmar. El id entra a la cola, pero el
+    // `status: 'approved'` del cuerpo se ignora por completo — nada aguas
+    // abajo lo lee. `ProcessPaymentUseCase` le pregunta el estado a
+    // MercadoPago con `PaymentPort.getPayment`, de modo que un atacante no
+    // puede fabricar una aprobacion escribiendola en el JSON.
     const response = await request(app.getHttpServer())
       .post('/webhooks/mercadopago?data.id=999999')
       .set('x-signature', 'ts=1700000002,v1=' + '0'.repeat(64))
       .send({ action: 'payment.updated', data: { id: '999999' }, status: 'approved' });
 
-    expect(response.status).toBe(401);
-    expect(queue.enqueuedPaymentIds).not.toContain('999999');
+    expect(response.status).toBe(200);
+    expect(events.records.at(-1)).toEqual(
+      expect.objectContaining({ paymentId: '999999', signatureValid: false }),
+    );
   });
 
   it('is public — reachable with no session cookie, proving PermissionsGuard does not block it', async () => {

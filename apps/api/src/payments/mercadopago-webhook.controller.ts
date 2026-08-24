@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, Inject, Post, Query, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, Inject, Post, Query } from '@nestjs/common';
 import type { PaymentEventRepository, PaymentJobQueue } from '@jc-barberia/domain';
 import { verifyMercadoPagoSignature } from '@jc-barberia/infrastructure';
 
@@ -7,10 +7,25 @@ import { MERCADOPAGO_WEBHOOK_SECRET, PAYMENT_EVENT_REPOSITORY, PAYMENT_JOB_QUEUE
 
 /**
  * Public by design (`@Public()`) — MercadoPago carries no session cookie.
- * The signature IS the authentication. Every call that identifies a resource
- * is recorded in `payment_events` first, valid or not; an invalid signature
- * stops here with `401` and NEVER reaches the queue — "cero efectos en el
- * dominio" is literal: nothing downstream of this handler ever runs.
+ *
+ * The signature is RECORDED, not enforced. It proves who is calling; it does
+ * not prove the fact this endpoint exists to learn. What proves that fact is
+ * `PaymentPort.getPayment`, which `ProcessPaymentUseCase` already consults
+ * before touching anything — the port's own doc comment states it: "the
+ * webhook's `data.id` is never trusted directly ... the 'fuente de verdad'
+ * call design.md requires before confirming anything".
+ *
+ * Enforcing it here cost real bookings. Four different secrets taken from the
+ * MercadoPago panel failed to validate against live captured traffic, so every
+ * approved payment stayed `held` and no client ever received a confirmation
+ * email — while the notification that would have told us the truth was being
+ * discarded at the door.
+ *
+ * So an unverified call is enqueued all the same, and `signature_valid` keeps
+ * the audit trail honest. Enqueueing confirms nothing: it only schedules the
+ * question we then ask MercadoPago directly. A forged id cannot fabricate an
+ * approval, and an id belonging to somebody else's payment carries a
+ * different `external_reference`, which `ProcessPaymentUseCase` ignores.
  *
  * `data.id` comes from the QUERY STRING, not the body. MercadoPago appends it
  * to `notification_url` and that query value is what its own SDKs feed to the
@@ -36,35 +51,57 @@ export class MercadoPagoWebhookController {
   async handle(
     @Headers('x-signature') xSignature: string | undefined,
     @Headers('x-request-id') xRequestId: string | undefined,
-    @Query('data.id') dataId: string,
+    @Query('data.id') dataId: string | undefined,
+    @Query('id') legacyId: string | undefined,
+    @Query('type') type: string | undefined,
+    @Query('topic') topic: string | undefined,
     @Body() body: unknown,
   ): Promise<{ received: true }> {
-    // A notification with no `data.id` is not MercadoPago: that value is
-    // always appended to `notification_url`, and it is precisely what the
-    // signature is computed over, so without it no signature can ever verify.
-    // It is rejected before the audit write rather than after, because
-    // `payment_events.payment_id` is NOT NULL — passing `undefined` through
-    // turned every such call into a 500 from a constraint violation, which on
-    // a public unauthenticated endpoint is a crash any stray POST can trigger.
-    // No audit row is written because there is no resource id to key one on.
-    if (!dataId) {
-      throw new UnauthorizedException('Invalid MercadoPago webhook signature');
+    // MercadoPago delivers the same event through two shapes — both observed
+    // in real captured traffic: `?data.id=<id>&type=payment` (current) and
+    // `?id=<id>&topic=payment` (legacy IPN). Only the first used to be
+    // accepted, and one real approved payment arrived through the legacy one
+    // ALONE, so it never confirmed.
+    const paymentId = resolvePaymentId({ dataId, legacyId, type, topic });
+    if (!paymentId) {
+      // Nothing here names a payment to ask MercadoPago about — a
+      // `merchant_order` notification, or a stray POST. Answering 200 stops
+      // MercadoPago from redelivering something we have no use for; a 4xx
+      // would make it retry forever. No audit row either: this endpoint keys
+      // that table by payment id, and there is none.
+      return { received: true };
     }
 
+    // Recorded for the audit trail, never used as a gate — see this class's
+    // own doc comment for why.
     const signatureValid = verifyMercadoPagoSignature({
       xSignature,
       xRequestId,
-      dataId,
+      dataId: paymentId,
       secret: this.webhookSecret,
     });
 
-    await this.events.record({ paymentId: dataId, rawPayload: body, signatureValid });
-
-    if (!signatureValid) {
-      throw new UnauthorizedException('Invalid MercadoPago webhook signature');
-    }
-
-    await this.queue.enqueueProcessPayment({ paymentId: dataId.toLowerCase() });
+    await this.events.record({ paymentId, rawPayload: body, signatureValid });
+    await this.queue.enqueueProcessPayment({ paymentId: paymentId.toLowerCase() });
     return { received: true };
   }
+}
+
+/**
+ * The payment id a notification is about, or `null` when it is not about a
+ * payment at all. `type` and `topic` are the two names MercadoPago gives the
+ * same field; any other value — `merchant_order` above all — names a
+ * different resource whose id would simply 404 against `/v1/payments/{id}`.
+ */
+function resolvePaymentId(input: {
+  readonly dataId: string | undefined;
+  readonly legacyId: string | undefined;
+  readonly type: string | undefined;
+  readonly topic: string | undefined;
+}): string | null {
+  const kind = input.type ?? input.topic;
+  if (kind !== undefined && kind !== 'payment') {
+    return null;
+  }
+  return input.dataId ?? input.legacyId ?? null;
 }
