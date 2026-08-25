@@ -92,6 +92,9 @@ describe('CreatePhoneAppointmentUseCase', () => {
           barberName: 'Cristian Gomez',
           serviceName: 'Corte clasico',
           appointmentTime: at('10:00').toISOString(),
+          // Un turno telefonico no lleva seña: el mail no puede afirmarle al
+          // cliente que ya pago algo que no pago.
+          depositPaid: 'false',
         },
       },
     ]);

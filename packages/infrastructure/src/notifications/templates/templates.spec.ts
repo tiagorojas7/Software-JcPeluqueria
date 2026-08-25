@@ -69,6 +69,31 @@ describe('createTemplateRegistry (7.7) — una plantilla por evento existente', 
     expect(rendered.body).toContain('Corte clasico');
   });
 
+  // El dueño lo vio en un mail real: un turno telefonico no lleva seña, y el
+  // mensaje igual afirmaba "Ya pagaste la seña". Decirle al cliente que pago
+  // algo que no pago es peor que no decirle nada, asi que la linea del dinero
+  // sale del payload y no de un supuesto.
+  it('booking_confirmed sin seña: no afirma un pago que no ocurrio', () => {
+    const rendered = registry['booking_confirmed']({
+      barberName: 'Cristian',
+      serviceName: 'Corte clasico',
+      appointmentTime: '2026-09-01T17:00:00.000Z',
+      depositPaid: 'false',
+    });
+    expect(rendered.body).not.toContain('Ya pagaste');
+    expect(rendered.body).toContain('en el local');
+  });
+
+  it('booking_confirmed con seña: si la menciona', () => {
+    const rendered = registry['booking_confirmed']({
+      barberName: 'Cristian',
+      serviceName: 'Corte clasico',
+      appointmentTime: '2026-09-01T17:00:00.000Z',
+      depositPaid: 'true',
+    });
+    expect(rendered.body).toContain('Ya pagaste la seña');
+  });
+
   // panel-usable — "nobody tells the client their appointment changed":
   // EditAppointmentUseCase enqueues this whenever staff edit a turno's
   // barbero, servicio or horario.

@@ -178,6 +178,10 @@ export class CreatePhoneAppointmentUseCase {
         barberName: barber?.name ?? '',
         serviceName: input.serviceName,
         appointmentTime: input.startsAt.toISOString(),
+        // A phone booking never carries a deposit (admin-operations, "turnos
+        // telefónicos sin seña"). Saying so explicitly keeps the template from
+        // telling this client they already paid something they did not.
+        depositPaid: 'false',
       },
     });
   }
