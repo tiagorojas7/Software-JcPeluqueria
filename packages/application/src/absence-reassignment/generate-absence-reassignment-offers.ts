@@ -1,7 +1,7 @@
 import {
   AvailabilityService,
+  bookableSlots,
   findNearestAvailable,
-  sliceIntoSlots,
   type Appointment,
   type AvailableCandidate,
   type BarberRepository,
@@ -151,7 +151,10 @@ export class GenerateAbsenceReassignmentOffers {
       for (const window of workingWindows) {
         const free = await this.freeRangesQuery.findFreeRanges(barber.id, window);
         for (const freeWindow of free) {
-          for (const slot of sliceIntoSlots(freeWindow, durationMinutes, this.clock)) {
+          // Reassignment offers are same-day by definition, so the morning
+          // half of `originDate` is routinely already gone: `bookableSlots`
+          // keeps the offer from proposing a replacement earlier than now.
+          for (const slot of bookableSlots(freeWindow, durationMinutes, this.clock)) {
             candidates.push({ date: originDate, window: slot, barberId: barber.id });
           }
         }

@@ -28,14 +28,20 @@ import { GetPublicAvailabilityUseCase } from './get-public-availability';
 // This use case takes no actor/session at all — there is nothing to
 // authenticate, by construction: an anonymous visitor is the only caller.
 
-const clock = new FakeClock();
-const at = (time: string) => clock.localTimeToUtc('2026-09-07', time); // a Monday
+// A throwaway FakeClock used only to build fixed instants for test data — the
+// use case itself always gets a clock with a real `now`, because "which start
+// times are still bookable" is part of what it answers.
+const dateBuilder = new FakeClock();
+const at = (time: string) => dateBuilder.localTimeToUtc('2026-09-07', time); // a Monday
 
-function buildUseCase() {
+// Default: the shop day has not started yet, so nothing is filtered out by the
+// elapsed-slot rule and each test states only the behaviour it is about.
+function buildUseCase(now: Date = at('00:00')) {
   const barbers = new FakeBarberRepository();
   const services = new FakeServiceRepository();
   const schedules = new FakeScheduleRepository();
   const freeRanges = new FakeFreeRangesQuery();
+  const clock = new FakeClock(-180, now);
   const useCase = new GetPublicAvailabilityUseCase(barbers, services, schedules, freeRanges, clock);
   return { useCase, barbers, services, schedules, freeRanges };
 }
@@ -73,6 +79,41 @@ describe('GetPublicAvailabilityUseCase', () => {
     await services.create(createService({ id: 'service-1', name: 'Corte', durationMinutes: 30, priceCents: 500000 }));
     await schedules.createShopHours(createShopHours({ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }));
     // No BarberSchedule row for Monday.
+
+    const result = await useCase.execute({ barberId: 'barber-1', serviceId: 'service-1', date: '2026-09-07' });
+
+    expect(result.slots).toEqual([]);
+  });
+
+  // RED — the reported bug: browsing today's availability at 10:30 still
+  // offered 09:00 and 10:00. Occupancy does not remove them (nobody booked
+  // them, they simply went by), so the only thing that can is the clock.
+  it('never offers a start time that already went by when the requested date is today', async () => {
+    const { useCase, barbers, services, schedules, freeRanges } = buildUseCase(at('10:05'));
+    await barbers.create(createBarber({ id: 'barber-1', name: 'Juan', active: true }));
+    await services.create(createService({ id: 'service-1', name: 'Corte', durationMinutes: 30, priceCents: 500000 }));
+    await schedules.createShopHours(createShopHours({ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }));
+    await schedules.createBarberSchedule(
+      createBarberSchedule({ barberId: 'barber-1', dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }),
+    );
+    freeRanges.seed('barber-1', [{ start: at('09:00'), end: at('11:00') }]);
+
+    const result = await useCase.execute({ barberId: 'barber-1', serviceId: 'service-1', date: '2026-09-07' });
+
+    expect(result.slots).toEqual([{ start: at('10:30'), end: at('11:00') }]);
+  });
+
+  it('returns no slots for a date the shop already left behind', async () => {
+    const { useCase, barbers, services, schedules, freeRanges } = buildUseCase(
+      dateBuilder.localTimeToUtc('2026-09-14', '09:00'),
+    );
+    await barbers.create(createBarber({ id: 'barber-1', name: 'Juan', active: true }));
+    await services.create(createService({ id: 'service-1', name: 'Corte', durationMinutes: 30, priceCents: 500000 }));
+    await schedules.createShopHours(createShopHours({ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }));
+    await schedules.createBarberSchedule(
+      createBarberSchedule({ barberId: 'barber-1', dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }),
+    );
+    freeRanges.seed('barber-1', [{ start: at('09:00'), end: at('13:00') }]);
 
     const result = await useCase.execute({ barberId: 'barber-1', serviceId: 'service-1', date: '2026-09-07' });
 

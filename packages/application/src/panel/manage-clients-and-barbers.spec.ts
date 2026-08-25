@@ -45,6 +45,10 @@ import { ManageClientsAndBarbersUseCase } from './manage-clients-and-barbers';
 
 const clock = new FakeClock();
 const at = (time: string) => clock.localTimeToUtc('2026-09-07', time); // a Monday
+// `GetPublicAvailabilityUseCase` only offers start times still ahead of `now`,
+// so the clock it gets here sits before the shop opens that Monday — this test
+// is about the barber becoming assignable, not about the time of day.
+const bookingClock = new FakeClock(-180, at('00:00'));
 
 function buildUseCase() {
   const clients = new FakeClientRepository();
@@ -76,7 +80,7 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     // the exact rows `addBarber` just wrote.
     const freeRangesQuery = new FakeFreeRangesQuery();
     freeRangesQuery.seed('barber-1', [{ start: at('09:00'), end: at('13:00') }]);
-    const availability = new GetPublicAvailabilityUseCase(barbers, services, schedules, freeRangesQuery, clock);
+    const availability = new GetPublicAvailabilityUseCase(barbers, services, schedules, freeRangesQuery, bookingClock);
 
     const result = await availability.execute({
       barberId: 'barber-1',
@@ -98,7 +102,7 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
 
     const freeRangesQuery = new FakeFreeRangesQuery();
     freeRangesQuery.seed('barber-2', [{ start: at('09:00'), end: at('13:00') }]);
-    const availability = new GetPublicAvailabilityUseCase(barbers, services, schedules, freeRangesQuery, clock);
+    const availability = new GetPublicAvailabilityUseCase(barbers, services, schedules, freeRangesQuery, bookingClock);
 
     const result = await availability.execute({
       barberId: 'barber-2',
@@ -137,7 +141,7 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     expect(result).toBe(true);
     const freeRangesQuery = new FakeFreeRangesQuery();
     freeRangesQuery.seed('barber-3', [{ start: at('09:00'), end: at('13:00') }]);
-    const availability = new GetPublicAvailabilityUseCase(barbers, services, schedules, freeRangesQuery, clock);
+    const availability = new GetPublicAvailabilityUseCase(barbers, services, schedules, freeRangesQuery, bookingClock);
     const availabilityResult = await availability.execute({
       barberId: 'barber-3',
       serviceId: 'service-1',

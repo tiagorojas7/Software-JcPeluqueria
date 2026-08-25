@@ -2,7 +2,7 @@ export { dayOfWeekOf } from './calendar';
 export type { BarberRepository, ScheduleRepository, ServiceRepository } from './ports';
 export type { TimeWindow, WorkingWindowsInput } from './availability-service';
 export { AvailabilityService } from './availability-service';
-export { sliceIntoSlots } from './slot-generator';
+export { bookableSlots } from './slot-generator';
 export {
   FakeBarberRepository,
   FakeScheduleRepository,

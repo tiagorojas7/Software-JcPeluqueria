@@ -33,7 +33,12 @@ import {
 // NO session cookie set anywhere in this file — the request that matters
 // most here is the one nobody logs in for.
 
-const clock = new FakeClock();
+// A throwaway FakeClock only to build the fixed instants below; the app gets
+// `clock`, whose `now` sits before the seeded Monday opens — the endpoint only
+// offers start times still ahead, and this file is about the anonymous access,
+// not about the time of day.
+const dateBuilder = new FakeClock();
+const clock = new FakeClock(-180, dateBuilder.localTimeToUtc('2026-09-07', '00:00'));
 const BARBER_ID = 'aaaaaaaa-0000-4000-8000-000000000009';
 const SERVICE_ID = 'bbbbbbbb-0000-4000-8000-000000000009';
 

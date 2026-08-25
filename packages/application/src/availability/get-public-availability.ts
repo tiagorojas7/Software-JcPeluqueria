@@ -1,6 +1,6 @@
 import {
   AvailabilityService,
-  sliceIntoSlots,
+  bookableSlots,
   type BarberRepository,
   type Clock,
   type FreeRangesQuery,
@@ -30,12 +30,14 @@ export interface GetPublicAvailabilityResult {
  *   1. `AvailabilityService.workingWindows` — is the barber working, and when.
  *   2. `FreeRangesQuery.findFreeRanges` — subtract everything already
  *      held/reservado/realizado (Phase 2's occupancy model).
- *   3. `sliceIntoSlots` — cut what remains into concrete, bookable
- *      `Service.durationMinutes`-sized start times.
+ *   3. `bookableSlots` — cut what remains into concrete,
+ *      `Service.durationMinutes`-sized start times, dropping the ones whose
+ *      instant already arrived (occupancy never removes those: nobody booked
+ *      them, the day simply moved past them).
  *
- * An unknown `serviceId` or a day the barber does not work both resolve to
- * an empty `slots` list, never a throw — an anonymous visitor browsing
- * availability is not an exceptional path.
+ * An unknown `serviceId`, a day the barber does not work, or a date the shop
+ * already left behind all resolve to an empty `slots` list, never a throw —
+ * an anonymous visitor browsing availability is not an exceptional path.
  */
 export class GetPublicAvailabilityUseCase {
   private readonly availabilityService: AvailabilityService;
@@ -77,7 +79,7 @@ export class GetPublicAvailabilityUseCase {
     for (const window of workingWindows) {
       const free = await this.freeRangesQuery.findFreeRanges(input.barberId, window);
       for (const freeWindow of free) {
-        slots.push(...sliceIntoSlots(freeWindow, service.durationMinutes, this.clock));
+        slots.push(...bookableSlots(freeWindow, service.durationMinutes, this.clock));
       }
     }
     return { slots };
