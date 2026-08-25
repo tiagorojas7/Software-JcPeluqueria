@@ -12,11 +12,32 @@ import { z } from 'zod';
 const DAY_OF_WEEK = z.number().int().min(0).max(6);
 const WALL_CLOCK_TIME = z.string().regex(/^\d{2}:\d{2}$/, 'Formato esperado: HH:mm');
 
-const BarberScheduleDaySchema = z.object({
-  dayOfWeek: DAY_OF_WEEK,
-  opensAt: WALL_CLOCK_TIME,
-  closesAt: WALL_CLOCK_TIME,
-});
+/**
+ * `opensAt < closesAt` is enforced HERE, not only in the domain.
+ *
+ * `createBarberSchedule` (packages/domain) has always asserted it, but that
+ * runs when a schedule is READ. Validating only the `HH:mm` shape on the way
+ * in let the panel store `13:00 → 00:00`, and the row then threw every time
+ * anyone asked for availability — and because `GetPublicAvailabilityUseCase`
+ * fans out over all barbers at once, a single bad row left the WHOLE shop
+ * with no bookable times, not just that barber.
+ *
+ * Comparing the strings is correct precisely because they are zero-padded
+ * `HH:mm`: lexicographic order and clock order agree. A shift that ends at
+ * midnight cannot be expressed in this model (`00:00` sorts before
+ * everything), so it is refused with an explanation rather than accepted and
+ * broken later — the shop can close at `23:59`.
+ */
+const BarberScheduleDaySchema = z
+  .object({
+    dayOfWeek: DAY_OF_WEEK,
+    opensAt: WALL_CLOCK_TIME,
+    closesAt: WALL_CLOCK_TIME,
+  })
+  .refine((day) => day.opensAt < day.closesAt, {
+    message: 'El horario de cierre tiene que ser posterior al de apertura (por ejemplo 09:00 a 18:00)',
+    path: ['closesAt'],
+  });
 
 export const AddBarberRequestSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio'),

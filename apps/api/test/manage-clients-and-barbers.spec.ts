@@ -192,6 +192,33 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
     expect(response.status).toBe(400);
   });
 
+  // El dueño cargo un horario que cerraba a las 00:00 y el panel lo acepto:
+  // el schema solo validaba el FORMATO de cada hora, nunca que la apertura
+  // fuera anterior al cierre. `createBarberSchedule` si lo valida, asi que la
+  // fila entraba a la base y despues reventaba al LEERLA — y como la
+  // disponibilidad recorre a todos los barberos en paralelo, un solo tramo
+  // invalido dejaba sin horarios a TODO el local, no solo a ese barbero.
+  // Se rechaza en el borde, que es donde se puede explicar el error.
+  it('rechaza un tramo cuyo cierre no es posterior a la apertura, sin llegar al repositorio', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).put('/panel/barbers/week-barber-4/schedule/week'),
+      OWNER_SESSION,
+    ).send({ schedule: [{ dayOfWeek: 1, opensAt: '13:00', closesAt: '00:00' }] });
+
+    expect(response.status).toBe(400);
+    expect(await schedules.listBarberSchedule('week-barber-4')).toHaveLength(0);
+  });
+
+  it('rechaza tambien por el endpoint de un solo dia', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).put('/panel/barbers/day-barber-invalid/schedule'),
+      OWNER_SESSION,
+    ).send({ dayOfWeek: 2, opensAt: '18:00', closesAt: '18:00' });
+
+    expect(response.status).toBe(400);
+    expect(await schedules.listBarberSchedule('day-barber-invalid')).toHaveLength(0);
+  });
+
   it('the per-day schedule endpoint keeps working unmodified for a single-day caller', async () => {
     await barbers.create(createBarber({ id: 'day-barber', name: 'Un Dia', active: true }));
 
