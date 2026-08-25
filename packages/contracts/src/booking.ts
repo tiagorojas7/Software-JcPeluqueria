@@ -100,3 +100,31 @@ export interface PublicServiceResponse {
 export interface PublicServicesResponse {
   readonly services: readonly PublicServiceResponse[];
 }
+
+/**
+ * cablear-el-mvp: the client's own browser telling us which payment it just
+ * came back from. MercadoPago appends `payment_id` to the `back_urls` it
+ * redirects to, so the returning client already carries the one fact needed
+ * to ask MercadoPago whether that payment settled.
+ *
+ * This exists because the webhook is a SINGLE delivery attempt to a single
+ * URL, and a booking that was really paid for must not evaporate when that
+ * one call goes missing — verified in production: an approved payment of
+ * ARS 6000 whose `notification_url` was correct never produced a
+ * notification, and the hold was minutes from expiring with the money taken.
+ *
+ * Sending a `paymentId` confirms nothing on its own — exactly like the
+ * webhook's own `data.id`. It only schedules the question the worker then
+ * asks MercadoPago directly, and an id belonging to somebody else's payment
+ * carries a different `external_reference`, which `ProcessPaymentUseCase`
+ * ignores.
+ */
+export const ClaimPaymentRequestSchema = z.object({
+  paymentId: z.string().min(1, 'Falta el identificador del pago'),
+});
+
+export type ClaimPaymentRequest = z.infer<typeof ClaimPaymentRequestSchema>;
+
+export interface ClaimPaymentResponseBody {
+  readonly claimed: true;
+}

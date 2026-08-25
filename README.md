@@ -154,6 +154,23 @@ Este es el mecanismo que evita que **dos clientes se peleen por el mismo horario
 
 > **Importante:** el hold **no** es exclusivo del flujo de ausencia del barbero. Es infraestructura base del sistema de reservas: aplica igual cuando dos clientes cualquiera compiten por el mismo horario desde la web.
 
+#### El pago se entera por dos caminos, no por uno
+
+El turno pasa de *retenido* a **reservado** cuando MercadoPago avisa que la seña se acreditó. Ese aviso llegaba **solo** por el webhook: un intento de entrega, a una sola URL.
+
+Y se pierde. Pasó de verdad: un pago aprobado de **ARS 6.000**, con el `notification_url` correcto, no generó ninguna notificación. El hold estaba a minutos de vencer con la plata ya cobrada — un turno pagado que se evaporaba, y un cliente que iba a aparecer en el local sin silla.
+
+Ahora hay **dos avisos independientes**:
+
+| Aviso | Quién lo manda | Cuándo |
+|---|---|---|
+| Webhook | MercadoPago | Al acreditarse el pago |
+| `POST /payments/claim` | El navegador del cliente | Al volver del checkout |
+
+MercadoPago agrega `payment_id` a la URL de retorno, así que el cliente que vuelve ya trae el dato. **Avisar no es confirmar:** ninguno de los dos caminos afirma nada — los dos agendan la misma pregunta, y el worker se la hace a MercadoPago. Un id falso no fabrica una aprobación, y un id de otro pago trae otro `external_reference`, que el sistema ignora. Que lleguen los dos es un no-op: `deposits.payment_id` es único.
+
+> La pantalla de retorno **sigue sin decir "tu turno está confirmado"**, y eso no cambió: el redirect del navegador no es fuente de verdad. Lo único que hace ahora es avisar.
+
 ### 3.4 Ausencia del barbero
 
 Cuando un barbero falta o llega tarde, la secretaria lo marca como no disponible para una franja horaria. A partir de ahí el sistema se encarga.
@@ -548,9 +565,9 @@ criterio de aceptación distinto y más duro:
 |---------|:---:|:---:|
 | `domain` | 12 | 64 |
 | `application` | 44 | 245 |
-| `apps/web` | 33 | 178 |
-| `apps/api` | 19 | 147 |
-| **Total rápido** | **108** | **634** |
+| `apps/web` | 33 | 183 |
+| `apps/api` | 19 | 150 |
+| **Total rápido** | **108** | **642** |
 
 `infrastructure` corre aparte: sus suites levantan un PostgreSQL real con
 Testcontainers, así que tardan minutos en vez de segundos. En cada corrida

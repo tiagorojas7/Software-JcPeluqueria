@@ -166,3 +166,63 @@ describe('MercadoPago webhook (App Nest levantada en memoria)', () => {
     expect(response.status).toBe(200);
   });
 });
+
+// RED — found in production: an approved payment of ARS 6.000 whose
+// `notification_url` was correct produced NO webhook at all, and the hold sat
+// minutes from expiring with the money already taken. One delivery attempt to
+// one URL is not something to hang a paid booking on. MercadoPago appends
+// `payment_id` to its `back_urls`, so the returning client carries a second
+// chance — `PaymentReturnPage` posts it here.
+describe('POST /payments/claim — el aviso del cliente que vuelve de pagar', () => {
+  let app: INestApplication;
+  let queue: FakePaymentJobQueue;
+
+  beforeAll(async () => {
+    queue = new FakePaymentJobQueue();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule, PaymentsModule] })
+      .overrideProvider(PAYMENT_EVENT_REPOSITORY)
+      .useValue(new FakePaymentEventRepository())
+      .overrideProvider(PAYMENT_JOB_QUEUE)
+      .useValue(queue)
+      .overrideProvider(MERCADOPAGO_WEBHOOK_SECRET)
+      .useValue(SECRET)
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    await app.init();
+  }, 60_000);
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('encola el pago sin sesión — quien acaba de pagar todavía no tiene cuenta', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/payments/claim')
+      .send({ paymentId: '175602375118' });
+
+    expect(response.status).toBe(202);
+    expect(response.body).toEqual({ claimed: true });
+    expect(queue.enqueuedPaymentIds).toContain('175602375118');
+  });
+
+  it('202, nunca 200: al responder, el turno NO está confirmado todavía', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/payments/claim')
+      .send({ paymentId: 'otro-pago' });
+
+    // Encolar es agendar una pregunta a MercadoPago, no afirmar una respuesta:
+    // `ProcessPaymentUseCase` no confirma nada salvo que MercadoPago diga
+    // `approved`, e ignora un id cuyo external_reference sea de otro hold.
+    expect(response.status).toBe(202);
+  });
+
+  it('rechaza un cuerpo sin paymentId en vez de encolar basura', async () => {
+    const before = queue.enqueuedPaymentIds.length;
+
+    const response = await request(app.getHttpServer()).post('/payments/claim').send({});
+
+    expect(response.status).toBe(400);
+    expect(queue.enqueuedPaymentIds).toHaveLength(before);
+  });
+});

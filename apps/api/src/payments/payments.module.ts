@@ -2,6 +2,7 @@ import { Module, type OnApplicationShutdown } from '@nestjs/common';
 import { db, DrizzlePaymentEventRepository, lazyJobSender, PgBossPaymentJobQueue, stopJobSender } from '@jc-barberia/infrastructure';
 
 import { MercadoPagoWebhookController } from './mercadopago-webhook.controller';
+import { PaymentClaimController } from './payment-claim.controller';
 import { MERCADOPAGO_WEBHOOK_SECRET, PAYMENT_EVENT_REPOSITORY, PAYMENT_JOB_QUEUE } from './tokens';
 
 /**
@@ -22,7 +23,10 @@ import { MERCADOPAGO_WEBHOOK_SECRET, PAYMENT_EVENT_REPOSITORY, PAYMENT_JOB_QUEUE
  * `checkout.spec.ts`), same pattern as every other module in this app.
  */
 @Module({
-  controllers: [MercadoPagoWebhookController],
+  // Two controllers, one queue: MercadoPago's notification and the client's
+  // own return from it. See `PaymentClaimController` for why one delivery
+  // attempt to one URL is not enough to hang a paid booking on.
+  controllers: [MercadoPagoWebhookController, PaymentClaimController],
   providers: [
     { provide: PAYMENT_EVENT_REPOSITORY, useFactory: () => new DrizzlePaymentEventRepository(db) },
     { provide: PAYMENT_JOB_QUEUE, useFactory: () => new PgBossPaymentJobQueue(lazyJobSender()) },

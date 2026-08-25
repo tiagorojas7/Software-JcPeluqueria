@@ -1,8 +1,14 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { apiPost } from '../shared/api-client';
 import { RouterProvider } from '../shared/router';
 import { PaymentReturnPage } from './PaymentReturnPage';
+
+vi.mock('../shared/api-client', () => ({
+  apiPost: vi.fn().mockResolvedValue({ claimed: true }),
+  describeError: (err: unknown) => (err instanceof Error ? err.message : 'error desconocido'),
+}));
 
 function renderReturn(search: string) {
   return render(
@@ -54,5 +60,57 @@ describe('PaymentReturnPage (cablear-el-mvp item 3)', () => {
 
     expect(screen.getByText(/c.digo de acceso/i)).toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute('href', '/acceder');
+  });
+});
+
+// RED — found in production, not deduced: an approved payment of ARS 6.000
+// whose `notification_url` was correct produced no webhook at all, and the
+// hold sat minutes from expiring with the money already taken. One delivery
+// attempt to one URL is not something to hang a paid booking on. MercadoPago
+// appends `payment_id` to this very URL, so the returning browser is carrying
+// the second chance.
+describe('PaymentReturnPage — el segundo aviso, cuando el webhook no llega', () => {
+  beforeEach(() => {
+    vi.mocked(apiPost).mockClear();
+    vi.mocked(apiPost).mockResolvedValue({ claimed: true });
+  });
+
+  it('avisa del pago que MercadoPago dejó en la URL al volver', async () => {
+    renderReturn('?estado=success&payment_id=175602375118');
+
+    await waitFor(() => {
+      expect(apiPost).toHaveBeenCalledWith('/payments/claim', { paymentId: '175602375118' });
+    });
+  });
+
+  it('sigue sin afirmar que el turno está confirmado — avisar no es confirmar', async () => {
+    renderReturn('?estado=success&payment_id=175602375118');
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalled());
+    expect(screen.queryByText(/turno.*confirmado/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/email con la confirmaci/i)).toBeInTheDocument();
+  });
+
+  it('no avisa nada cuando el pago falló — no hay pago del que preguntar', () => {
+    renderReturn('?estado=failure&payment_id=175602375118');
+
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it('no avisa nada cuando MercadoPago no dejó payment_id', () => {
+    renderReturn('?estado=success');
+
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it('un fallo del aviso no le muestra un error al cliente que sí pagó', async () => {
+    vi.mocked(apiPost).mockRejectedValueOnce(new Error('sin red'));
+    renderReturn('?estado=success&payment_id=175602375118');
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalled());
+    // El webhook sigue en camino; asustar a alguien que pagó bien seria
+    // ademas de alarmante, falso.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText(/recibimos tu pago/i)).toBeInTheDocument();
   });
 });

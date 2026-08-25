@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { AccessCodeNotice } from '../booking/AccessCodeNotice';
+import { apiPost } from '../shared/api-client';
 
 type PaymentEstado = 'success' | 'pending' | 'failure' | 'unknown';
 
@@ -56,6 +57,28 @@ export interface PaymentReturnPageProps {
 export function PaymentReturnPage({ search = window.location.search }: PaymentReturnPageProps) {
   const [estado] = useState(() => readEstado(search));
   const { title, body } = COPY[estado];
+
+  // The client's return is the SECOND chance to notice the payment, next to
+  // MercadoPago's webhook — which is one delivery attempt to one URL and does
+  // go missing. It happened in production: an approved payment of ARS 6.000
+  // whose `notification_url` was correct produced no notification, and the
+  // hold sat minutes from expiring with the money already taken.
+  //
+  // MercadoPago appends `payment_id` to this very URL, so the browser that
+  // lands here is carrying exactly what is needed to ask about it.
+  //
+  // This does NOT confirm anything, and the copy above deliberately keeps
+  // saying "estamos confirmando": all it does is schedule the question the
+  // worker asks MercadoPago. Failures are swallowed on purpose — the webhook
+  // is still coming, and telling a client who paid correctly that something
+  // went wrong would be both alarming and untrue.
+  useEffect(() => {
+    const paymentId = new URLSearchParams(search).get('payment_id');
+    if (!paymentId || estado === 'failure') {
+      return;
+    }
+    void apiPost('/payments/claim', { paymentId }).catch(() => {});
+  }, [search, estado]);
 
   return (
     <section className="container">

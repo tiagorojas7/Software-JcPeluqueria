@@ -56,6 +56,8 @@ export type {
   AvailabilitySlot,
   CheckoutRequest,
   CheckoutResponseBody,
+  ClaimPaymentRequest,
+  ClaimPaymentResponseBody,
   ConfirmReservationRequest,
   ConfirmReservationResponse,
   CreateHoldRequest,
@@ -68,6 +70,7 @@ export type {
 } from './booking';
 export {
   CheckoutRequestSchema,
+  ClaimPaymentRequestSchema,
   ConfirmReservationRequestSchema,
   CreateHoldRequestSchema,
   GetAvailabilityQuerySchema,
