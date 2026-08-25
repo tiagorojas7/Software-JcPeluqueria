@@ -159,6 +159,9 @@ describe('GET /account/appointments + POST /account/appointments/:id/cancel (C.3
       expect(response.body).toEqual({
         outcome: 'cancelled',
         appointment: expect.objectContaining({ id: appointmentId, status: 'cancelado' }),
+        // Dentro de la ventana la seña vuelve, y la respuesta lo dice en vez
+        // de dejar que el cliente lo deduzca.
+        refund: 'refunded',
       });
       // "sin aprobación manual": the refund is part of cancelling, never a
       // second step someone has to remember to trigger.
@@ -190,9 +193,13 @@ describe('GET /account/appointments + POST /account/appointments/:id/cancel (C.3
       );
 
       expect(response.status).toBe(200);
-      // Cutoff = start (local 09:30 = UTC 12:30) minus 60 minutes = local
-      // 08:30 = UTC 11:30.
-      expect(response.body).toEqual({ outcome: 'too-late', cutoff: at('08:30').toISOString() });
+      // Cambio de regla: fuera de la ventana el turno IGUAL se cancela y el
+      // cupo se libera; lo que se pierde es la seña. Antes se respondia
+      // `too-late` y el horario quedaba tomado por un turno al que nadie iba
+      // a ir.
+      expect(response.body.outcome).toBe('cancelled');
+      expect(response.body.refund).toBe('forfeited');
+      // Perder una seña no mueve plata: no hay nada que pedirle a la pasarela.
       expect(paymentPort.refundCalls.length).toBe(refundsBefore);
     });
 
