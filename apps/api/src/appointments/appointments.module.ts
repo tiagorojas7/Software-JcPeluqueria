@@ -108,7 +108,16 @@ import {
     },
     {
       provide: CreatePhoneAppointmentUseCase,
-      inject: [CLIENT_REPOSITORY, HOLD_REPOSITORY, CreateHold, ScheduleAppointmentReminder, SERVICE_REPOSITORY, CLOCK],
+      inject: [
+        CLIENT_REPOSITORY,
+        HOLD_REPOSITORY,
+        CreateHold,
+        ScheduleAppointmentReminder,
+        SERVICE_REPOSITORY,
+        CLOCK,
+        NOTIFICATION_OUTBOX_REPOSITORY,
+        BARBER_REPOSITORY,
+      ],
       useFactory: (
         clients: ClientRepository,
         holds: HoldRepository,
@@ -116,7 +125,19 @@ import {
         scheduleReminder: ScheduleAppointmentReminder,
         services: ServiceRepository,
         clock: Clock,
-      ) => new CreatePhoneAppointmentUseCase(clients, holds, createHold, scheduleReminder, services, clock),
+        outbox: NotificationOutboxRepository,
+        barbers: BarberRepository,
+      ) =>
+        new CreatePhoneAppointmentUseCase(
+          clients,
+          holds,
+          createHold,
+          scheduleReminder,
+          services,
+          clock,
+          outbox,
+          barbers,
+        ),
     },
     // Slice B (cablear-el-mvp, B.1-B.5): bound to their own tokens here
     // rather than reused across modules — same one-token-per-module pattern

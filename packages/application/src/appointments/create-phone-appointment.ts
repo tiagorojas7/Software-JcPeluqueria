@@ -1,8 +1,10 @@
 import {
   type Appointment,
+  type BarberRepository,
   type Clock,
   type ClientRepository,
   type HoldRepository,
+  type NotificationOutboxRepository,
   type ServiceRepository,
   type TimeWindow,
 } from '@jc-barberia/domain';
@@ -78,6 +80,8 @@ export class CreatePhoneAppointmentUseCase {
     private readonly scheduleReminder: ScheduleAppointmentReminder,
     private readonly services: ServiceRepository,
     private readonly clock: Clock,
+    private readonly outbox: NotificationOutboxRepository,
+    private readonly barbers: BarberRepository,
   ) {}
 
   async execute(input: CreatePhoneAppointmentInput): Promise<Appointment> {
@@ -120,6 +124,14 @@ export class CreatePhoneAppointmentUseCase {
       appointmentStart: hold.timeRange.start,
     });
 
+    await this.notifyBookingConfirmed({
+      appointmentId: hold.id,
+      barberId: hold.barberId,
+      serviceName: service.name,
+      startsAt: hold.timeRange.start,
+      email: client.email,
+    });
+
     return {
       id: hold.id,
       barberId: hold.barberId,
@@ -130,5 +142,43 @@ export class CreatePhoneAppointmentUseCase {
       status: 'reservado',
       deposit: { kind: 'not_applicable' },
     };
+  }
+
+  /**
+   * A phone booking is `reservado` the moment this returns, exactly like a web
+   * one once its deposit settles — so it earns the same `booking_confirmed`
+   * message, which until now it never got.
+   *
+   * Same email gate the rest of the system already applies
+   * (`ProcessPaymentUseCase`, `AppointmentReminder`): no email on file, no
+   * dispatch, and never a crash. A phone client without an email is ordinary,
+   * not an error — admin-operations' "Consecuencias de un turno telefónico sin
+   * email" says so outright.
+   *
+   * Written to the outbox, never to `NotificationPort` directly: the worker's
+   * consumer owns delivery and retries, so a mail server having a bad minute
+   * can never fail the booking the secretary just took over the phone.
+   */
+  private async notifyBookingConfirmed(input: {
+    appointmentId: string;
+    barberId: string;
+    serviceName: string;
+    startsAt: Date;
+    email: string | null;
+  }): Promise<void> {
+    if (!input.email) {
+      return;
+    }
+    const barber = await this.barbers.findById(input.barberId);
+    await this.outbox.enqueue({
+      notificationType: 'booking_confirmed',
+      recipientEmail: input.email,
+      payload: {
+        appointmentId: input.appointmentId,
+        barberName: barber?.name ?? '',
+        serviceName: input.serviceName,
+        appointmentTime: input.startsAt.toISOString(),
+      },
+    });
   }
 }

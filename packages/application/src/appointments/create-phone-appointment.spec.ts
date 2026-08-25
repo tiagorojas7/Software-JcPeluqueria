@@ -1,10 +1,13 @@
 import {
+  createBarber,
   createService,
   FakeAppointmentReminderScheduler,
+  FakeBarberRepository,
   FakeClientRepository,
   FakeClock,
   FakeHoldExpireScheduler,
   FakeHoldRepository,
+  FakeNotificationOutboxRepository,
   FakeServiceRepository,
   REMINDER_LEAD_MINUTES,
   type TimeWindow,
@@ -48,9 +51,70 @@ describe('CreatePhoneAppointmentUseCase', () => {
     const createHold = new CreateHold(holds, clock, new FakeHoldExpireScheduler());
     const reminderScheduler = new FakeAppointmentReminderScheduler();
     const scheduleReminder = new ScheduleAppointmentReminder(clock, reminderScheduler);
-    const useCase = new CreatePhoneAppointmentUseCase(clients, holds, createHold, scheduleReminder, services, clock);
-    return { useCase, clients, holds, reminderScheduler, services, clock };
+    const outbox = new FakeNotificationOutboxRepository();
+    const barbers = new FakeBarberRepository();
+    barbers.create(createBarber({ id: 'barber-1', name: 'Cristian Gomez', active: true }));
+    const useCase = new CreatePhoneAppointmentUseCase(
+      clients,
+      holds,
+      createHold,
+      scheduleReminder,
+      services,
+      clock,
+      outbox,
+      barbers,
+    );
+    return { useCase, clients, holds, reminderScheduler, services, clock, outbox, barbers };
   }
+
+  // El dueño: "los turnos que se agendan telefonicamente y se agrega mail,
+  // tambien tiene que llegar las notificaciones". Un turno telefonico queda
+  // `reservado` en el acto, igual que uno web una vez acreditada la seña, asi
+  // que merece el mismo aviso — y hasta ahora no mandaba ninguno.
+  it('encola la confirmacion cuando el cliente dejo su mail', async () => {
+    const { useCase, outbox } = buildUseCase();
+
+    const appointment = await useCase.execute({
+      id: 'appt-mail',
+      barberId: 'barber-1',
+      serviceId: HAIRCUT_SERVICE_ID,
+      startsAt: at('10:00'),
+      searchWindow,
+      client: { name: 'Sofia', phone: '3510001111', email: 'sofia@example.com' },
+    });
+
+    expect(outbox.enqueued).toEqual([
+      {
+        notificationType: 'booking_confirmed',
+        recipientEmail: 'sofia@example.com',
+        payload: {
+          appointmentId: appointment.id,
+          barberName: 'Cristian Gomez',
+          serviceName: 'Corte clasico',
+          appointmentTime: at('10:00').toISOString(),
+        },
+      },
+    ]);
+  });
+
+  // Misma compuerta que ya aplican `ProcessPaymentUseCase` y
+  // `AppointmentReminder`: sin mail no hay envio, y el turno se agenda igual.
+  // Un turno telefonico sin mail es un caso normal, no un error.
+  it('agenda el turno igual cuando no hay mail, sin encolar nada', async () => {
+    const { useCase, outbox } = buildUseCase();
+
+    const appointment = await useCase.execute({
+      id: 'appt-sin-mail',
+      barberId: 'barber-1',
+      serviceId: HAIRCUT_SERVICE_ID,
+      startsAt: at('11:00'),
+      searchWindow,
+      client: { name: 'Sin Mail', phone: '3510002222' },
+    });
+
+    expect(appointment.status).toBe('reservado');
+    expect(outbox.enqueued).toEqual([]);
+  });
 
   it('books a new client directly into reservado, with no deposit', async () => {
     const { useCase, holds } = buildUseCase();
