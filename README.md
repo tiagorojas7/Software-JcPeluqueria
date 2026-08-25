@@ -80,10 +80,13 @@ Esa jerarquía importa: si el teléfono se usa como canal paralelo cómodo en ve
 |-------|-------|
 | Seña | **50% fijo** del precio del servicio, igual para todos los servicios |
 | Momento del cobro | Al reservar |
-| Ventana de cancelación del cliente | Hasta **1 hora antes** del turno |
-| Cancelación dentro de la ventana | Reembolso automático |
+| Cancelación del cliente | **Siempre permitida**, hasta el momento mismo del turno |
+| Cancelación hasta **1 hora antes** | Reembolso automático |
+| Cancelación dentro de la última hora | **Se pierde la seña**, pero el turno se libera igual |
 | Ausencia confirmada por una persona | **Se pierde la seña** |
 | Procesamiento del reembolso | **Siempre automático** por la pasarela, sin aprobación manual |
+
+> **La ventana de 1 hora decide la plata, no el permiso.** Antes el sistema rechazaba la cancelación tardía, y el resultado era el peor de los dos mundos: el local se quedaba sin la hora *y* sin la chance de revenderla, porque el turno seguía ocupado por alguien que ya había avisado que no venía. Ahora el hueco vuelve a estar disponible siempre; lo único que cambia al cruzar la hora límite es que la seña no se devuelve.
 
 **La seña solo se cobra en la web.** Durante la transición del papel a lo digital va a seguir entrando mucha llamada, y frenar esos turnos para cobrar una seña por teléfono sería ponerle un palo en la rueda al negocio. La estrategia es **empujar a los clientes hacia la web**, no castigar al que llama.
 
@@ -114,12 +117,12 @@ stateDiagram-v2
     state "Sin registrar" as SinRegistrar
     [*] --> Reservado: cliente paga la seña
     Reservado --> Realizado: el personal lo marca durante el día
-    Reservado --> Cancelado: cancela el cliente (hasta 1h antes)<br/>o cancela el local
+    Reservado --> Cancelado: cancela el cliente (siempre)<br/>o cancela el local
     Reservado --> SinRegistrar: barrido automático de las 23:59
     SinRegistrar --> Realizado: una persona confirma que vino
     SinRegistrar --> Ausente: una persona confirma que no vino
     Realizado --> [*]: seña aplicada al servicio
-    Cancelado --> [*]: seña reembolsada
+    Cancelado --> [*]: seña reembolsada si canceló a tiempo,<br/>perdida si canceló en la última hora
     Ausente --> [*]: seña perdida
 ```
 
@@ -127,7 +130,7 @@ stateDiagram-v2
 |--------|---------------|----------------------|
 | **Reservado** | Turno confirmado y señado | Retenida |
 | **Realizado** | El corte se hizo; alguien lo marcó desde el panel | Se aplica al pago del servicio |
-| **Cancelado** | El cliente canceló a tiempo, o canceló el local | Reembolso automático |
+| **Cancelado** | El cliente canceló, o canceló el local | Reembolso automático si fue hasta 1h antes; **se pierde** si fue dentro de la última hora |
 | **Sin registrar** | Pasó el día y nadie lo marcó. **No sabemos qué pasó** | Retenida, sin cambios |
 | **Ausente** | Una persona confirmó que el cliente no vino | **Se pierde** (si no había seña, queda solo el registro) |
 
@@ -212,6 +215,8 @@ Al día siguiente, el local resuelve esos turnos desde el panel: **realizado** o
 | Configurable desde el panel | Horarios del local, horarios de cada barbero, precios de los servicios, alta y baja de barberos, gestión de clientes |
 
 **Por qué el walk-in registra servicio y barbero.** Si fuera solo un bloque de "ocupado", los cortes sin turno no contarían para las estadísticas de nadie y los números de cada barbero quedarían siempre por debajo de la realidad. Un barbero que desconfía de sus propios números deja de mirarlos.
+
+**Un horario que ya pasó no se ofrece.** La disponibilidad de un día se calcula sobre el horario del barbero menos lo que ya está ocupado, y ninguna de esas dos cosas sabe qué hora es: a las 10:30 el hueco de las 09:00 sigue libre —nadie lo reservó— y se mostraba igual. Ahora el reloj del local corta esos horarios antes de ofrecerlos, tanto en la web pública como en las pantallas del panel que agendan turnos telefónicos y walk-ins. La consecuencia práctica: **el panel tampoco puede cargar un turno hacia atrás**; un walk-in que empezó hace veinte minutos se registra en el hueco siguiente, no en el que ya arrancó.
 
 > **Horario corrido, decidido a propósito.** El modelo admite **un solo tramo por día** para el local y para cada barbero. No es una limitación que se coló: JC no cierra al mediodía y ningún barbero trabaja en turnos partidos. Si eso cambiara, hay que rehacer el modelo de disponibilidad — no alcanza con cargar dos filas para el mismo día.
 
@@ -469,7 +474,8 @@ criterio de aceptación distinto y más duro:
 - **Pagar la seña** — MercadoPago devuelve una preferencia real, con `back_urls`,
   `auto_return` y `notification_url`; el cliente vuelve a `/pago/retorno`
 - **Cuenta del cliente** — pedir código de acceso, entrar, ver los turnos propios
-  y cancelarlos respetando la ventana de 1 hora
+  y cancelarlos; la ventana de 1 hora decide si la seña vuelve, no si se puede
+  cancelar
 - **Panel** — login del personal y navegación **construida desde los permisos del
   actor**, no desde el rol: el dueño ve facturación del local, el barbero no
 - **Agenda del día** — marcar realizado, confirmar ausencia, editar, cancelar y
@@ -496,11 +502,11 @@ criterio de aceptación distinto y más duro:
 
 | Paquete | Archivos | Tests |
 |---------|:---:|:---:|
-| `domain` | 12 | 60 |
-| `application` | 39 | 189 |
-| `apps/web` | 30 | 122 |
-| `apps/api` | 17 | 113 |
-| **Total rápido** | **98** | **484** |
+| `domain` | 12 | 64 |
+| `application` | 43 | 223 |
+| `apps/web` | 32 | 163 |
+| `apps/api` | 18 | 133 |
+| **Total rápido** | **105** | **583** |
 
 `infrastructure` corre aparte: sus suites levantan un PostgreSQL real con
 Testcontainers, así que tardan minutos en vez de segundos. En cada corrida
