@@ -39,6 +39,14 @@ const BARBER_ACCOUNTS_RESPONSE = {
       active: true,
       activated: false,
     },
+    {
+      userId: null,
+      barberId: 'b3',
+      barberName: 'De Antes',
+      email: null,
+      active: false,
+      activated: false,
+    },
   ],
 };
 
@@ -300,5 +308,50 @@ describe('ManagementPage — cuentas de barberos', () => {
 
     expect(apiPost).toHaveBeenCalledWith('/panel/barber-accounts/u-cristian/active', { active: false });
     expect(await screen.findByText(/sus turnos no cambian/i)).toBeInTheDocument();
+  });
+});
+
+// The gap the real shop exposed: six barbers were already on file from before
+// the alta created accounts. The screen listed ACCOUNTS, so those six were
+// invisible on the only page that can give them access.
+describe('ManagementPage — barberos que todavia no tienen cuenta', () => {
+  beforeEach(() => {
+    vi.mocked(apiGet).mockReset();
+    vi.mocked(apiPost).mockReset();
+    vi.mocked(apiPut).mockReset();
+    mockReferenceData();
+  });
+
+  it('shows the barber with no account at all, and says plainly that they cannot get in', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByRole('heading', { name: /cuentas de barberos/i });
+
+    expect(screen.getByText('De Antes')).toBeInTheDocument();
+    expect(screen.getByText(/sin cuenta — no puede entrar/i)).toBeInTheDocument();
+  });
+
+  it('creates the account for that barber with the email the owner types', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ userId: 'u-de-antes' });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByRole('heading', { name: /cuentas de barberos/i });
+
+    fireEvent.change(screen.getByLabelText(/email de de antes/i), { target: { value: 'deantes@jc.test' } });
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta e invitar/i }));
+
+    expect(apiPost).toHaveBeenCalledWith('/panel/barber-accounts', {
+      barberId: 'b3',
+      email: 'deantes@jc.test',
+    });
+    expect(await screen.findByText(/le mandamos a deantes@jc.test/i)).toBeInTheDocument();
+  });
+
+  it('refuses to invite with an empty email instead of sending a broken request', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByRole('heading', { name: /cuentas de barberos/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta e invitar/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/escrib. el email de de antes/i);
+    expect(apiPost).not.toHaveBeenCalled();
   });
 });

@@ -207,6 +207,23 @@ describe('MercadoPagoPaymentAdapter', () => {
     expect(init.headers['X-Idempotency-Key']).toBe('pay-9');
   });
 
+  // The refund used to declare `Content-Type: application/json` and send NO
+  // body at all — a well-formed-looking request with nothing to parse, which
+  // MercadoPago's gateway answers with a generic rejection. An empty JSON
+  // OBJECT is what "reembolso total" means on the wire: a body with no
+  // `amount` key is the total refund, and a body with one would make it
+  // partial — which this system never does (the seña is indivisible).
+  it('refund() sends an empty JSON object as the body — a total refund, never a bodyless POST', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: 4242 }), { status: 201 }));
+    const adapter = new MercadoPagoPaymentAdapter('token-123', BASE_URL);
+
+    await adapter.refund({ paymentId: 'pay-9', amountCents: 250000 });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(init.body).toBe('{}');
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('amount');
+  });
+
   // Research sec.5 — the BLOCKING edge case this task explicitly names: 428
   // `insufficient_money_for_refund` is a BUSINESS STATE (owner withdrew,
   // client cancels). It MUST NOT crash as a generic gateway error — the

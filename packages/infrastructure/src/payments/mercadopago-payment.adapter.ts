@@ -173,6 +173,13 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
         Authorization: `Bearer ${this.accessToken}`,
         'X-Idempotency-Key': input.paymentId,
       },
+      // An EMPTY JSON OBJECT, not an absent body. `{}` is how "reembolso
+      // total" is expressed on the wire — a body carrying an `amount` would
+      // make it partial, which this system never does (research sec.3: the
+      // seña is indivisible). This request used to declare
+      // `Content-Type: application/json` and then send nothing at all, which
+      // is a well-formed-looking request with no document to parse.
+      body: '{}',
     });
 
     if (response.ok) {

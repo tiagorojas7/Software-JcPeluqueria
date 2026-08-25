@@ -1,6 +1,17 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { ManageBarberAccountsUseCase } from '@jc-barberia/application';
 import {
+  InviteBarberAccountRequestSchema,
   SetBarberAccountActiveRequestSchema,
   type BarberAccountsListResponse,
 } from '@jc-barberia/contracts';
@@ -28,6 +39,35 @@ export class BarberAccountsController {
   @Get()
   async list(): Promise<BarberAccountsListResponse> {
     return { accounts: await this.accounts.list() };
+  }
+
+  /**
+   * Gives an account to a barber who already exists. The alta does this in
+   * one step for a NEW barber; this is the same act for everyone who was
+   * already on file before the alta started creating one — without it, the
+   * shop's existing barbers could be listed on this screen and never given
+   * access, which is the state that made the screen useless in practice.
+   */
+  @RequiresPermission('barber:manage')
+  @Post()
+  @HttpCode(201)
+  async invite(@Body() body: unknown): Promise<{ userId: string }> {
+    const parsed = InviteBarberAccountRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+
+    const result = await this.accounts.invite(parsed.data);
+    switch (result.outcome) {
+      case 'invited':
+        return { userId: result.userId };
+      case 'barber-not-found':
+        throw new NotFoundException({ message: `No existe el barbero "${parsed.data.barberId}"` });
+      case 'already-has-account':
+        throw new ConflictException({ message: 'Ese barbero ya tiene cuenta. Reenviale la invitación.' });
+      case 'email-taken':
+        throw new ConflictException({ message: `Ya hay una cuenta con el email "${parsed.data.email}"` });
+    }
   }
 
   /**

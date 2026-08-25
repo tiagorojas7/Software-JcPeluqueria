@@ -515,6 +515,8 @@ function BarberAccountsSection() {
   const [accounts, setAccounts] = useState<readonly BarberAccountResponse[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Email being typed for a barber who has no account yet, keyed by barber. */
+  const [pendingEmails, setPendingEmails] = useState<Record<string, string>>({});
 
   async function load() {
     try {
@@ -539,6 +541,24 @@ function BarberAccountsSection() {
           ? `Le mandamos a ${account.email} un enlace para elegir una contraseña nueva. La anterior deja de servir.`
           : `Reenviamos la invitación a ${account.email}. El enlace anterior deja de servir.`,
       );
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  async function handleInvite(account: BarberAccountResponse) {
+    const email = (pendingEmails[account.barberId] ?? '').trim();
+    if (!email) {
+      setError(`Escribí el email de ${account.barberName} para poder invitarlo.`);
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    try {
+      await apiPost('/panel/barber-accounts', { barberId: account.barberId, email });
+      setNotice(`Le mandamos a ${email} un enlace para que ${account.barberName} elija su contraseña.`);
+      setPendingEmails((current) => ({ ...current, [account.barberId]: '' }));
+      await load();
     } catch (err) {
       setError(describeError(err));
     }
@@ -571,9 +591,7 @@ function BarberAccountsSection() {
       {notice && <p role="status">{notice}</p>}
 
       {accounts === null && !error && <p className="empty-state">Cargando cuentas...</p>}
-      {accounts !== null && accounts.length === 0 && (
-        <p className="empty-state">Todavía no hay barberos con cuenta.</p>
-      )}
+      {accounts !== null && accounts.length === 0 && <p className="empty-state">Todavía no hay barberos.</p>}
       {accounts !== null && accounts.length > 0 && (
         <table className="management__table">
           <thead>
@@ -586,23 +604,47 @@ function BarberAccountsSection() {
           </thead>
           <tbody>
             {accounts.map((account) => (
-              <tr key={account.userId}>
+              <tr key={account.barberId}>
                 <td>{account.barberName}</td>
-                <td>{account.email}</td>
                 <td>
-                  {!account.active
-                    ? 'Acceso quitado'
-                    : account.activated
-                      ? 'Activa'
-                      : 'Sin activar — todavía no entró'}
+                  {account.userId === null ? (
+                    <input
+                      aria-label={`Email de ${account.barberName}`}
+                      type="email"
+                      placeholder="email@ejemplo.com"
+                      value={pendingEmails[account.barberId] ?? ''}
+                      onChange={(e) =>
+                        setPendingEmails((current) => ({ ...current, [account.barberId]: e.target.value }))
+                      }
+                    />
+                  ) : (
+                    account.email
+                  )}
                 </td>
                 <td>
-                  <button type="button" onClick={() => void handleResend(account)}>
-                    {account.activated ? 'Resetear contraseña' : 'Reenviar invitación'}
-                  </button>
-                  <button type="button" onClick={() => void handleToggleActive(account)}>
-                    {account.active ? 'Quitar acceso' : 'Devolver acceso'}
-                  </button>
+                  {account.userId === null
+                    ? 'Sin cuenta — no puede entrar'
+                    : !account.active
+                      ? 'Acceso quitado'
+                      : account.activated
+                        ? 'Activa'
+                        : 'Sin activar — todavía no entró'}
+                </td>
+                <td>
+                  {account.userId === null ? (
+                    <button type="button" onClick={() => void handleInvite(account)}>
+                      Crear cuenta e invitar
+                    </button>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => void handleResend(account)}>
+                        {account.activated ? 'Resetear contraseña' : 'Reenviar invitación'}
+                      </button>
+                      <button type="button" onClick={() => void handleToggleActive(account)}>
+                        {account.active ? 'Quitar acceso' : 'Devolver acceso'}
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}

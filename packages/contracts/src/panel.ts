@@ -52,21 +52,35 @@ export const AddBarberRequestSchema = z.object({
 export type AddBarberRequest = z.infer<typeof AddBarberRequestSchema>;
 
 /**
- * One row of the owner's "Cuentas de barberos" screen. `activated` is the
- * state that matters operationally — an account invited and never activated
- * is the one that needs chasing — and it is derived from whether a password
- * hash exists, never from the hash itself. No credential appears in this
- * contract, in either direction: the owner controls the account, not the
- * password (see `ManageBarberAccountsUseCase`).
+ * One row of the owner's "Cuentas de barberos" screen — one per BARBER, not
+ * one per account. `userId`/`email` are `null` for a barber who has no
+ * account yet: the barbers already on file from before the alta started
+ * creating one, who would otherwise be invisible on the only screen that can
+ * give them access.
+ *
+ * `activated` is the state that matters operationally — an account invited
+ * and never activated is the one that needs chasing — and it is derived from
+ * whether a password hash exists, never from the hash itself. No credential
+ * appears in this contract, in either direction: the owner controls the
+ * account, not the password (see `ManageBarberAccountsUseCase`).
  */
 export interface BarberAccountResponse {
-  readonly userId: string;
+  readonly userId: string | null;
   readonly barberId: string;
   readonly barberName: string;
-  readonly email: string;
+  readonly email: string | null;
   readonly active: boolean;
   readonly activated: boolean;
 }
+
+/** Giving an account to a barber who already exists — the alta does this in
+ *  one step for new barbers, and this is the same act for everyone else. */
+export const InviteBarberAccountRequestSchema = z.object({
+  barberId: z.string().min(1, 'Falta el barbero'),
+  email: z.string().email('Email inválido'),
+});
+
+export type InviteBarberAccountRequest = z.infer<typeof InviteBarberAccountRequestSchema>;
 
 export interface BarberAccountsListResponse {
   readonly accounts: readonly BarberAccountResponse[];

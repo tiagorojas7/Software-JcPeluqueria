@@ -319,6 +319,8 @@ Si el email ya pertenece a otra cuenta, **no se escribe nada**: ni el barbero, n
 
 **Quitar el acceso no es dar de baja al barbero.** Son dos decisiones distintas y viven en dos lugares distintos: un barbero de vacaciones puede perder el acceso al panel sin desaparecer de la agenda, y al revés.
 
+**La pantalla lista barberos, no cuentas.** Un barbero sin cuenta aparece como *«Sin cuenta — no puede entrar»*, con un campo para cargarle el email e invitarlo ahí mismo. La primera versión listaba cuentas, y eso la dejaba inservible justo para la barbería que ya tiene gente: los barberos cargados de antes no aparecían en la única pantalla que puede darles acceso. Un barbero sin cuenta no se nota en ningún otro lado — sale en la agenda y en la disponibilidad igual que el resto.
+
 ---
 
 ## 4. Alcance del MVP
@@ -527,10 +529,10 @@ criterio de aceptación distinto y más duro:
 | Paquete | Archivos | Tests |
 |---------|:---:|:---:|
 | `domain` | 12 | 64 |
-| `application` | 44 | 238 |
-| `apps/web` | 33 | 174 |
-| `apps/api` | 19 | 143 |
-| **Total rápido** | **108** | **619** |
+| `application` | 44 | 240 |
+| `apps/web` | 33 | 177 |
+| `apps/api` | 19 | 146 |
+| **Total rápido** | **108** | **627** |
 
 `infrastructure` corre aparte: sus suites levantan un PostgreSQL real con
 Testcontainers, así que tardan minutos en vez de segundos. En cada corrida

@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
+  createBarber,
   FakeActorContextRepository,
   FakeAuthChallengeRepository,
   FakeBarberRepository,
@@ -230,6 +231,49 @@ describe('Panel: cuentas de barberos (App Nest levantada en memoria)', () => {
       newPassword: 'una-contra-bien-larga',
     });
     expect(withOldLink.body).toEqual({ outcome: 'rejected' });
+  });
+
+  // El hueco que aparecio en la barberia real: seis barberos ya estaban
+  // cargados de antes de que el alta creara cuentas. La pantalla listaba
+  // CUENTAS, asi que esos seis no aparecian en la unica pagina que puede
+  // darles acceso.
+  it('lista tambien a los barberos sin cuenta, y los deja invitar', async () => {
+    const barbers = app.get<FakeBarberRepository>(BARBER_REPOSITORY);
+    await barbers.create(createBarber({ id: 'barber-de-antes', name: 'De Antes', active: true }));
+
+    const listed = await withSession(request(app.getHttpServer()).get('/panel/barber-accounts'), OWNER_SESSION);
+    const row = listed.body.accounts.find((a: { barberId: string }) => a.barberId === 'barber-de-antes');
+    expect(row).toMatchObject({ userId: null, email: null, barberName: 'De Antes', activated: false });
+
+    const email = anEmail();
+    const invited = await withSession(request(app.getHttpServer()).post('/panel/barber-accounts'), OWNER_SESSION).send({
+      barberId: 'barber-de-antes',
+      email,
+    });
+
+    expect(invited.status).toBe(201);
+    expect(outbox.enqueued).toContainEqual(expect.objectContaining({ notificationType: 'staff_activation', recipientEmail: email }));
+  });
+
+  it('409 al invitar a un barbero que ya tiene cuenta', async () => {
+    const email = anEmail();
+    const created = await addBarber(email, 'Ya Tiene');
+
+    const response = await withSession(request(app.getHttpServer()).post('/panel/barber-accounts'), OWNER_SESSION).send({
+      barberId: created.body.id,
+      email: anEmail(),
+    });
+
+    expect(response.status).toBe(409);
+  });
+
+  it('404 al invitar a un barbero que no existe', async () => {
+    const response = await withSession(request(app.getHttpServer()).post('/panel/barber-accounts'), OWNER_SESSION).send({
+      barberId: '11111111-1111-4111-8111-111111111111',
+      email: anEmail(),
+    });
+
+    expect(response.status).toBe(404);
   });
 
   it('404 al reenviar a una cuenta que no existe', async () => {

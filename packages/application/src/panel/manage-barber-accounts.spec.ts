@@ -149,6 +149,38 @@ describe('ManageBarberAccountsUseCase', () => {
     expect((await accounts.findById(account!.id))?.active).toBe(true);
   });
 
+  // RED — the gap the real shop exposed: six barbers were already on file
+  // from before the alta created accounts, and the owner's screen listed
+  // ACCOUNTS, so those six were invisible on it and there was no way to give
+  // them one. A screen that can only see the people it already onboarded is
+  // useless to a barbershop that already has staff.
+  it('lists barbers who have NO account yet, so the owner can still invite them', async () => {
+    const { useCase, barbers } = await withBarber();
+    await barbers.create(createBarber({ id: 'barber-viejo', name: 'De Antes', active: true }));
+    await useCase.invite({ barberId: 'barber-1', email: 'juan@jc.test' });
+
+    const list = await useCase.list();
+
+    expect(list).toContainEqual({
+      userId: null,
+      barberId: 'barber-viejo',
+      barberName: 'De Antes',
+      email: null,
+      active: false,
+      activated: false,
+    });
+  });
+
+  it('invites a barber who already existed before accounts were a thing', async () => {
+    const { useCase, accounts, outbox } = await withBarber();
+
+    const result = await useCase.invite({ barberId: 'barber-1', email: 'deantes@jc.test' });
+
+    expect(result.outcome).toBe('invited');
+    expect(await accounts.findByBarberId('barber-1')).toMatchObject({ email: 'deantes@jc.test' });
+    expect(outbox.enqueued).toHaveLength(1);
+  });
+
   it('lists every barber account with its barber name and activation state', async () => {
     const { useCase, accounts, barbers } = await withBarber();
     await barbers.create(createBarber({ id: 'barber-2', name: 'Pedro', active: true }));
@@ -160,7 +192,14 @@ describe('ManageBarberAccountsUseCase', () => {
     const list = await useCase.list();
 
     expect(list).toEqual([
-      { userId: juan!.id, barberId: 'barber-1', barberName: 'Juan', email: 'juan@jc.test', active: true, activated: true },
+      {
+        userId: juan!.id,
+        barberId: 'barber-1',
+        barberName: 'Juan',
+        email: 'juan@jc.test',
+        active: true,
+        activated: true,
+      },
       {
         userId: (await accounts.findByBarberId('barber-2'))!.id,
         barberId: 'barber-2',

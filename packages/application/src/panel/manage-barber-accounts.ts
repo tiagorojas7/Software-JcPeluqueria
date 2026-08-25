@@ -20,13 +20,23 @@ export type InviteBarberResult =
 
 export type ResendInviteResult = { readonly outcome: 'sent' } | { readonly outcome: 'not-found' };
 
-/** One row of the owner's accounts screen: who the account belongs to, how
- *  they log in, and the only two states the owner can act on. */
+/**
+ * One row of the owner's accounts screen — one per BARBER, not one per
+ * account. A barber with no account yet is a row with `userId: null` and no
+ * email, which is exactly the row the owner needs in order to give them one.
+ *
+ * Listing accounts instead of barbers is what made this screen useless to a
+ * shop that already had staff: the barbers on file from before accounts
+ * existed simply did not appear, so there was no way to invite them.
+ */
 export interface BarberAccountView {
-  readonly userId: string;
+  /** `null` when this barber has no account yet. */
+  readonly userId: string | null;
   readonly barberId: string;
   readonly barberName: string;
-  readonly email: string;
+  /** `null` when there is no account, so there is no login identity either. */
+  readonly email: string | null;
+  /** Whether the account may log in. `false` with no account at all. */
   readonly active: boolean;
   readonly activated: boolean;
 }
@@ -130,19 +140,32 @@ export class ManageBarberAccountsUseCase {
     return (await this.accounts.findByEmail(email)) === null;
   }
 
-  /** Every barber account, activated or not — "invitado y nunca activado" is
-   *  exactly the row the owner needs to see in order to chase it. */
+  /**
+   * One row per BARBER — including the ones with no account at all.
+   *
+   * Two states the owner has to be able to see and act on, and neither is
+   * visible anywhere else in the panel: "todavía no tiene cuenta" (the
+   * barbers who were already on file before the alta started creating one)
+   * and "invitado y nunca activó". A barber shows up in the agenda and in
+   * public availability in both cases, so nothing else on any screen betrays
+   * that they cannot get in.
+   */
   async list(): Promise<BarberAccountView[]> {
     const [accounts, barbers] = await Promise.all([this.accounts.listByRole('barber'), this.barbers.list()]);
-    const nameById = new Map(barbers.map((barber) => [barber.id, barber.name]));
-    return accounts.map((account) => ({
-      userId: account.id,
-      barberId: account.barberId ?? '',
-      barberName: nameById.get(account.barberId ?? '') ?? '',
-      email: account.email,
-      active: account.active,
-      activated: account.activated,
-    }));
+    const accountByBarberId = new Map(
+      accounts.filter((account) => account.barberId !== null).map((account) => [account.barberId!, account]),
+    );
+    return barbers.map((barber) => {
+      const account = accountByBarberId.get(barber.id);
+      return {
+        userId: account?.id ?? null,
+        barberId: barber.id,
+        barberName: barber.name,
+        email: account?.email ?? null,
+        active: account?.active ?? false,
+        activated: account?.activated ?? false,
+      };
+    });
   }
 
   /**

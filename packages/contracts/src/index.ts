@@ -82,6 +82,7 @@ export type {
   ConfigureBarberScheduleRequest,
   ConfigureBarberWeekRequest,
   ConfigureServicePriceRequest,
+  InviteBarberAccountRequest,
   SetBarberAccountActiveRequest,
 } from './panel';
 export {
@@ -89,5 +90,6 @@ export {
   ConfigureBarberScheduleRequestSchema,
   ConfigureBarberWeekRequestSchema,
   ConfigureServicePriceRequestSchema,
+  InviteBarberAccountRequestSchema,
   SetBarberAccountActiveRequestSchema,
 } from './panel';
