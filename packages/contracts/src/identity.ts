@@ -111,3 +111,35 @@ export type ClientLoginResponseBody =
   | { readonly outcome: 'authenticated'; readonly clientId: string }
   | { readonly outcome: 'rejected' }
   | { readonly outcome: 'must-request-new-code'; readonly reason: 'expired' | 'exhausted' | 'consumed' };
+
+/**
+ * What the barber submits from the activation link the owner's invite sent
+ * (`staff_activation`). `challengeId`/`secret` are the two halves of the
+ * link's query string; `newPassword` is the password the barber picks for
+ * themselves — the first and only moment a staff password exists in
+ * plaintext anywhere in this system, and it comes from the barber, never
+ * from the owner (see `ManageBarberAccountsUseCase`).
+ *
+ * The minimum length is asserted again in the domain
+ * (`assertValidPassword`), which is the authority; this schema exists so the
+ * browser gets a field-level message instead of a 500.
+ */
+export const ActivateStaffRequestSchema = z.object({
+  challengeId: z.string().uuid(),
+  secret: z.string().min(1, 'El enlace de activación está incompleto'),
+  newPassword: z.string().min(12, 'La contraseña necesita al menos 12 caracteres'),
+});
+
+export type ActivateStaffRequest = z.infer<typeof ActivateStaffRequestSchema>;
+
+/**
+ * Outcome-discriminated, same idiom as `StaffLoginResponseBody`. `rejected`
+ * covers every dead-link case at once — expired, already used, wrong token —
+ * on purpose: an activation link is emailed to one person, and telling a
+ * stranger WHICH kind of dead it is teaches them something about an account
+ * that is not theirs.
+ */
+export type ActivateStaffResponseBody =
+  | { readonly outcome: 'activated' }
+  | { readonly outcome: 'rejected' }
+  | { readonly outcome: 'weak-password'; readonly message: string };

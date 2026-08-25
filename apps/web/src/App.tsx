@@ -11,6 +11,7 @@ import { BookingPage } from './pages/BookingPage';
 import { HomePage } from './pages/HomePage';
 import { ManagementPage } from './pages/ManagementPage';
 import { PaymentReturnPage } from './pages/PaymentReturnPage';
+import { StaffActivationPage } from './pages/StaffActivationPage';
 import { PhoneAppointmentPage } from './pages/PhoneAppointmentPage';
 import { RevenuePage } from './pages/RevenuePage';
 import { ShopRevenuePage } from './pages/ShopRevenuePage';
@@ -43,6 +44,11 @@ function renderPublicRoute(pathname: string) {
       return <MyAccountPage />;
     case '/pago/retorno':
       return <PaymentReturnPage />;
+    // Public on purpose, and NOT under `/panel`: whoever follows the
+    // activation link has no session yet — routing it into the panel shell
+    // would bounce them to the login they cannot pass.
+    case '/personal/activar':
+      return <StaffActivationPage />;
     default:
       return <NotFound />;
   }

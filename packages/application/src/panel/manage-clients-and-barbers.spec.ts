@@ -2,16 +2,21 @@ import {
   createBarberSchedule,
   createService,
   createShopHours,
+  FakeAuthChallengeRepository,
   FakeBarberRepository,
   FakeClientRepository,
   FakeClock,
   FakeFreeRangesQuery,
+  FakeNotificationOutboxRepository,
   FakeScheduleRepository,
   FakeServiceRepository,
+  FakeStaffAccountRepository,
 } from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
 import { GetPublicAvailabilityUseCase } from '../availability/get-public-availability';
+import { ChallengeService } from '../identity/challenge-service';
+import { ManageBarberAccountsUseCase } from './manage-barber-accounts';
 import { ManageClientsAndBarbersUseCase } from './manage-clients-and-barbers';
 
 // 10.14 RED — derived from specs/admin-operations/spec.md, not from an
@@ -55,9 +60,23 @@ function buildUseCase() {
   const barbers = new FakeBarberRepository();
   const schedules = new FakeScheduleRepository();
   const services = new FakeServiceRepository();
-  const useCase = new ManageClientsAndBarbersUseCase(clients, barbers, schedules, services);
-  return { useCase, clients, barbers, schedules, services };
+  const accountsRepository = new FakeStaffAccountRepository();
+  const outbox = new FakeNotificationOutboxRepository();
+  const accounts = new ManageBarberAccountsUseCase(
+    accountsRepository,
+    barbers,
+    new ChallengeService(new FakeAuthChallengeRepository(), bookingClock),
+    outbox,
+  );
+  const useCase = new ManageClientsAndBarbersUseCase(clients, barbers, schedules, services, accounts);
+  return { useCase, clients, barbers, schedules, services, accounts, accountsRepository, outbox };
 }
+
+/** Every pre-existing test in this file is about the barber becoming
+ *  assignable, not about their account — this keeps the email out of their
+ *  way while still going through the one code path the alta now has. */
+let nextEmail = 1;
+const anEmail = () => `barbero-${nextEmail++}@jc.test`;
 
 describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
   it('adding a barber with a base schedule makes them genuinely assignable — bookable slots appear', async () => {
@@ -67,13 +86,19 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     );
     await schedules.createShopHours(createShopHours({ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }));
 
-    const barber = await useCase.addBarber({
+    const added = await useCase.addBarber({
       id: 'barber-1',
       name: 'Nuevo Barbero',
+      email: anEmail(),
       schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }],
     });
 
-    expect(barber).toMatchObject({ id: 'barber-1', name: 'Nuevo Barbero', active: true });
+    expect(added.outcome).toBe('added');
+    expect(added.outcome === 'added' && added.barber).toMatchObject({
+      id: 'barber-1',
+      name: 'Nuevo Barbero',
+      active: true,
+    });
 
     // The literal "queda disponible para asignación de turnos" check: reuse
     // the already-tested public availability use case, unmodified, against
@@ -98,7 +123,7 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     );
     await schedules.createShopHours(createShopHours({ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }));
 
-    await useCase.addBarber({ id: 'barber-2', name: 'Sin Horario', schedule: [] });
+    await useCase.addBarber({ id: 'barber-2', name: 'Sin Horario', email: anEmail(), schedule: [] });
 
     const freeRangesQuery = new FakeFreeRangesQuery();
     freeRangesQuery.seed('barber-2', [{ start: at('09:00'), end: at('13:00') }]);
@@ -133,6 +158,7 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     await useCase.addBarber({
       id: 'barber-3',
       name: 'Para Dar de Baja',
+      email: anEmail(),
       schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }],
     });
 
@@ -177,6 +203,7 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     await useCase.addBarber({
       id: 'barber-4',
       name: 'Con Horario',
+      email: anEmail(),
       schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }],
     });
 
@@ -203,7 +230,7 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
   // is the fix's actual claim: one call, many rows.
   it('configures a whole week in a single call — one row per working day, never just one', async () => {
     const { useCase, schedules } = buildUseCase();
-    await useCase.addBarber({ id: 'barber-5', name: 'Semana Completa', schedule: [] });
+    await useCase.addBarber({ id: 'barber-5', name: 'Semana Completa', email: anEmail(), schedule: [] });
 
     await useCase.configureBarberWeek('barber-5', [
       { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
@@ -223,6 +250,7 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     await useCase.addBarber({
       id: 'barber-6',
       name: 'Con Un Dia',
+      email: anEmail(),
       schedule: [{ dayOfWeek: 1, opensAt: '08:00', closesAt: '12:00' }],
     });
 
@@ -239,5 +267,53 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
         createBarberSchedule({ barberId: 'barber-6', dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' }),
       ]),
     );
+  });
+});
+
+// RED — README section 3.9, "Perfil del barbero": *"No es opcional: es la
+// puerta por la que entra al sistema."* Until now the alta wrote `barbers` +
+// `barber_schedules` and stopped there, so a barber the owner had just
+// created showed up in the agenda and in public availability while no
+// `users` row existed for them: assignable, and unable to log in. These
+// cases pin the alta to producing BOTH, or neither.
+describe('ManageClientsAndBarbersUseCase — la cuenta del barbero', () => {
+  it('creates the login account and sends the activation invite in the same alta', async () => {
+    const { useCase, accountsRepository, outbox } = buildUseCase();
+
+    const added = await useCase.addBarber({
+      id: 'barber-cuenta',
+      name: 'Con Cuenta',
+      email: 'concuenta@jc.test',
+      schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }],
+    });
+
+    expect(added).toMatchObject({ outcome: 'added' });
+    const account = await accountsRepository.findByBarberId('barber-cuenta');
+    expect(account).toMatchObject({ email: 'concuenta@jc.test', role: 'barber', activated: false, active: true });
+    expect(outbox.enqueued.map((call) => call.notificationType)).toEqual(['staff_activation']);
+  });
+
+  it('writes NOTHING when the email already belongs to another account — no half-created barber', async () => {
+    const { useCase, barbers, accountsRepository, outbox } = buildUseCase();
+    await useCase.addBarber({
+      id: 'barber-primero',
+      name: 'Primero',
+      email: 'repetido@jc.test',
+      schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }],
+    });
+
+    const added = await useCase.addBarber({
+      id: 'barber-segundo',
+      name: 'Segundo',
+      email: 'repetido@jc.test',
+      schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' }],
+    });
+
+    expect(added).toEqual({ outcome: 'email-taken' });
+    // The barber that could never log in was never created either — that is
+    // the whole point of checking the email before writing anything.
+    expect(await barbers.findById('barber-segundo')).toBeNull();
+    expect(await accountsRepository.findByBarberId('barber-segundo')).toBeNull();
+    expect(outbox.enqueued).toHaveLength(1);
   });
 });

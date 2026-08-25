@@ -41,10 +41,45 @@ const BarberScheduleDaySchema = z
 
 export const AddBarberRequestSchema = z.object({
   name: z.string().min(1, 'El nombre es obligatorio'),
+  /** README 3.9: the profile is the door the barber walks in through, so the
+   *  alta captures where the activation invite goes and what they will log
+   *  in as. Required — an alta without it produced a barber who could be
+   *  assigned turnos and could never open the panel. */
+  email: z.string().email('Email inválido'),
   schedule: z.array(BarberScheduleDaySchema).min(1, 'El horario base es obligatorio'),
 });
 
 export type AddBarberRequest = z.infer<typeof AddBarberRequestSchema>;
+
+/**
+ * One row of the owner's "Cuentas de barberos" screen. `activated` is the
+ * state that matters operationally — an account invited and never activated
+ * is the one that needs chasing — and it is derived from whether a password
+ * hash exists, never from the hash itself. No credential appears in this
+ * contract, in either direction: the owner controls the account, not the
+ * password (see `ManageBarberAccountsUseCase`).
+ */
+export interface BarberAccountResponse {
+  readonly userId: string;
+  readonly barberId: string;
+  readonly barberName: string;
+  readonly email: string;
+  readonly active: boolean;
+  readonly activated: boolean;
+}
+
+export interface BarberAccountsListResponse {
+  readonly accounts: readonly BarberAccountResponse[];
+}
+
+/** Whether the account may log in at all. Deliberately separate from the
+ *  barber's own `active` flag: taking someone off the agenda and taking away
+ *  their access are different decisions. */
+export const SetBarberAccountActiveRequestSchema = z.object({
+  active: z.boolean(),
+});
+
+export type SetBarberAccountActiveRequest = z.infer<typeof SetBarberAccountActiveRequestSchema>;
 
 export interface BarberResponse {
   readonly id: string;

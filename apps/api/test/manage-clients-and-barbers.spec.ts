@@ -3,11 +3,15 @@ import { Test } from '@nestjs/testing';
 import {
   createBarber,
   FakeActorContextRepository,
+  FakeAuthChallengeRepository,
   FakeBarberRepository,
   FakeClientRepository,
+  FakeClock,
+  FakeNotificationOutboxRepository,
   FakeRolePermissionRepository,
   FakeScheduleRepository,
   FakeServiceRepository,
+  FakeStaffAccountRepository,
   type Permission,
 } from '@jc-barberia/domain';
 import request from 'supertest';
@@ -16,7 +20,16 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ACTOR_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from '../src/access-control/tokens';
 import { SESSION_COOKIE_NAME } from '../src/access-control/session-cookie';
 import { AppModule } from '../src/app.module';
-import { BARBER_REPOSITORY, CLIENT_REPOSITORY, SCHEDULE_REPOSITORY, SERVICE_REPOSITORY } from '../src/panel/tokens';
+import {
+  AUTH_CHALLENGE_REPOSITORY,
+  BARBER_REPOSITORY,
+  CLIENT_REPOSITORY,
+  CLOCK,
+  NOTIFICATION_OUTBOX_REPOSITORY,
+  SCHEDULE_REPOSITORY,
+  SERVICE_REPOSITORY,
+  STAFF_ACCOUNT_REPOSITORY,
+} from '../src/panel/tokens';
 
 // 10.14/10.15 RED — derived from specs/admin-operations/spec.md, not from
 // an implementation:
@@ -62,11 +75,15 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
   let barbers: FakeBarberRepository;
   let clients: FakeClientRepository;
   let schedules: FakeScheduleRepository;
+  let staffAccounts: FakeStaffAccountRepository;
+  let outbox: FakeNotificationOutboxRepository;
 
   beforeAll(async () => {
     barbers = new FakeBarberRepository();
     clients = new FakeClientRepository();
     schedules = new FakeScheduleRepository();
+    staffAccounts = new FakeStaffAccountRepository();
+    outbox = new FakeNotificationOutboxRepository();
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ROLE_PERMISSION_REPOSITORY)
@@ -81,6 +98,17 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
       .useValue(schedules)
       .overrideProvider(SERVICE_REPOSITORY)
       .useValue(new FakeServiceRepository())
+      // The alta creates the barber ACCOUNT too now, so this suite has to
+      // stand in for the three ports that invitation needs — otherwise the
+      // real Drizzle repositories would try to reach a database.
+      .overrideProvider(STAFF_ACCOUNT_REPOSITORY)
+      .useValue(staffAccounts)
+      .overrideProvider(AUTH_CHALLENGE_REPOSITORY)
+      .useValue(new FakeAuthChallengeRepository())
+      .overrideProvider(NOTIFICATION_OUTBOX_REPOSITORY)
+      .useValue(outbox)
+      .overrideProvider(CLOCK)
+      .useValue(new FakeClock(-180, new FakeClock().parseInstant('2026-09-01T12:00:00.000Z')))
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -94,7 +122,7 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
   it('rejects an anonymous request to add a barber with 403 — deny by default applies here too', async () => {
     const response = await request(app.getHttpServer())
       .post('/panel/barbers')
-      .send({ name: 'Nuevo', schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }] });
+      .send({ name: 'Nuevo', email: 'nuevo-anon@jc.test', schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }] });
 
     expect(response.status).toBe(403);
   });
@@ -102,6 +130,7 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
   it('lets the owner add a barber with a base schedule', async () => {
     const response = await withSession(request(app.getHttpServer()).post('/panel/barbers'), OWNER_SESSION).send({
       name: 'Nuevo Barbero',
+      email: 'nuevo@jc.test',
       schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }],
     });
 
@@ -114,6 +143,7 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
   it('MUST reject the secretary adding a barber with 403 — barber:manage is owner-only, unlike client:manage', async () => {
     const response = await withSession(request(app.getHttpServer()).post('/panel/barbers'), SECRETARY_SESSION).send({
       name: 'Otro Barbero',
+      email: 'otro@jc.test',
       schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }],
     });
 

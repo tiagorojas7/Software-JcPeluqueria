@@ -1,4 +1,15 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { ManageClientsAndBarbersUseCase } from '@jc-barberia/application';
 import {
   AddBarberRequestSchema,
@@ -52,11 +63,19 @@ export class ManageClientsAndBarbersController {
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.flatten());
     }
-    return this.manage.addBarber({
+    const result = await this.manage.addBarber({
       id: crypto.randomUUID(),
       name: parsed.data.name,
+      email: parsed.data.email,
       schedule: parsed.data.schedule.map((day) => ({ ...day, dayOfWeek: asDayOfWeek(day.dayOfWeek) })),
     });
+    if (result.outcome === 'email-taken') {
+      // 409, not 400: the request is perfectly well formed, it just collides
+      // with an account that already exists — and the panel shows that as a
+      // field-level message on the email, not as a validation failure.
+      throw new ConflictException({ message: `Ya hay una cuenta con el email "${parsed.data.email}"` });
+    }
+    return result.barber;
   }
 
   @RequiresPermission('barber:manage')

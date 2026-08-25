@@ -9,6 +9,7 @@ import { createClientAccessCodeTemplate } from './client-access-code.template';
 import { cancellationWithRefundTemplate } from './cancellation-with-refund.template';
 import { createReminderWithDepositTemplate } from './reminder-with-deposit.template';
 import { reminderWithoutDepositTemplate } from './reminder-without-deposit.template';
+import { createStaffActivationTemplate } from './staff-activation.template';
 
 /**
  * Exhaustive registry of every `NotificationTemplate` to its renderer. The
@@ -32,13 +33,19 @@ import { reminderWithoutDepositTemplate } from './reminder-without-deposit.templ
  *
  * `publicBaseUrl` (fix/acceso-cliente-sin-id) is the same `PUBLIC_BASE_URL`
  * `MercadoPagoPaymentAdapter` already reads (`apps/api/src/booking/booking.module.ts`)
- * — one source of truth for where this deployment is publicly reachable,
- * passed through only to `client_access_code`, the one template that
- * currently needs a link back into the app.
+ * — one source of truth for where this deployment is publicly reachable. Two
+ * templates need a link back into the app: `client_access_code` and now
+ * `staff_activation`, the invite the owner sends a new barber.
+ *
+ * `staff_activation` stopped sharing `accessTemplate` with
+ * `staff_password_reset`: the shared body announced a "código de acceso" and
+ * printed the raw token, which described neither what the barber receives
+ * (a link to a form where they choose a password) nor what they are meant to
+ * do with it.
  */
 export function createTemplateRegistry(clock: Clock, publicBaseUrl?: string): TemplateRegistry {
   return {
-    staff_activation: accessTemplate,
+    staff_activation: createStaffActivationTemplate(clock, publicBaseUrl),
     staff_password_reset: accessTemplate,
     cancellation_with_refund: cancellationWithRefundTemplate,
     reminder_with_deposit: createReminderWithDepositTemplate(clock),

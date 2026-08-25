@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type {
+  BarberAccountResponse,
+  BarberAccountsListResponse,
   ClientRecordResponse,
   PublicBarberResponse,
   PublicBarbersResponse,
@@ -85,6 +87,10 @@ export function ManagementPage({ actor }: ManagementPageProps) {
         <p className="empty-state">Cargando barberos y servicios...</p>
       )}
       {canBarbers && referenceDataReady && <BarbersSection barbers={barbers} />}
+      {/* Its own fetch, independent of the barber/service reference data —
+          an account exists whether or not the barber is still active, so this
+          section must not disappear behind that gate. */}
+      {canBarbers && <BarberAccountsSection />}
       {canSchedules && referenceDataReady && <SchedulesSection barbers={barbers} />}
       {canPricing && referenceDataReady && <PricingSection services={services} />}
     </section>
@@ -231,6 +237,7 @@ interface BarbersSectionProps {
 function BarbersSection({ barbers }: BarbersSectionProps) {
   const [firstBarber] = barbers;
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [week, setWeek] = useState<readonly WeekDayEntry[]>(buildDefaultWeek);
   const [barberToDeactivate, setBarberToDeactivate] = useState<string>(firstBarber?.id ?? '');
   const [notice, setNotice] = useState<string | null>(null);
@@ -248,10 +255,14 @@ function BarbersSection({ barbers }: BarbersSectionProps) {
     try {
       const created = await apiPost<{ id: string; name: string; active: boolean }>('/panel/barbers', {
         name,
+        email,
         schedule,
       });
-      setNotice(`${created.name} dado de alta correctamente. Recargá la página para verlo en los selectores.`);
+      setNotice(
+        `${created.name} dado de alta correctamente. Le enviamos a ${email} un enlace para que active su cuenta y elija su contraseña. Recargá la página para verlo en los selectores.`,
+      );
       setName('');
+      setEmail('');
       setWeek(buildDefaultWeek());
     } catch (err) {
       setError(describeError(err));
@@ -282,6 +293,17 @@ function BarbersSection({ barbers }: BarbersSectionProps) {
         <span className="management__field">
           <label htmlFor="mgmt-barber-name">Nombre del barbero</label>
           <input id="mgmt-barber-name" required value={name} onChange={(e) => setName(e.target.value)} />
+        </span>
+        <span className="management__field">
+          <label htmlFor="mgmt-barber-email">Email del barbero</label>
+          <input
+            id="mgmt-barber-email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <small>Le llega ahí el enlace para activar su cuenta. Es también el usuario con el que va a entrar.</small>
         </span>
         <WeekScheduleFields idPrefix="mgmt-barber-week" week={week} onChange={setWeek} />
         <button type="submit">Dar de alta</button>
@@ -470,3 +492,123 @@ const DAY_OF_WEEK_OPTIONS = [
   { value: '5', label: 'Viernes' },
   { value: '6', label: 'Sábado' },
 ] as const;
+
+/**
+ * "la cuenta de cada barbero y tener todo el control sobre las cuentas para
+ * que ingresen" — the owner's view of who can actually get into the panel.
+ * Gated by `barber:manage`, which the 3b seed grants to the owner ALONE, so
+ * the secretary never sees this section even though she manages clients and
+ * turnos all day.
+ *
+ * What the owner controls here is the ACCOUNT, not the credential. There is
+ * no password field on this screen, in either direction: no place to type
+ * one, and nothing that could display one. The two real actions are
+ * re-sending the activation link (which doubles as the password reset — same
+ * write, see `ManageBarberAccountsUseCase.resendInvite`) and switching access
+ * on and off.
+ *
+ * "Sin activar" is the state worth surfacing: an account invited and never
+ * used is the one that needs chasing, and it is invisible from every other
+ * screen — the barber shows up in the agenda and in availability regardless.
+ */
+function BarberAccountsSection() {
+  const [accounts, setAccounts] = useState<readonly BarberAccountResponse[] | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const response = await apiGet<BarberAccountsListResponse>('/panel/barber-accounts');
+      setAccounts(response.accounts);
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function handleResend(account: BarberAccountResponse) {
+    setError(null);
+    setNotice(null);
+    try {
+      await apiPost(`/panel/barber-accounts/${account.userId}/resend-invite`);
+      setNotice(
+        account.activated
+          ? `Le mandamos a ${account.email} un enlace para elegir una contraseña nueva. La anterior deja de servir.`
+          : `Reenviamos la invitación a ${account.email}. El enlace anterior deja de servir.`,
+      );
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  async function handleToggleActive(account: BarberAccountResponse) {
+    setError(null);
+    setNotice(null);
+    try {
+      await apiPost(`/panel/barber-accounts/${account.userId}/active`, { active: !account.active });
+      setNotice(
+        account.active
+          ? `${account.barberName} ya no puede entrar al panel. Sus turnos no cambian.`
+          : `${account.barberName} puede volver a entrar al panel.`,
+      );
+      await load();
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  return (
+    <div className="management__section">
+      <h3>Cuentas de barberos</h3>
+      <p className="management__hint">
+        Cada barbero elige su propia contraseña desde el enlace que le mandamos. Vos manejás la cuenta: podés reenviar
+        el enlace, resetear la contraseña y quitar o devolver el acceso — nunca ves ni escribís la contraseña de nadie.
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
+
+      {accounts === null && !error && <p className="empty-state">Cargando cuentas...</p>}
+      {accounts !== null && accounts.length === 0 && (
+        <p className="empty-state">Todavía no hay barberos con cuenta.</p>
+      )}
+      {accounts !== null && accounts.length > 0 && (
+        <table className="management__table">
+          <thead>
+            <tr>
+              <th scope="col">Barbero</th>
+              <th scope="col">Email</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map((account) => (
+              <tr key={account.userId}>
+                <td>{account.barberName}</td>
+                <td>{account.email}</td>
+                <td>
+                  {!account.active
+                    ? 'Acceso quitado'
+                    : account.activated
+                      ? 'Activa'
+                      : 'Sin activar — todavía no entró'}
+                </td>
+                <td>
+                  <button type="button" onClick={() => void handleResend(account)}>
+                    {account.activated ? 'Resetear contraseña' : 'Reenviar invitación'}
+                  </button>
+                  <button type="button" onClick={() => void handleToggleActive(account)}>
+                    {account.active ? 'Quitar acceso' : 'Devolver acceso'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}

@@ -47,6 +47,7 @@ export { Argon2PasswordHasher } from './identity/argon2-password-hasher';
 export { DrizzleAuthChallengeRepository } from './identity/auth-challenge.repository';
 export { DrizzleSessionRepository } from './identity/session.repository';
 export { DrizzleClientAccountRepository } from './identity/client-account.repository';
+export { DrizzleStaffAccountRepository } from './identity/staff-account.repository';
 export { DrizzleClientContextRepository } from './identity/client-context.repository';
 export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
 export { DrizzleAbsenceRecordRepository } from './appointments/absence-record.repository';

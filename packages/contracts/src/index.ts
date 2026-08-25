@@ -34,6 +34,8 @@ export {
 } from './appointments';
 export type { BarberRevenueResponse, BarberStatsResponse } from './barbers';
 export type {
+  ActivateStaffRequest,
+  ActivateStaffResponseBody,
   ClientLoginByEmailRequest,
   ClientLoginRequest,
   ClientLoginResponseBody,
@@ -43,6 +45,7 @@ export type {
   StaffLoginResponseBody,
 } from './identity';
 export {
+  ActivateStaffRequestSchema,
   ClientLoginByEmailRequestSchema,
   ClientLoginRequestSchema,
   RequestClientAccessRequestSchema,
@@ -71,16 +74,20 @@ export {
 } from './booking';
 export type {
   AddBarberRequest,
+  BarberAccountResponse,
+  BarberAccountsListResponse,
   BarberResponse,
   ClientRecordResponse,
   ClientsListResponse,
   ConfigureBarberScheduleRequest,
   ConfigureBarberWeekRequest,
   ConfigureServicePriceRequest,
+  SetBarberAccountActiveRequest,
 } from './panel';
 export {
   AddBarberRequestSchema,
   ConfigureBarberScheduleRequestSchema,
   ConfigureBarberWeekRequestSchema,
   ConfigureServicePriceRequestSchema,
+  SetBarberAccountActiveRequestSchema,
 } from './panel';

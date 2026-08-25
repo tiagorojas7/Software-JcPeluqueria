@@ -15,12 +15,27 @@ import { createTemplateRegistry } from './index';
 describe('createTemplateRegistry (7.7) — una plantilla por evento existente', () => {
   const registry = createTemplateRegistry(new FakeClock());
 
-  it('staff_activation / staff_password_reset: codigo o enlace de acceso con el token', () => {
-    for (const template of ['staff_activation', 'staff_password_reset'] as const) {
-      const rendered = registry[template]({ token: 'abc123', expiresAt: '2026-09-01T13:00:00.000Z' });
-      expect(rendered.subject.length).toBeGreaterThan(0);
-      expect(rendered.body).toContain('abc123');
-    }
+  it('staff_password_reset: codigo o enlace de acceso con el token', () => {
+    const rendered = registry['staff_password_reset']({ token: 'abc123', expiresAt: '2026-09-01T13:00:00.000Z' });
+    expect(rendered.subject.length).toBeGreaterThan(0);
+    expect(rendered.body).toContain('abc123');
+  });
+
+  // `staff_activation` stopped sharing `accessTemplate` with the reset above
+  // when the panel gained the alta that sends it (README 3.9): what the
+  // barber receives is a LINK to a form where they pick a password, not a
+  // token to transcribe — so this registry, built with no `PUBLIC_BASE_URL`,
+  // renders a body with no link and, deliberately, no bare token either. Its
+  // own behaviour is covered in `staff-activation.spec.ts`.
+  it('staff_activation: invita a activar la cuenta sin exponer el token suelto', () => {
+    const rendered = registry['staff_activation']({
+      challengeId: 'challenge-1',
+      token: 'abc123',
+      expiresAt: '2026-09-01T13:00:00.000Z',
+    });
+    expect(rendered.subject.length).toBeGreaterThan(0);
+    expect(rendered.body.length).toBeGreaterThan(0);
+    expect(rendered.body).not.toContain('abc123');
   });
 
   it('cancellation_with_refund: confirma el reembolso y menciona la seña', () => {

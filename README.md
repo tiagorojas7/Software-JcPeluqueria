@@ -278,6 +278,8 @@ Con los barberos entrando al sistema, aparecen **tres roles con límites reales 
 
 La razón es que la fricción que queríamos evitar era la del **cliente ocasional**, no la de tres o seis personas que abren el sistema cada mañana. Pedirles un link por mail en cada turno de trabajo sería peor experiencia, no mejor. Además, un código de 6 dígitos enviado por mail es una protección floja para la cuenta del dueño, que ve la facturación del local.
 
+**Esa contraseña la elige cada uno, una sola vez, desde el enlace de activación** — nadie la escribe por él y nadie puede leerla después. Cómo se crean esas cuentas está en [La cuenta nace con el alta](#la-cuenta-nace-con-el-alta).
+
 **La secretaria opera, el dueño configura.** La secretaria maneja todo el día a día — turnos, clientes, walk-ins, ausencias de barberos — pero el alta y baja de barberos, los horarios base y los precios quedan solo en manos del dueño.
 
 > Esto se revisa **el día de la entrega del MVP**. Es posible que el dueño prefiera que la secretaria maneje todo como si fuera él. Por eso conviene que la diferencia entre los dos roles sea un cambio de permisos, no de código.
@@ -297,6 +299,25 @@ Cada barbero tiene su perfil. **No es opcional**: es la puerta por la que entra 
 **Facturación no es ganancia.** Cuánto se lleva cada barbero depende de un modelo de comisión que todavía no está definido y que quedó fuera del MVP. Ver [Trabajo futuro](#7-trabajo-futuro).
 
 **La vista de agenda ya la necesitábamos.** Para manejar ausencias, ver disponibilidad y cargar walk-ins, el panel admin necesita la vista del día con una columna por barbero. La agenda del barbero es esa misma vista filtrada a su propia columna.
+
+#### La cuenta nace con el alta
+
+Dar de alta un barbero y darle una cuenta son **el mismo acto**, no dos pasos. El alta pide nombre, **email** y horario base; con eso se crea el barbero, sus días de trabajo y su usuario, y le sale un mail con un enlace para activarse. Antes el alta se detenía en el barbero: la persona aparecía en la agenda y en la disponibilidad pública sin ninguna forma de entrar.
+
+Si el email ya pertenece a otra cuenta, **no se escribe nada**: ni el barbero, ni la cuenta. Un barbero que no puede entrar es justamente el estado que esto viene a eliminar.
+
+**El dueño controla la cuenta, nunca la contraseña.** La pantalla de cuentas —que solo ve él, porque `barber:manage` es suyo y no de la secretaria— muestra quién activó y quién no, y ofrece dos acciones: reenviar el enlace y quitar o devolver el acceso. No hay ningún campo de contraseña, en ninguna de las dos direcciones: ni para escribirla ni para leerla. La elige el barbero, una sola vez, desde el enlace.
+
+| Acción | Quién |
+|--------|-------|
+| Crear la cuenta y mandar la invitación | Dueño |
+| Elegir la contraseña | **El barbero, siempre** |
+| Reenviar la invitación / resetear la contraseña | Dueño |
+| Quitar o devolver el acceso | Dueño |
+
+> **Reenviar la invitación y resetear la contraseña son el mismo botón**, porque son la misma escritura: se emite un enlace nuevo y el anterior deja de servir. Separarlos serían dos botones haciendo lo mismo con la base.
+
+**Quitar el acceso no es dar de baja al barbero.** Son dos decisiones distintas y viven en dos lugares distintos: un barbero de vacaciones puede perder el acceso al panel sin desaparecer de la agenda, y al revés.
 
 ---
 
@@ -483,6 +504,9 @@ criterio de aceptación distinto y más duro:
   consulta, no en la pantalla
 - **Turno telefónico**, gestión de clientes y barberos, facturación del barbero y
   del local
+- **Cuentas de barberos** — el alta crea barbero, horarios y usuario en el mismo
+  acto y manda la invitación; el dueño ve quién activó, reenvía el enlace y
+  quita o devuelve el acceso; el barbero elige su contraseña desde el enlace
 - **Notificaciones por email reales** — el outbox se despacha por Gmail; probado
   con una entrega real, no con un doble
 
@@ -503,10 +527,10 @@ criterio de aceptación distinto y más duro:
 | Paquete | Archivos | Tests |
 |---------|:---:|:---:|
 | `domain` | 12 | 64 |
-| `application` | 43 | 223 |
-| `apps/web` | 32 | 163 |
-| `apps/api` | 18 | 133 |
-| **Total rápido** | **105** | **583** |
+| `application` | 44 | 238 |
+| `apps/web` | 33 | 174 |
+| `apps/api` | 19 | 143 |
+| **Total rápido** | **108** | **619** |
 
 `infrastructure` corre aparte: sus suites levantan un PostgreSQL real con
 Testcontainers, así que tardan minutos en vez de segundos. En cada corrida

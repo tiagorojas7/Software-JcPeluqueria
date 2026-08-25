@@ -9,14 +9,26 @@ import {
   type ServiceRepository,
 } from '@jc-barberia/domain';
 
+import type { ManageBarberAccountsUseCase } from './manage-barber-accounts';
+
 export interface AddBarberInput {
   readonly id: string;
   readonly name: string;
+  /** Where the activation invite goes, and the barber's login identity from
+   *  then on (`users.email`, UNIQUE). Not optional: README section 3.9 makes
+   *  the profile the door the barber walks in through, and an alta with no
+   *  email produces someone who can be assigned turnos but can never open
+   *  the panel — which is exactly the gap this parameter closes. */
+  readonly email: string;
   /** The barber's base weekly schedule — one row per working day. Without
    *  at least one row, `AvailabilityService.workingWindows()` can never
    *  produce a working window for them, no matter how `active` they are. */
   readonly schedule: readonly Omit<BarberSchedule, 'barberId'>[];
 }
+
+export type AddBarberResult =
+  | { readonly outcome: 'added'; readonly barber: Barber; readonly userId: string }
+  | { readonly outcome: 'email-taken' };
 
 /**
  * admin-operations spec, "Gestión de clientes y de barberos":
@@ -42,6 +54,11 @@ export class ManageClientsAndBarbersUseCase {
     private readonly barbers: BarberRepository,
     private readonly schedules: ScheduleRepository,
     private readonly services: ServiceRepository,
+    /** The alta owns the account too — see `addBarber`. Injected as a use
+     *  case rather than as raw ports so that "dar de alta un barbero" and
+     *  "invitar a un barbero" cannot drift into two different meanings of
+     *  the same act. */
+    private readonly accounts: ManageBarberAccountsUseCase,
   ) {}
 
   /** "ver... los registros de clientes." */
@@ -61,14 +78,36 @@ export class ManageClientsAndBarbersUseCase {
    * and at least one `BarberSchedule` row (so
    * `AvailabilityService.workingWindows()` produces a non-empty window).
    * Both happen in the same call, never one without the other.
+   *
+   * A THIRD thing happens in that same call now: the barber's login account
+   * and its activation invite (README 3.9, "es la puerta por la que entra al
+   * sistema"). It used to be missing entirely, which produced barbers who
+   * were assignable but had no way in. The email is checked for collision
+   * BEFORE anything is written, because the only failure mode left —
+   * `users.email` is UNIQUE — must not be discovered halfway through, with
+   * the `barbers` row already committed and the account impossible: that is
+   * the very state this method exists to make unreachable.
    */
-  async addBarber(input: AddBarberInput): Promise<Barber> {
+  async addBarber(input: AddBarberInput): Promise<AddBarberResult> {
+    if (!(await this.accounts.emailAvailable(input.email))) {
+      return { outcome: 'email-taken' };
+    }
+
     const barber = createBarber({ id: input.id, name: input.name, active: true });
     await this.barbers.create(barber);
     for (const day of input.schedule) {
       await this.schedules.createBarberSchedule({ barberId: barber.id, ...day });
     }
-    return barber;
+
+    const invited = await this.accounts.invite({ barberId: barber.id, email: input.email });
+    if (invited.outcome !== 'invited') {
+      // Unreachable through this path: the barber was just created, has no
+      // account, and the email was free a moment ago. Surfaced rather than
+      // swallowed so a future caller cannot quietly reintroduce the
+      // accountless barber.
+      throw new Error(`No se pudo crear la cuenta del barbero "${barber.id}": ${invited.outcome}`);
+    }
+    return { outcome: 'added', barber, userId: invited.userId };
   }
 
   /** "baja de barberos" — `false` means no barber with that id exists. */

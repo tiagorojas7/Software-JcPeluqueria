@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, HttpCode, Inject, Post, Res } from '@nestjs/common';
 import {
+  ActivateStaffUseCase,
   ClientLoginByEmailUseCase,
   ClientLoginUseCase,
   RequestClientAccessUseCase,
@@ -8,15 +9,17 @@ import {
   type ClientLoginResult,
 } from '@jc-barberia/application';
 import {
+  ActivateStaffRequestSchema,
   ClientLoginByEmailRequestSchema,
   ClientLoginRequestSchema,
   RequestClientAccessRequestSchema,
   StaffLoginRequestSchema,
+  type ActivateStaffResponseBody,
   type ClientLoginResponseBody,
   type RequestClientAccessResponseBody,
   type StaffLoginResponseBody,
 } from '@jc-barberia/contracts';
-import type { ActorContextRepository, ClientContextRepository } from '@jc-barberia/domain';
+import { WeakPasswordError, type ActorContextRepository, type ClientContextRepository } from '@jc-barberia/domain';
 
 import { Public } from '../access-control/decorators/public.decorator';
 import { SESSION_COOKIE_NAME, writeSessionCookie, type CookieResponse } from '../access-control/session-cookie';
@@ -54,6 +57,7 @@ export class AuthController {
     private readonly requestClientAccessUseCase: RequestClientAccessUseCase,
     private readonly clientLoginUseCase: ClientLoginUseCase,
     private readonly clientLoginByEmailUseCase: ClientLoginByEmailUseCase,
+    private readonly activateStaffUseCase: ActivateStaffUseCase,
     private readonly sessions: SessionService,
     @Inject(ACTOR_CONTEXT_REPOSITORY) private readonly actorContexts: ActorContextRepository,
     @Inject(CLIENT_CONTEXT_REPOSITORY) private readonly clientContexts: ClientContextRepository,
@@ -97,6 +101,40 @@ export class AuthController {
     writeSessionCookie(res, session.id, session.expiresAt);
 
     return { outcome: 'authenticated', userId: actor.userId, role: actor.role, barberId: actor.barberId ?? null };
+  }
+
+  /**
+   * Where the barber lands from the activation link the owner's invite sent.
+   * `@Public()` is the literal requirement: whoever follows this link has no
+   * account they can log into yet — the whole point is that they are about to
+   * get one. The single-use, expiring, hashed challenge IS the authentication
+   * here, exactly as it is for a client's access code.
+   *
+   * A weak password is answered as its own outcome rather than a 500, and —
+   * `ActivateStaffUseCase` validates BEFORE consuming — the activation link
+   * survives it, so the barber can retry with a stronger one from the same
+   * email. Every OTHER failure collapses into `rejected`: an activation link
+   * is emailed to one person, and telling a stranger which flavour of dead
+   * it is teaches them about an account that is not theirs.
+   */
+  @Public()
+  @Post('activate-staff')
+  @HttpCode(200)
+  async activateStaff(@Body() body: unknown): Promise<ActivateStaffResponseBody> {
+    const parsed = ActivateStaffRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+
+    try {
+      const result = await this.activateStaffUseCase.activate(parsed.data);
+      return result.outcome === 'activated' ? { outcome: 'activated' } : { outcome: 'rejected' };
+    } catch (error) {
+      if (error instanceof WeakPasswordError) {
+        return { outcome: 'weak-password', message: error.message };
+      }
+      throw error;
+    }
   }
 
   /**

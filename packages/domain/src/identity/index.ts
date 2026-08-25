@@ -24,5 +24,7 @@ export { SESSION_TTL_MINUTES_BY_SUBJECT } from './session';
 export { FakeSessionRepository } from './testing/fake-session-repository';
 export type { ClientAccount, ClientAccountRepository, CreateClientAccountInput } from './client-account';
 export { FakeClientAccountRepository } from './testing/fake-client-account-repository';
+export type { CreateStaffAccountInput, StaffAccount, StaffAccountRepository } from './staff-account';
+export { FakeStaffAccountRepository } from './testing/fake-staff-account-repository';
 export type { ClientContext, ClientContextRepository } from './client-context';
 export { FakeClientContextRepository } from './testing/fake-client-context-repository';

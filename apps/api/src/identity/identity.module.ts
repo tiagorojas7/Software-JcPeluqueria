@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import {
+  ActivateStaffUseCase,
   ChallengeService,
   ClientLoginByEmailUseCase,
   ClientLoginUseCase,
@@ -118,6 +119,18 @@ import {
       provide: ChallengeService,
       inject: [AUTH_CHALLENGE_REPOSITORY, CLOCK],
       useFactory: (challenges: AuthChallengeRepository, clock: Clock) => new ChallengeService(challenges, clock),
+    },
+    {
+      // The other end of the invite the panel sends
+      // (`ManageBarberAccountsUseCase`): this is what consumes the
+      // activation link. `PasswordService.setPassword` is the ONLY seam that
+      // writes a staff password hash, and it is reached from HERE — from the
+      // staff member choosing their own password, never from the owner's
+      // side of the screen.
+      provide: ActivateStaffUseCase,
+      inject: [ChallengeService, PasswordService],
+      useFactory: (challenges: ChallengeService, passwords: PasswordService) =>
+        new ActivateStaffUseCase(challenges, passwords),
     },
     {
       provide: RequestClientAccessUseCase,

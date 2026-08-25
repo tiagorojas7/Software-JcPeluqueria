@@ -21,6 +21,26 @@ const SERVICES_RESPONSE = {
 const CLIENTS_RESPONSE = {
   clients: [{ id: 'c1', name: 'Juan Perez', phone: '3511234567', email: null, age: 30 }],
 };
+const BARBER_ACCOUNTS_RESPONSE = {
+  accounts: [
+    {
+      userId: 'u-cristian',
+      barberId: 'b1',
+      barberName: 'Cristian Gómez',
+      email: 'cristian@jc.test',
+      active: true,
+      activated: true,
+    },
+    {
+      userId: 'u-nuevo',
+      barberId: 'b2',
+      barberName: 'Nuevo Barbero',
+      email: 'nuevo@jc.test',
+      active: true,
+      activated: false,
+    },
+  ],
+};
 
 /**
  * datos-reales-en-ui — the barber/schedule/pricing sections used to default
@@ -39,6 +59,9 @@ function mockReferenceData() {
     }
     if (path === '/panel/clients') {
       return Promise.resolve(CLIENTS_RESPONSE);
+    }
+    if (path === '/panel/barber-accounts') {
+      return Promise.resolve(BARBER_ACCOUNTS_RESPONSE);
     }
     return Promise.reject(new Error(`unexpected apiGet path in test: ${path}`));
   });
@@ -95,6 +118,7 @@ describe('ManagementPage (D.3)', () => {
     // OWN "Lunes"/"Martes"/... checkboxes on the same page, so plain label
     // text would be ambiguous between the two sections.
     fireEvent.change(await screen.findByLabelText(/nombre del barbero/i), { target: { value: 'Nuevo Barbero' } });
+    fireEvent.change(screen.getByLabelText(/email del barbero/i), { target: { value: 'nuevo@jc.test' } });
     fireEvent.click(container.querySelector('#mgmt-barber-week-1-enabled')!);
     fireEvent.click(container.querySelector('#mgmt-barber-week-2-enabled')!);
     fireEvent.click(container.querySelector('#mgmt-barber-week-3-enabled')!);
@@ -109,6 +133,7 @@ describe('ManagementPage (D.3)', () => {
     expect(apiPost).toHaveBeenCalledTimes(1);
     expect(apiPost).toHaveBeenCalledWith('/panel/barbers', {
       name: 'Nuevo Barbero',
+      email: 'nuevo@jc.test',
       schedule: [
         { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
         { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
@@ -123,6 +148,7 @@ describe('ManagementPage (D.3)', () => {
     render(<ManagementPage actor={OWNER} />);
 
     fireEvent.change(await screen.findByLabelText(/nombre del barbero/i), { target: { value: 'Sin Dias' } });
+    fireEvent.change(screen.getByLabelText(/email del barbero/i), { target: { value: 'sindias@jc.test' } });
     fireEvent.click(screen.getByRole('button', { name: /dar de alta/i }));
 
     expect(await screen.findByText(/eleg.\s*al menos un d.a de trabajo/i)).toBeInTheDocument();
@@ -190,14 +216,89 @@ describe('ManagementPage (D.3)', () => {
 
   it('si la carga de referencia falla, muestra el error en vez de secciones vacias', async () => {
     vi.mocked(apiGet).mockImplementation((path: string) => {
-      if (path === '/barbers' || path === '/services') {
-        return Promise.reject(new Error('No se pudo conectar con el servidor'));
+      if (path === '/panel/barber-accounts') {
+        // Its own independent fetch — kept working so this test observes the
+        // reference-data failure alone.
+        return Promise.resolve({ accounts: [] });
       }
-      return Promise.reject(new Error(`unexpected apiGet path in test: ${path}`));
+      return Promise.reject(new Error('No se pudo conectar con el servidor'));
     });
     render(<ManagementPage actor={OWNER} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo conectar/i);
     expect(screen.queryByLabelText(/nombre del barbero/i)).toBeNull();
+  });
+});
+
+// README section 3.9 + the owner's own words: "la cuenta de cada barbero y
+// tener todo el control sobre las cuentas para que ingresen". The alta used
+// to create a barber who showed up in the agenda with no way to log in; these
+// cases pin BOTH halves of the owner's control — and its limit.
+describe('ManagementPage — cuentas de barberos', () => {
+  beforeEach(() => {
+    vi.mocked(apiGet).mockReset();
+    vi.mocked(apiPost).mockReset();
+    vi.mocked(apiPut).mockReset();
+    mockReferenceData();
+  });
+
+  it('lists every barber account and singles out the one that never activated', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    expect(await screen.findByRole('heading', { name: /cuentas de barberos/i })).toBeInTheDocument();
+    expect(screen.getByText('cristian@jc.test')).toBeInTheDocument();
+    // The state worth chasing: invited, never used. Invisible everywhere
+    // else — the barber shows up in the agenda regardless.
+    expect(screen.getByText(/sin activar/i)).toBeInTheDocument();
+  });
+
+  it('never shows a password field, in either direction — the owner controls the account, not the credential', async () => {
+    const { container } = render(<ManagementPage actor={OWNER} />);
+    await screen.findByRole('heading', { name: /cuentas de barberos/i });
+
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(screen.queryByLabelText(/contrase/i)).toBeNull();
+  });
+
+  it('hides the whole section from the secretary — barber:manage is owner-only', () => {
+    render(<ManagementPage actor={SECRETARY} />);
+
+    expect(screen.queryByRole('heading', { name: /cuentas de barberos/i })).toBeNull();
+    expect(apiGet).not.toHaveBeenCalledWith('/panel/barber-accounts');
+  });
+
+  it('resends the invite to a barber who never activated', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ sent: true });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByRole('heading', { name: /cuentas de barberos/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /reenviar invitaci/i }));
+
+    expect(await screen.findByText(/reenviamos la invitaci/i)).toBeInTheDocument();
+    expect(apiPost).toHaveBeenCalledWith('/panel/barber-accounts/u-nuevo/resend-invite');
+  });
+
+  it('resets an activated barber password through the SAME endpoint — one write, not two', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ sent: true });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByRole('heading', { name: /cuentas de barberos/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /resetear contrase/i }));
+
+    expect(apiPost).toHaveBeenCalledWith('/panel/barber-accounts/u-cristian/resend-invite');
+    // What the owner is told is that the barber picks the new one, never
+    // what it is: there is nothing here for the owner to read out loud.
+    expect(await screen.findByText(/elegir una contrase.a nueva/i)).toBeInTheDocument();
+  });
+
+  it('revokes access without touching the barber turnos', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ active: false });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByRole('heading', { name: /cuentas de barberos/i });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /quitar acceso/i })[0]!);
+
+    expect(apiPost).toHaveBeenCalledWith('/panel/barber-accounts/u-cristian/active', { active: false });
+    expect(await screen.findByText(/sus turnos no cambian/i)).toBeInTheDocument();
   });
 });
