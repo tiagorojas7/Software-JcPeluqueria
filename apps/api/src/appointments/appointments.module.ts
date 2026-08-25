@@ -198,9 +198,9 @@ import {
     },
     {
       provide: AdminCancelAppointmentUseCase,
-      inject: [APPOINTMENT_REPOSITORY, PAYMENT_PORT],
-      useFactory: (appointments: AppointmentRepository, paymentPort: PaymentPort) =>
-        new AdminCancelAppointmentUseCase(appointments, paymentPort),
+      inject: [APPOINTMENT_REPOSITORY, PAYMENT_PORT, CLOCK],
+      useFactory: (appointments: AppointmentRepository, paymentPort: PaymentPort, clock: Clock) =>
+        new AdminCancelAppointmentUseCase(appointments, paymentPort, clock),
     },
     {
       provide: CreateWalkInUseCase,

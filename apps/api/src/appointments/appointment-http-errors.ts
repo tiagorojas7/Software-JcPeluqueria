@@ -1,4 +1,4 @@
-import { BadGatewayException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import {
   AppointmentNotFoundError,
   InvalidAppointmentTransitionError,
@@ -20,6 +20,8 @@ import { MercadoPagoApiError } from '@jc-barberia/infrastructure';
  * surfaced to the person as "Internal server error" with nothing actionable
  * in it — which is exactly what the shop owner hit.
  */
+const logger = new Logger('AppointmentCancellation');
+
 export function rethrowAppointmentErrorAsHttp(error: unknown): never {
   if (error instanceof AppointmentNotFoundError) {
     throw new NotFoundException(`No existe un turno con id "${error.appointmentId}"`);
@@ -57,6 +59,14 @@ export function rethrowAppointmentErrorAsHttp(error: unknown): never {
   // "upstream", and the message says what to do about it — the turno stays as
   // it was, so retrying is safe.
   if (error instanceof MercadoPagoApiError) {
+    // The provider's own answer is the ONLY thing that says why it refused,
+    // and it used to die right here: the browser got a status number and the
+    // server logged nothing, so "MercadoPago rechazó la devolución" was
+    // unactionable for everyone — the person at the counter AND whoever had
+    // to debug it. Logged in full, server-side only; the response still
+    // carries just the status, since a gateway's raw error body is not
+    // something to render to whoever happens to be standing there.
+    logger.error(`Refund rejected by MercadoPago — status ${error.status}, body: ${error.body}`);
     throw new BadGatewayException({
       message:
         'MercadoPago rechazó la devolución de la seña, así que el turno no se canceló. Volvé a intentarlo en unos minutos.',
