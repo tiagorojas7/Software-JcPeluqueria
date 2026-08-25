@@ -132,7 +132,26 @@ Created by `pnpm seed` (passwords are hashed with `Argon2PasswordHasher` in the 
 | Barbero (Cristian Gómez) | `cristian@jcbarberia.test` | `jcbarberia-barbero1` |
 | Barbero (Facundo Díaz) | `facundo@jcbarberia.test` | `jcbarberia-barbero2` |
 
-A third barber, **Nahuel Torres**, exists in the schedule/day-board data but has no login user — demonstrates that `barbers` and `users` are decoupled tables (a barber can exist operationally without ever using the panel).
+A third barber, **Nahuel Torres**, exists in the schedule/day-board data but has no login user — demonstrates that `barbers` and `users` are decoupled tables (a barber can exist operationally without ever using the panel). The owner can give him one from **Gestión → Cuentas de barberos**, which lists every barber, not just the ones who already have an account.
+
+### Paying a test booking (do NOT log in with your own MercadoPago account)
+
+The seller credentials in `.env` belong to a MercadoPago **test user** — that part is correct, and a test Access Token starting with `APP_USR` is exactly what the Checkout Pro docs describe. What must match it is the BUYER.
+
+**At the checkout, log in with a test buyer account.** Paying with a real MercadoPago account produces a payment that is real money (`live_mode: true`) collected by a test seller, and MercadoPago then refuses to refund it: `401 unauthorized use of live credentials`. That is not a bug in this app and no retry fixes it — the money is simply stuck.
+
+Create a test buyer (up to 15 per application; they cannot be deleted, so reuse them):
+
+```bash
+curl -X POST "https://api.mercadopago.com/users/test_user" \
+  -H "Authorization: Bearer $MERCADOPAGO_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"site_id":"MLA"}'
+```
+
+The response carries the buyer's `email` and `password` — keep them outside this repo. If the login asks for a verification code, it is the **last 6 digits of that buyer's user id**.
+
+Pay with the test buyer's account money or with MercadoPago's documented test cards. Everything stays inside the test realm, and refunds — the cancellation flow, `ExpireHold`'s refund branch — actually work.
 
 ## 6. Reference data (for the booking flow's barber/service pickers)
 
