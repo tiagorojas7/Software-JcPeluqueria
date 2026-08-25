@@ -14,13 +14,20 @@ import type { EmailTemplateRenderer } from './types';
  * the template never reads `SHOP_UTC_OFFSET` or builds a `Date` directly — the
  * `no-restricted-syntax` lint rule forbids that outside ShopClock/FakeClock.
  *
- * The payload is `{ appointmentId, appointmentTime }` (the ISO the
- * `appointment.reminder` handler wrote to the outbox in 6.10/6.11). The reminder
- * fires 2h before the turno, so the margin between the reminder and the cutoff
- * is ~1h — matching the cancel-refund window of `client-booking`.
+ * The payload is `{ appointmentTime, barberName, serviceName }` (the
+ * `appointment.reminder` handler writes it in 6.10/6.11). The reminder fires 2h
+ * before the turno, so the margin between the reminder and the cutoff is ~1h —
+ * matching the cancel-refund window of `client-booking`.
+ *
+ * It used to close with `(Turno <uuid> — <instante UTC>)`: a database id and a
+ * timestamp in a timezone the customer does not live in, which is the one thing
+ * a reminder must never be. Now it says WHICH turno it is the way
+ * `booking_confirmed` always did — barbero, servicio, fecha y hora del local.
+ * A missing barber/service name never costs the client their reminder: the
+ * line is dropped, the cutoff still renders.
  */
 export function createReminderWithDepositTemplate(clock: Clock): EmailTemplateRenderer {
-  return ({ appointmentId = '', appointmentTime = '' }) => {
+  return ({ appointmentTime = '', barberName = '', serviceName = '' }) => {
     const appointmentDate = clock.parseInstant(appointmentTime);
     const cutoff = clock.addMinutes(appointmentDate, -60);
     const cutoffTime = clock.wallClockTimeOf(cutoff);
@@ -29,10 +36,13 @@ export function createReminderWithDepositTemplate(clock: Clock): EmailTemplateRe
       body: [
         'Te recordamos tu turno en JC Barberia.',
         '',
+        ...(barberName ? [`Barbero: ${barberName}`] : []),
+        ...(serviceName ? [`Servicio: ${serviceName}`] : []),
+        `Fecha: ${clock.calendarDateOf(appointmentDate)}`,
+        `Hora: ${clock.wallClockTimeOf(appointmentDate)}`,
+        '',
         'Esta es la última oportunidad para cancelar y recuperar tu seña.',
         `Podés cancelar hasta las ${cutoffTime} (una hora antes del turno).`,
-        '',
-        `(Turno ${appointmentId} — ${appointmentTime})`,
       ].join('\n'),
     };
   };

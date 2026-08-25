@@ -106,6 +106,8 @@ La adopción de la web se maneja **por acuerdo con el dueño, no por restricció
 
 **El recordatorio sale 2 horas antes del turno.** Como la ventana de cancelación cierra 1 hora antes, ese aviso es **la última oportunidad del cliente para cancelar y recuperar la seña**. El mensaje tiene que decirlo explícitamente, con la hora límite: si el cliente no lo lee a tiempo, pierde la plata sin haber tenido la chance de decidir.
 
+**Y tiene que decir de qué turno habla:** barbero, servicio, fecha y hora del local. Durante un tiempo cerró con `(Turno <uuid> — <instante UTC>)`, que es un id de base de datos y una hora en un huso donde el cliente no vive — las dos únicas cosas con las que no puede hacer nada. Los nombres viajan **dentro del evento del outbox**, no se releen al momento de entregar: el correo sale minutos después, y a veces tras varios reintentos, así que releer el nombre del barbero ahí permitiría que un renombre reescriba un mensaje sobre un turno ya reservado. Si un id quedó colgado, se cae **esa línea**, nunca el recordatorio: la hora es lo que el cliente necesita.
+
 > Con el canal actual esto queda ajustado: el correo tiene la peor tasa de apertura justo para avisos del mismo día, y 2 horas es una ventana corta para que alguien abra el mail. La elección funciona mucho mejor cuando migremos a WhatsApp, donde los mensajes se leen al instante. Es un motivo más para no quedarse en Gmail más de lo necesario.
 
 ### 3.2 Ciclo de vida del turno
@@ -545,10 +547,10 @@ criterio de aceptación distinto y más duro:
 | Paquete | Archivos | Tests |
 |---------|:---:|:---:|
 | `domain` | 12 | 64 |
-| `application` | 44 | 242 |
-| `apps/web` | 33 | 177 |
+| `application` | 44 | 245 |
+| `apps/web` | 33 | 178 |
 | `apps/api` | 19 | 147 |
-| **Total rápido** | **108** | **630** |
+| **Total rápido** | **108** | **634** |
 
 `infrastructure` corre aparte: sus suites levantan un PostgreSQL real con
 Testcontainers, así que tardan minutos en vez de segundos. En cada corrida

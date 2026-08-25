@@ -1,9 +1,11 @@
 import {
   type AppointmentReminderScheduler,
+  type BarberRepository,
   type Clock,
   REMINDER_LEAD_MINUTES,
   type NotificationOutboxRepository,
   type NotificationTemplate,
+  type ServiceRepository,
 } from '@jc-barberia/domain';
 
 /**
@@ -22,6 +24,11 @@ import {
  */
 export interface AppointmentReminderInput {
   readonly appointmentId: string;
+  /** Resolved to a NAME here and carried in the payload — see the class doc
+   *  for why the name travels with the intent instead of being read at
+   *  delivery time. */
+  readonly barberId: string;
+  readonly serviceId: string;
   /** Null only when the client has no email registrado — then NO reminder.
    *  notification-port spec: "un cliente sin email no recibe ningún
    *  recordatorio", admin-operations spec: phone walk-in sin email alike. */
@@ -47,21 +54,44 @@ export interface AppointmentReminderInput {
  * brief ("solo el evento del outbox").
  */
 export class AppointmentReminder {
-  constructor(private readonly outbox: NotificationOutboxRepository) {}
+  constructor(
+    private readonly outbox: NotificationOutboxRepository,
+    private readonly barbers: BarberRepository,
+    private readonly services: ServiceRepository,
+  ) {}
 
   async execute(input: AppointmentReminderInput): Promise<void> {
     // The email gate is the ONLY gate — notification-port spec: both channels
     // get the reminder, with or without seña, never without an email. A null
     // email returns BEFORE enqueueing, so the outbox never holds a row that
     // cannot be delivered (the only channel implemented in the MVP is email).
+    // It also returns before the two lookups below: nothing to render means
+    // nothing worth reading.
     if (input.clientEmail === null) return;
+
+    // Resolved HERE, not by the template: the outbox row is what the consumer
+    // delivers — minutes later, or several retries later — and a template that
+    // re-read the barber's name at delivery time would let a rename rewrite a
+    // message about a turno that was already booked. A dangling id costs the
+    // client one LINE (the template drops it), never the reminder itself, the
+    // same posture `ProcessPaymentUseCase.notifyBookingConfirmed` takes.
+    const [barber, service] = await Promise.all([
+      this.barbers.findById(input.barberId),
+      this.services.findById(input.serviceId),
+    ]);
+
     const notificationType: NotificationTemplate = input.hasSettledDeposit
       ? 'reminder_with_deposit'
       : 'reminder_without_deposit';
     await this.outbox.enqueue({
       notificationType,
       recipientEmail: input.clientEmail,
-      payload: { appointmentId: input.appointmentId, appointmentTime: input.appointmentTime },
+      payload: {
+        appointmentId: input.appointmentId,
+        appointmentTime: input.appointmentTime,
+        barberName: barber?.name ?? '',
+        serviceName: service?.name ?? '',
+      },
     });
   }
 }

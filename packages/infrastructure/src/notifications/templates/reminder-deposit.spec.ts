@@ -40,3 +40,49 @@ describe('reminder condicional por DepositState (7.9/7.10/7.11)', () => {
     expect(rendered.body).not.toContain('última oportunidad');
   });
 });
+
+// RED — reported from the real inbox: the reminder that reaches the client
+// says `(Turno 4a18d65e-d246-4cd8-87d7-aafedc4bd939 — 2026-08-26T12:00:00.000Z)`.
+// That is a database id and a UTC instant: the two things a customer can do
+// nothing with. What a reminder is FOR is telling somebody what they booked
+// and when — barbero, servicio, fecha y hora del local — which is exactly
+// what `booking_confirmed` has always rendered correctly right next to it.
+describe('el recordatorio dice QUE turno es, no su id', () => {
+  const registry = createTemplateRegistry(new FakeClock());
+  const payload = {
+    appointmentId: 'apt-1',
+    appointmentTime: APPOINTMENT_13H_LOCAL_UTC,
+    barberName: 'Cristian Gómez',
+    serviceName: 'Corte clásico',
+  };
+
+  for (const template of ['reminder_with_deposit', 'reminder_without_deposit'] as const) {
+    it(`${template}: muestra barbero, servicio, fecha y hora del local`, () => {
+      const rendered = registry[template](payload);
+
+      expect(rendered.body).toContain('Cristian Gómez');
+      expect(rendered.body).toContain('Corte clásico');
+      expect(rendered.body).toContain('2026-09-01');
+      expect(rendered.body).toContain('13:00');
+    });
+
+    it(`${template}: no muestra el id del turno ni el instante UTC crudo`, () => {
+      const rendered = registry[template](payload);
+
+      expect(rendered.body).not.toContain('apt-1');
+      expect(rendered.body).not.toContain(APPOINTMENT_13H_LOCAL_UTC);
+    });
+  }
+
+  // A dangling barber/service id must never cost the client their reminder —
+  // same posture `booking_confirmed` takes.
+  it('renderiza igual cuando falta el nombre del barbero o del servicio', () => {
+    const rendered = registry['reminder_with_deposit']({
+      appointmentId: 'apt-1',
+      appointmentTime: APPOINTMENT_13H_LOCAL_UTC,
+    });
+
+    expect(rendered.body).toContain('13:00');
+    expect(rendered.body).toContain('última oportunidad');
+  });
+});

@@ -42,6 +42,15 @@ type Status = 'idle' | 'submitting' | 'activated';
  *
  * A weak password keeps the link alive — the API validates before consuming
  * the challenge — so the retry hint is honest: the same email still works.
+ *
+ * This page deliberately does NOT re-implement the minimum-length rule. The
+ * domain's `assertValidPassword` owns it and answers with `weak-password` and
+ * its own message, which is what gets shown. A barber's first activation once
+ * came back as a bare `400` precisely because a second authority (the wire
+ * schema) rejected first and had nothing useful to say; adding a third one
+ * here would invite the same drift. The "Al menos 12 caracteres" hint below is
+ * copy, not a rule — if the requirement ever changes, the API is still the one
+ * that decides and the one that explains.
  */
 export function StaffActivationPage() {
   const params = readActivationParams();

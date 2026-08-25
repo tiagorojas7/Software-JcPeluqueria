@@ -120,14 +120,21 @@ export type ClientLoginResponseBody =
  * plaintext anywhere in this system, and it comes from the barber, never
  * from the owner (see `ManageBarberAccountsUseCase`).
  *
- * The minimum length is asserted again in the domain
- * (`assertValidPassword`), which is the authority; this schema exists so the
- * browser gets a field-level message instead of a 500.
+ * The minimum LENGTH is deliberately NOT checked here. `assertValidPassword`
+ * in the domain is the single authority on password strength, and it answers
+ * through the `weak-password` outcome below — a message the barber can act on,
+ * on a link that is still alive. Asserting the same rule here shadowed that
+ * outcome entirely: the schema rejected first and the browser got a bare 400
+ * with nothing usable in it, which is exactly what a barber hit on their first
+ * activation. Two authorities on one rule, and the worse one won.
+ *
+ * This schema keeps only what the DOMAIN cannot check for itself: that the
+ * three fields are present and that the ids are shaped like ids.
  */
 export const ActivateStaffRequestSchema = z.object({
   challengeId: z.string().uuid(),
   secret: z.string().min(1, 'El enlace de activación está incompleto'),
-  newPassword: z.string().min(12, 'La contraseña necesita al menos 12 caracteres'),
+  newPassword: z.string().min(1, 'Elegí una contraseña'),
 });
 
 export type ActivateStaffRequest = z.infer<typeof ActivateStaffRequestSchema>;

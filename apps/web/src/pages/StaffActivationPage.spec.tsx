@@ -87,3 +87,26 @@ describe('StaffActivationPage', () => {
     expect(screen.queryByLabelText(/^contraseña$/i)).toBeNull();
   });
 });
+
+// A barber's first activation came back as a bare 400: the wire schema was
+// asserting the minimum length too, so it rejected before the domain could
+// answer with its own message. Two authorities on one rule, and the worse one
+// won. The page keeps exactly ONE rule of its own — the repeat field, which no
+// API can check — and lets the domain own the rest.
+describe('StaffActivationPage — el largo lo decide el dominio, no la pantalla', () => {
+  beforeEach(() => {
+    vi.mocked(apiPost).mockReset();
+  });
+
+  it('sends a short password instead of rejecting it locally, and shows what the API answered', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ outcome: 'weak-password', message: 'La contraseña necesita al menos 12 caracteres.' });
+    renderAt(VALID_LINK);
+
+    fireEvent.change(screen.getByLabelText(/^contraseña$/i), { target: { value: 'corta' } });
+    fireEvent.change(screen.getByLabelText(/repetí la contraseña/i), { target: { value: 'corta' } });
+    fireEvent.click(screen.getByRole('button', { name: /activar cuenta/i }));
+
+    expect(apiPost).toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/al menos 12 caracteres/i);
+  });
+});

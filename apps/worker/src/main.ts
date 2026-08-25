@@ -238,7 +238,14 @@ async function main(): Promise<void> {
   // `createQueue` here is a second, harmless `ON CONFLICT DO NOTHING` call —
   // the queue already exists by this point (registered early, before
   // `payment.process`'s producer could ever race a send against it).
-  const appointmentReminder = new AppointmentReminder(new DrizzleNotificationOutboxRepository(db));
+  // The barber/service repositories are what let the reminder say WHICH turno
+  // it is about. Without them the email arrived carrying an appointment uuid
+  // and a UTC instant — the two things a customer can do nothing with.
+  const appointmentReminder = new AppointmentReminder(
+    new DrizzleNotificationOutboxRepository(db),
+    new DrizzleBarberRepository(db),
+    new DrizzleServiceRepository(db),
+  );
   const appointmentsForReminder = new DrizzleAppointmentRepository(db);
   const clientsForReminder = new DrizzleClientRepository(db);
   await boss.createQueue(APPOINTMENT_REMINDER_QUEUE);
@@ -252,6 +259,8 @@ async function main(): Promise<void> {
       const client = await clientsForReminder.findById(appointment.clientId);
       await appointmentReminder.execute({
         appointmentId: appointment.id,
+        barberId: appointment.barberId,
+        serviceId: appointment.serviceId,
         clientEmail: client?.email ?? null,
         hasSettledDeposit: appointment.deposit.kind === 'settled',
         appointmentTime: appointment.timeRange.start.toISOString(),

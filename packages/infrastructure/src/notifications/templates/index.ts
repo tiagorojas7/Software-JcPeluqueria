@@ -8,7 +8,7 @@ import { createBookingConfirmedTemplate } from './booking-confirmed.template';
 import { createClientAccessCodeTemplate } from './client-access-code.template';
 import { cancellationWithRefundTemplate } from './cancellation-with-refund.template';
 import { createReminderWithDepositTemplate } from './reminder-with-deposit.template';
-import { reminderWithoutDepositTemplate } from './reminder-without-deposit.template';
+import { createReminderWithoutDepositTemplate } from './reminder-without-deposit.template';
 import { createStaffActivationTemplate } from './staff-activation.template';
 
 /**
@@ -49,7 +49,7 @@ export function createTemplateRegistry(clock: Clock, publicBaseUrl?: string): Te
     staff_password_reset: accessTemplate,
     cancellation_with_refund: cancellationWithRefundTemplate,
     reminder_with_deposit: createReminderWithDepositTemplate(clock),
-    reminder_without_deposit: reminderWithoutDepositTemplate,
+    reminder_without_deposit: createReminderWithoutDepositTemplate(clock),
     absence_reassignment_offer: createAbsenceReassignmentOfferTemplate(clock),
     client_access_code: createClientAccessCodeTemplate(clock, publicBaseUrl),
     booking_confirmed: createBookingConfirmedTemplate(clock),

@@ -358,9 +358,11 @@ describe('Panel: cuentas de barberos (App Nest levantada en memoria)', () => {
       secret: invite.token,
       newPassword: 'corta',
     });
-    // Rebotada por el schema antes de llegar al dominio: el minimo es una
-    // regla de negocio, y el navegador merece un mensaje por campo.
-    expect(weak.status).toBe(400);
+    // El dominio es la unica autoridad sobre el largo, y responde con un
+    // outcome que el navegador puede mostrar — no un 400 pelado.
+    expect(weak.status).toBe(200);
+    expect(weak.body.outcome).toBe('weak-password');
+    expect(weak.body.message).toBeTruthy();
 
     const retry = await request(app.getHttpServer()).post('/auth/activate-staff').send({
       challengeId: invite.challengeId,
