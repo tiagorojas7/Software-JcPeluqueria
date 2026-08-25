@@ -89,9 +89,11 @@ export class AccountController {
 
     switch (result.outcome) {
       case 'cancelled':
-        return { outcome: 'cancelled', appointment: toAccountAppointmentResponse(result.appointment) };
-      case 'too-late':
-        return { outcome: 'too-late', cutoff: result.cutoff.toISOString() };
+        return {
+          outcome: 'cancelled',
+          appointment: toAccountAppointmentResponse(result.appointment),
+          refund: result.refund,
+        };
       case 'not-yours':
         return { outcome: 'not-yours' };
       case 'not-cancellable':

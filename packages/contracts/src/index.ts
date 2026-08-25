@@ -6,6 +6,7 @@ export type {
   AccountProfileResponse,
   ListOwnAppointmentsResponse,
   SelfCancelAppointmentResponseBody,
+  SelfCancelRefundOutcome,
 } from './account';
 export type {
   AcceptOfferResponseBody,

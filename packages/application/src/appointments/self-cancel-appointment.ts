@@ -1,9 +1,11 @@
 import {
   AppointmentStateMachine,
   resolveDepositForCancellation,
+  resolveDepositForLateCancellation,
   type Appointment,
   type AppointmentRepository,
   type Clock,
+  type DepositState,
   type PaymentPort,
 } from '@jc-barberia/domain';
 
@@ -23,9 +25,16 @@ export interface SelfCancelInput {
   readonly clientId: string;
 }
 
+/** What happened to the deposit, so the screen can say it plainly instead of
+ *  making the client infer it: `none` is a turno that never carried one. */
+export type SelfCancelRefund = 'refunded' | 'forfeited' | 'none';
+
 export type SelfCancelResult =
-  | { readonly outcome: 'cancelled'; readonly appointment: Appointment }
-  | { readonly outcome: 'too-late'; readonly cutoff: Date }
+  | {
+      readonly outcome: 'cancelled';
+      readonly appointment: Appointment;
+      readonly refund: SelfCancelRefund;
+    }
   | { readonly outcome: 'not-yours' }
   | { readonly outcome: 'not-cancellable' };
 
@@ -67,19 +76,42 @@ export class SelfCancelAppointmentUseCase {
       return { outcome: 'not-cancellable' };
     }
 
-    const cutoff = this.clock.addMinutes(existing.timeRange.start, -SELF_CANCEL_WINDOW_MINUTES);
-    if (this.clock.now() > cutoff) {
-      return { outcome: 'too-late', cutoff };
-    }
-
     const status = AppointmentStateMachine.transition(existing.status, 'cancelado');
-    // The refund is part of cancelling, not a follow-up step: the requirement
-    // says "sin aprobación manual". `resolveDepositForCancellation` owns the
-    // exhaustive `DepositState` switch, so the no-deposit phone case cannot be
-    // forgotten here.
-    const deposit = await resolveDepositForCancellation(existing.deposit, this.paymentPort);
+
+    // The window decides what happens to the MONEY, never whether the client
+    // may cancel at all. Refusing a late cancellation used to leave the slot
+    // held by a turno nobody would attend — the shop lost the hour AND the
+    // chance to resell it. Now the turno is always released; past the cutoff
+    // the deposit is simply forfeited.
+    //
+    // Either branch owns the exhaustive `DepositState` switch, so the
+    // no-deposit phone case cannot be forgotten here.
+    const cutoff = this.clock.addMinutes(existing.timeRange.start, -SELF_CANCEL_WINDOW_MINUTES);
+    const withinWindow = this.clock.now() <= cutoff;
+    const deposit = withinWindow
+      ? await resolveDepositForCancellation(existing.deposit, this.paymentPort)
+      : resolveDepositForLateCancellation(existing.deposit);
+
     await this.appointments.updateStatus(input.appointmentId, status);
 
-    return { outcome: 'cancelled', appointment: { ...existing, status, deposit } };
+    return {
+      outcome: 'cancelled',
+      appointment: { ...existing, status, deposit },
+      refund: toRefundOutcome(deposit),
+    };
+  }
+}
+
+/** Reads the resolved deposit rather than re-deriving the rule from the
+ *  clock, so the reported outcome can never disagree with what was actually
+ *  done to the money. */
+function toRefundOutcome(deposit: DepositState): SelfCancelRefund {
+  switch (deposit.kind) {
+    case 'refunded':
+      return 'refunded';
+    case 'forfeited':
+      return 'forfeited';
+    default:
+      return 'none';
   }
 }

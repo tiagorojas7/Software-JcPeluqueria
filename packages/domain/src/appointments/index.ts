@@ -17,6 +17,7 @@ export {
   UnexpectedDepositStateError,
   resolveDepositForAbsence,
   resolveDepositForCancellation,
+  resolveDepositForLateCancellation,
   resolveDepositForCompletion,
 } from './deposit-transitions';
 export { FakePaymentPort } from './testing/fake-payment-port';

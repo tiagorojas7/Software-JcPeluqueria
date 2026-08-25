@@ -32,9 +32,29 @@ export interface ListOwnAppointmentsResponse {
  * exactly, adding only the wire-safe representation of what does not survive
  * JSON as-is: `cutoff` travels as an ISO instant, never a `Date`.
  */
+/**
+ * What happened to the deposit. `none` is a turno that never carried one (a
+ * phone booking), so the screen can stay silent about money instead of
+ * inventing a refund that was never owed.
+ */
+export type SelfCancelRefundOutcome = 'refunded' | 'forfeited' | 'none';
+
+/**
+ * Mirrors `SelfCancelResult`
+ * (`packages/application/src/appointments/self-cancel-appointment.ts`).
+ *
+ * `too-late` used to be a REFUSAL: past the 1-hour cutoff the client was told
+ * to contact the shop, and the slot stayed occupied by a turno nobody would
+ * attend. The shop owner changed the rule — cancelling is always allowed, and
+ * the window now decides only whether the deposit comes back. `refund` is how
+ * the screen says which of the two happened.
+ */
 export type SelfCancelAppointmentResponseBody =
-  | { readonly outcome: 'cancelled'; readonly appointment: AccountAppointmentResponse }
-  | { readonly outcome: 'too-late'; readonly cutoff: string }
+  | {
+      readonly outcome: 'cancelled';
+      readonly appointment: AccountAppointmentResponse;
+      readonly refund: SelfCancelRefundOutcome;
+    }
   | { readonly outcome: 'not-yours' }
   | { readonly outcome: 'not-cancellable' };
 

@@ -86,34 +86,53 @@ describe('SelfCancelAppointmentUseCase', () => {
     });
   });
 
-  describe('Intento de cancelación fuera de la ventana permitida', () => {
-    it('rechaza el autoservicio cuando falta menos de 1 hora, sin tocar el turno ni el dinero', async () => {
-      const { useCase, appointments, paymentPort } = buildUseCase(at('09:30'));
+  // Cambio de regla pedido por el dueño: fuera de la ventana el cliente IGUAL
+  // puede cancelar; lo que pierde es la seña, no la posibilidad. Antes se le
+  // negaba y se lo mandaba a contactar al local, lo que dejaba el cupo tomado
+  // por un turno al que nadie iba a ir — el peor de los dos mundos para la
+  // barberia.
+  describe('Cancelación fuera de la ventana: se permite, pero sin devolución', () => {
+    it('cancela y libera el cupo aunque falte menos de 1 hora', async () => {
+      const { useCase, appointments } = buildUseCase(at('09:30'));
 
       const result = await useCase.execute({ appointmentId: 'appt-1', clientId: 'client-1' });
 
-      expect(result.outcome).toBe('too-late');
-      expect(appointments.updateStatusCalls).toEqual([]);
+      expect(result.outcome).toBe('cancelled');
+      expect(appointments.updateStatusCalls).toEqual([{ id: 'appt-1', status: 'cancelado' }]);
+    });
+
+    it('pierde la seña en vez de reembolsarla, sin llamar a la pasarela', async () => {
+      const { useCase, paymentPort } = buildUseCase(at('09:30'));
+
+      const result = await useCase.execute({ appointmentId: 'appt-1', clientId: 'client-1' });
+
+      if (result.outcome !== 'cancelled') {
+        throw new Error(`esperaba cancelled, llego ${result.outcome}`);
+      }
+      expect(result.refund).toBe('forfeited');
+      expect(result.appointment.deposit).toEqual({ kind: 'forfeited', amountCents: 500000 });
+      // Perder una seña no mueve plata: no hay nada que pedirle a MercadoPago.
       expect(paymentPort.refundCalls).toEqual([]);
     });
 
-    it('informa el instante de corte, para que la web pueda explicar el rechazo', async () => {
-      const { useCase } = buildUseCase(at('09:30'));
-
-      const result = await useCase.execute({ appointmentId: 'appt-1', clientId: 'client-1' });
-
-      // The cutoff is the appointment start minus the window — the same
-      // instant the 2h reminder announces as the last chance to cancel.
-      expect(result).toEqual({ outcome: 'too-late', cutoff: at('09:00') });
-    });
-
-    it('sigue rechazando despues de que el turno ya empezo', async () => {
+    it('tambien despues de que el turno ya empezo', async () => {
       const { useCase, paymentPort } = buildUseCase(at('10:15'));
 
       const result = await useCase.execute({ appointmentId: 'appt-1', clientId: 'client-1' });
 
-      expect(result.outcome).toBe('too-late');
+      expect(result.outcome).toBe('cancelled');
       expect(paymentPort.refundCalls).toEqual([]);
+    });
+
+    it('dentro de la ventana informa que la sena se devuelve', async () => {
+      const { useCase } = buildUseCase(at('08:30'));
+
+      const result = await useCase.execute({ appointmentId: 'appt-1', clientId: 'client-1' });
+
+      if (result.outcome !== 'cancelled') {
+        throw new Error(`esperaba cancelled, llego ${result.outcome}`);
+      }
+      expect(result.refund).toBe('refunded');
     });
   });
 
