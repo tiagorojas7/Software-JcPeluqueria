@@ -85,7 +85,11 @@ export class ManageBarberAccountsUseCase {
     if (await this.accounts.findByBarberId(input.barberId)) {
       return { outcome: 'already-has-account' };
     }
-    if (await this.accounts.findByEmail(input.email)) {
+    // Asked of the WHOLE `users` table, not just staff: `users.email` carries
+    // one UNIQUE constraint across every row, so a client account holding the
+    // address makes it just as unclaimable. Checking staff rows alone let the
+    // insert through and died on the constraint as a 500.
+    if (await this.accounts.isEmailInUse(input.email)) {
       return { outcome: 'email-taken' };
     }
 
@@ -137,7 +141,7 @@ export class ManageBarberAccountsUseCase {
    * eliminate.
    */
   async emailAvailable(email: string): Promise<boolean> {
-    return (await this.accounts.findByEmail(email)) === null;
+    return !(await this.accounts.isEmailInUse(email));
   }
 
   /**

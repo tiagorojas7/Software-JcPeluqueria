@@ -67,10 +67,30 @@ export function rethrowAppointmentErrorAsHttp(error: unknown): never {
     // carries just the status, since a gateway's raw error body is not
     // something to render to whoever happens to be standing there.
     logger.error(`Refund rejected by MercadoPago — status ${error.status}, body: ${error.body}`);
+
+    // A 401 is NOT a passing upstream hiccup: MercadoPago is refusing the
+    // credentials themselves, and every retry from now until someone changes
+    // the configuration will fail identically. Telling the person at the
+    // counter to "intentar en unos minutos" would send them into a loop that
+    // cannot end — the honest answer is that this needs the owner, not
+    // patience. Diagnosed live against a real rejection:
+    // `unauthorized use of live credentials`, returned because the seller
+    // credentials belong to a MercadoPago TEST user while the payment is
+    // `live_mode`, a mismatch no amount of retrying resolves.
+    if (error.status === 401) {
+      throw new BadGatewayException({
+        message:
+          'MercadoPago rechazó la devolución porque no acepta las credenciales de la cuenta. No es algo que se resuelva reintentando: avisale al dueño para que revise la configuración de MercadoPago. El turno quedó como estaba.',
+        providerStatus: error.status,
+        retryable: false,
+      });
+    }
+
     throw new BadGatewayException({
       message:
         'MercadoPago rechazó la devolución de la seña, así que el turno no se canceló. Volvé a intentarlo en unos minutos.',
       providerStatus: error.status,
+      retryable: true,
     });
   }
 

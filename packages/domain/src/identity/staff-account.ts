@@ -44,10 +44,22 @@ export interface StaffAccountRepository {
    *  second account for the same person. */
   findByBarberId(barberId: string): Promise<StaffAccount | null>;
 
-  /** `users.email` is UNIQUE, so at most one account can ever match. Used
-   *  to reject an alta that would collide with an existing account before
-   *  the database raises a constraint error at the HTTP boundary. */
+  /** The STAFF account with this email, if any. Scoped to staff on purpose —
+   *  a client account is not a staff account and must not be returned as
+   *  one. Use `isEmailInUse` to answer "can this email be claimed", which is
+   *  a different, wider question. */
   findByEmail(email: string): Promise<StaffAccount | null>;
+
+  /**
+   * Whether ANY `users` row already claims this email — staff or client.
+   *
+   * `users.email` carries a single UNIQUE constraint across the whole table,
+   * so "is this email free" can never be answered by looking at staff rows
+   * alone. It was, and inviting a barber whose address already existed as a
+   * CLIENT account passed the check and then died on the constraint with a
+   * 23505 — the owner saw a 500 instead of "ese email ya está en uso".
+   */
+  isEmailInUse(email: string): Promise<boolean>;
 
   findById(userId: string): Promise<StaffAccount | null>;
 

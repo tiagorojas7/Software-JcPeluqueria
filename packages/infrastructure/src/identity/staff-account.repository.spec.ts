@@ -100,6 +100,24 @@ describe('DrizzleStaffAccountRepository (Testcontainers)', () => {
     expect(await repo.findByEmail('cliente@jc.test')).toBeNull();
   });
 
+  // The failure the shop actually hit: inviting a barber with an address that
+  // already belonged to a CLIENT account passed the staff-scoped check and
+  // then died on `users_email_unique` (23505) as a 500. The constraint covers
+  // the whole table, so the availability question has to as well.
+  it('reports a CLIENT-owned email as in use, even though it is not a staff account', async () => {
+    const clientId = randomUUID();
+    await client`insert into clients (id, name, phone) values (${clientId}, 'Tiago', '3510000002')`;
+    await client`insert into users (id, email, client_id) values (${randomUUID()}, 'tiago@jc.test', ${clientId})`;
+    const repo = new DrizzleStaffAccountRepository(db);
+
+    // Not a staff account...
+    expect(await repo.findByEmail('tiago@jc.test')).toBeNull();
+    // ...but the address is taken all the same, which is what decides whether
+    // an alta may claim it.
+    expect(await repo.isEmailInUse('tiago@jc.test')).toBe(true);
+    expect(await repo.isEmailInUse('libre@jc.test')).toBe(false);
+  });
+
   it('revokes and restores access, and reports false for an id nobody has', async () => {
     const barberId = await newBarber('Acceso');
     const repo = new DrizzleStaffAccountRepository(db);

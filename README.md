@@ -517,22 +517,38 @@ criterio de aceptación distinto y más duro:
 | Pendiente | Por qué |
 |-----------|---------|
 | **Pago real de punta a punta** | Necesita una cuenta comprador de prueba de MercadoPago. La cadena aprobación → webhook → `deposits` → turno `reservado` → mail de confirmación no se puede simular, y es lo único que falta del viaje del cliente |
-| **A.7 · reembolso al vencer un hold** | La rama `refunded-and-notified` de `ExpireHold` exige un reembolso exitoso contra MercadoPago real. Las otras dos ramas ya están probadas en vivo |
+| **Reembolsos: el vendedor es un usuario de prueba** | **Bloqueante y no es código.** Las credenciales del `.env` pertenecen a un *test user* de MercadoPago, pero los pagos entran como `live_mode: true` con plata real. Cobrar funciona; **devolver no**: el refund responde `401 unauthorized use of live credentials`. Hay que elegir un entorno y quedarse ahí — ver el recuadro debajo de esta tabla |
+| **A.7 · reembolso al vencer un hold** | La rama `refunded-and-notified` de `ExpireHold` exige un reembolso exitoso contra MercadoPago real. Bloqueada por la fila de arriba: sin credenciales coherentes no hay reembolso posible |
 | **B.7 · click-through completo del panel** | Las acciones están verificadas por HTTP contra PostgreSQL real y por tests sobre los componentes de producción, pero falta la sesión de navegador entera |
 | **E.3 · ofertas por ausencia en pantalla** | La mitad del recordatorio de 2h está verificada; falta marcar un barbero ausente desde el panel y ver salir la oferta |
 | **Cambios de UX/UI** | El dueño los define después de terminar de probar |
 | **Aterrizar a `main`** | `main` sigue en `2173dac`, solo documentación. Hay 21 PRs abiertos y el trabajo vive en `feat/turnero-integracion` |
 | **Producción** | Deploy, dominio, HTTPS, backups, monitoreo |
 
+> #### El entorno de MercadoPago está mezclado, y por eso no se puede devolver
+>
+> Diagnosticado contra la API real, no deducido: el token del `.env` pertenece a un **usuario de prueba** (`tags: ["test_user"]`) y es quien cobra (`collector_id`), pero los pagos vuelven con `live_mode: true` y montos reales en pesos. Cobrar funciona. Devolver no: `POST /v1/payments/{id}/refunds` responde **`401 unauthorized use of live credentials`**.
+>
+> Un vendedor de prueba no está autorizado a mover plata real, así que **ningún cambio de código lo arregla** — y reintentar tampoco, que es justo lo que la pantalla le pedía al mostrador antes de este arreglo.
+>
+> Hay que elegir **uno** de los dos entornos y quedarse entero adentro:
+>
+> | | Vendedor | Comprador | `MERCADOPAGO_SANDBOX` | Plata |
+> |---|---|---|---|---|
+> | **Prueba** | Usuario de prueba (el actual) | **Otro usuario de prueba** + tarjetas de prueba | `true` | Ficticia |
+> | **Producción** | Credenciales de la cuenta real de la barbería | Cliente real | `false` | Real |
+>
+> Lo que hay hoy es un vendedor de prueba con un comprador que pagó de verdad: la única combinación que no funciona. Y mientras siga así, **cada reserva de prueba cobra plata real** que ese vendedor no puede devolver.
+
 ### Estado de la suite
 
 | Paquete | Archivos | Tests |
 |---------|:---:|:---:|
 | `domain` | 12 | 64 |
-| `application` | 44 | 240 |
+| `application` | 44 | 242 |
 | `apps/web` | 33 | 177 |
-| `apps/api` | 19 | 146 |
-| **Total rápido** | **108** | **627** |
+| `apps/api` | 19 | 147 |
+| **Total rápido** | **108** | **630** |
 
 `infrastructure` corre aparte: sus suites levantan un PostgreSQL real con
 Testcontainers, así que tardan minutos en vez de segundos. En cada corrida

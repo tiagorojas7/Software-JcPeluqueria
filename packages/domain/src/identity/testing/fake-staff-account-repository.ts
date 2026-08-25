@@ -5,6 +5,7 @@ import type { CreateStaffAccountInput, StaffAccount, StaffAccountRepository } fr
  *  `FakeClientAccountRepository` plays for `ClientAccountRepository`. */
 export class FakeStaffAccountRepository implements StaffAccountRepository {
   private readonly byId = new Map<string, StaffAccount>();
+  private readonly otherEmails = new Set<string>();
   private nextId = 1;
 
   async findByBarberId(barberId: string): Promise<StaffAccount | null> {
@@ -27,6 +28,20 @@ export class FakeStaffAccountRepository implements StaffAccountRepository {
 
   async findById(userId: string): Promise<StaffAccount | null> {
     return this.byId.get(userId) ?? null;
+  }
+
+  async isEmailInUse(email: string): Promise<boolean> {
+    if (this.otherEmails.has(email)) {
+      return true;
+    }
+    return (await this.findByEmail(email)) !== null;
+  }
+
+  /** Test-only: a `users` row that is NOT a staff account — a client
+   *  account — already holding this address. Stands in for the half of the
+   *  UNIQUE constraint that `listByRole`/`findByEmail` cannot see. */
+  seedNonStaffEmail(email: string): void {
+    this.otherEmails.add(email);
   }
 
   async listByRole(role: Role): Promise<StaffAccount[]> {

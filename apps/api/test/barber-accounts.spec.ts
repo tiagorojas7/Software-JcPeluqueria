@@ -267,6 +267,23 @@ describe('Panel: cuentas de barberos (App Nest levantada en memoria)', () => {
     expect(response.status).toBe(409);
   });
 
+  // El 23505 que vio el dueno: invitar con un email que ya era cuenta de
+  // CLIENTE pasaba el chequeo (que solo miraba personal) y moria contra
+  // users_email_unique como un 500.
+  it('409, no 500, cuando el email ya pertenece a una cuenta de cliente', async () => {
+    staffAccounts.seedNonStaffEmail('cliente.existente@jc.test');
+    const barbers = app.get<FakeBarberRepository>(BARBER_REPOSITORY);
+    await barbers.create(createBarber({ id: 'barber-colision', name: 'Colision', active: true }));
+
+    const response = await withSession(request(app.getHttpServer()).post('/panel/barber-accounts'), OWNER_SESSION).send({
+      barberId: 'barber-colision',
+      email: 'cliente.existente@jc.test',
+    });
+
+    expect(response.status).toBe(409);
+    expect(outbox.enqueued).toEqual([]);
+  });
+
   it('404 al invitar a un barbero que no existe', async () => {
     const response = await withSession(request(app.getHttpServer()).post('/panel/barber-accounts'), OWNER_SESSION).send({
       barberId: '11111111-1111-4111-8111-111111111111',

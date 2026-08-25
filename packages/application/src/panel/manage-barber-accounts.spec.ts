@@ -100,6 +100,30 @@ describe('ManageBarberAccountsUseCase', () => {
     expect(await accounts.findByBarberId('barber-2')).toBeNull();
   });
 
+  // RED — reproduces the exact failure the shop hit: inviting a barber with
+  // an address that already existed as a CLIENT account died on
+  // `users_email_unique` (Postgres 23505) and surfaced as a 500. The
+  // collision check only looked at STAFF rows, but the UNIQUE constraint
+  // covers the whole `users` table — client accounts included.
+  it('refuses an email already used by a CLIENT account, instead of dying on the unique constraint', async () => {
+    const { useCase, accounts, outbox } = await withBarber();
+    accounts.seedNonStaffEmail('tiago@jc.test');
+
+    const result = await useCase.invite({ barberId: 'barber-1', email: 'tiago@jc.test' });
+
+    expect(result).toEqual({ outcome: 'email-taken' });
+    expect(await accounts.findByBarberId('barber-1')).toBeNull();
+    expect(outbox.enqueued).toEqual([]);
+  });
+
+  it('reports a client-owned email as unavailable for an alta too', async () => {
+    const { useCase, accounts } = build();
+    accounts.seedNonStaffEmail('tiago@jc.test');
+
+    expect(await useCase.emailAvailable('tiago@jc.test')).toBe(false);
+    expect(await useCase.emailAvailable('libre@jc.test')).toBe(true);
+  });
+
   it('resends the invite with a FRESH secret — the previous link stops working', async () => {
     const { useCase, accounts, outbox } = await withBarber();
     await useCase.invite({ barberId: 'barber-1', email: 'juan@jc.test' });

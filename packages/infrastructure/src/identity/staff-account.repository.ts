@@ -38,6 +38,18 @@ export class DrizzleStaffAccountRepository implements StaffAccountRepository {
     return this.selectOne(eq(users.id, userId));
   }
 
+  /**
+   * Deliberately NOT joined to `roles` — this is the only query in this file
+   * that asks about the `users` table as a whole, because it answers a
+   * question about the whole table: `users.email` is UNIQUE across staff and
+   * client rows alike. Joining here would reproduce the bug it exists to
+   * prevent (a client's address passing the check and dying on 23505).
+   */
+  async isEmailInUse(email: string): Promise<boolean> {
+    const rows = await this.db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    return rows.length > 0;
+  }
+
   async listByRole(role: Role): Promise<StaffAccount[]> {
     const rows = await this.db
       .select({
