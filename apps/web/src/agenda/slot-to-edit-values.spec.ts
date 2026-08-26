@@ -10,6 +10,7 @@ function aSlot(overrides: Partial<DayBoardSlot> = {}): DayBoardSlot {
     serviceId: 'service-1',
     serviceName: 'Corte clasico',
     status: 'reservado',
+    channel: 'web',
     startsAt: '2026-09-01T13:00:00.000Z',
     endsAt: '2026-09-01T13:30:00.000Z',
     allowedActions: ['edit'],

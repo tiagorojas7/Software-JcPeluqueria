@@ -1,4 +1,5 @@
 import type { ActorContext } from '../access-control';
+import type { OccupancyChannel } from '../booking/hold';
 
 export interface DayBoardSlotRecord {
   readonly id: string;
@@ -16,6 +17,10 @@ export interface DayBoardSlotRecord {
   /** Raw `slot_occupancies.status` — see `DayBoardRepository`'s own doc
    *  comment on why this stays a string here. */
   readonly status: string;
+  /** Raw `slot_occupancies.channel` — how the turno entered the system.
+   *  Persisted since the payments migration and never selected until now, so
+   *  the panel had to infer a walk-in from missing client data. */
+  readonly channel: OccupancyChannel;
   readonly startsAt: Date;
   readonly endsAt: Date;
 }
@@ -23,6 +28,11 @@ export interface DayBoardSlotRecord {
 export interface DayBoardColumnRecord {
   readonly barberId: string;
   readonly barberName: string;
+  /** The barber's `HH:mm` working window for the requested date, or `null`
+   *  on both when they do not work that day. See `DayBoardColumn` in
+   *  `@jc-barberia/contracts` for why this cannot be derived downstream. */
+  readonly opensAt: string | null;
+  readonly closesAt: string | null;
 }
 
 export interface DayBoardQueryResult {

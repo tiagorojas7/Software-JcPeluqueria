@@ -22,6 +22,22 @@ export type SlotAction = (typeof SLOT_ACTIONS)[number];
 export interface DayBoardColumn {
   readonly barberId: string;
   readonly barberName: string;
+  /**
+   * The barber's working hours for THIS date (`HH:mm`, shop-local), or `null`
+   * when they do not work that day.
+   *
+   * Not derivable in the browser, which is why it travels: a day with no
+   * turnos says nothing about the schedule, and a day with turnos says only
+   * when there was activity — never when the barber opens. Without it the
+   * panel cannot draw the column's real extent, and cannot tell an empty
+   * morning apart from a morning the barber does not work.
+   *
+   * `null` on both is the deliberate shape for "no trabaja": an absent
+   * schedule row, not `00:00`–`00:00`, which would read as a real window of
+   * zero length.
+   */
+  readonly opensAt: string | null;
+  readonly closesAt: string | null;
 }
 
 export interface DayBoardSlot {
@@ -41,6 +57,17 @@ export interface DayBoardSlot {
    * pre-empting that type.
    */
   readonly status: string;
+  /**
+   * How this turno entered the system — `web` | `telefonico` | `walk_in`,
+   * straight from `slot_occupancies.channel`.
+   *
+   * The panel used to guess it from what was MISSING: no `clientPhone` meant
+   * "probably a walk-in". That never held — a phone turno can lack an age, a
+   * walk-in can have a phone on file — so the operator was reading absence of
+   * data as if it were data. The column was always persisted; it simply never
+   * left the database.
+   */
+  readonly channel: string;
   /** ISO instants. */
   readonly startsAt: string;
   readonly endsAt: string;

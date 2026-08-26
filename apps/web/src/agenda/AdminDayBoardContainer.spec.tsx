@@ -7,8 +7,8 @@ import { AdminDayBoardContainer } from './AdminDayBoardContainer';
 const dayBoard: DayBoardResponse = {
   date: '2026-08-20',
   columns: [
-    { barberId: 'barber-1', barberName: 'Juan' },
-    { barberId: 'barber-2', barberName: 'Ana' },
+    { barberId: 'barber-1', barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+    { barberId: 'barber-2', barberName: 'Ana', opensAt: '09:00', closesAt: '18:00' },
   ],
   slots: [
     {
@@ -17,6 +17,7 @@ const dayBoard: DayBoardResponse = {
       serviceId: 'service-1',
       serviceName: 'Corte clasico',
       status: 'reservado',
+      channel: 'web',
       startsAt: '2026-08-20T12:00:00.000Z',
       endsAt: '2026-08-20T12:30:00.000Z',
       clientName: 'Marcos',
@@ -29,6 +30,7 @@ const dayBoard: DayBoardResponse = {
       serviceId: 'service-2',
       serviceName: 'Corte + Barba',
       status: 'held',
+      channel: 'web',
       startsAt: '2026-08-20T13:00:00.000Z',
       endsAt: '2026-08-20T13:30:00.000Z',
       allowedActions: [],

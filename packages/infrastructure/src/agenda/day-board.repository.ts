@@ -35,7 +35,7 @@ export class DrizzleDayBoardRepository implements DayBoardRepository {
         ? await this.selectSlots().where(and(inWindow, eq(slotOccupancies.barberId, actor.barberId)))
         : await this.selectSlots().where(inWindow);
 
-    const columns = await this.columnsFor(actor, slots);
+    const columns = await this.columnsFor(actor, slots, calendarDate);
 
     return { columns, slots };
   }
@@ -55,9 +55,11 @@ export class DrizzleDayBoardRepository implements DayBoardRepository {
    * gratis: un barbero nunca puede ganar la columna de un colega por esta
    * via.
    */
-  private async columnsFor(actor: ActorContext, slots: readonly { barberId: string }[]) {
+  private async columnsFor(actor: ActorContext, slots: readonly { barberId: string }[], calendarDate: string) {
+    const dayOfWeek = dayOfWeekOf(calendarDate);
+
     if (actor.barberId !== undefined) {
-      return this.selectColumns().where(eq(barbers.id, actor.barberId));
+      return this.selectColumns(dayOfWeek).where(eq(barbers.id, actor.barberId));
     }
 
     const withSlots = [...new Set(slots.map((slot) => slot.barberId))];
@@ -66,11 +68,36 @@ export class DrizzleDayBoardRepository implements DayBoardRepository {
         ? or(eq(barbers.active, true), inArray(barbers.id, withSlots))
         : eq(barbers.active, true);
 
-    return this.selectColumns().where(visible);
+    return this.selectColumns(dayOfWeek).where(visible);
   }
 
-  private selectColumns() {
-    return this.db.select({ barberId: barbers.id, barberName: barbers.name }).from(barbers);
+  /**
+   * The schedule is a LEFT join, and the day of week is part of the join
+   * condition rather than a `WHERE`: a barber who does not work the requested
+   * day must still get a COLUMN — with `null` hours — never disappear from
+   * the board. Moving that predicate into the `WHERE` would silently drop
+   * exactly the barbers whose absence the panel needs to show.
+   *
+   * `(barber_id, day_of_week)` is UNIQUE (see the schema), so this join can
+   * never multiply a barber's row.
+   *
+   * `opens_at`/`closes_at` are `time` columns; Postgres renders them as
+   * `HH:mm:ss` and the contract speaks `HH:mm`, so they are trimmed here —
+   * the same shop-local wall-clock vocabulary `BarberSchedule` already uses.
+   */
+  private selectColumns(dayOfWeek: number) {
+    return this.db
+      .select({
+        barberId: barbers.id,
+        barberName: barbers.name,
+        opensAt: sql<string | null>`substring(${barberSchedules.opensAt}::text from 1 for 5)`,
+        closesAt: sql<string | null>`substring(${barberSchedules.closesAt}::text from 1 for 5)`,
+      })
+      .from(barbers)
+      .leftJoin(
+        barberSchedules,
+        and(eq(barberSchedules.barberId, barbers.id), eq(barberSchedules.dayOfWeek, dayOfWeek)),
+      );
   }
 
   private selectSlots() {
@@ -94,6 +121,7 @@ export class DrizzleDayBoardRepository implements DayBoardRepository {
         clientAge: clients.age,
         clientPhone: clients.phone,
         status: slotOccupancies.status,
+        channel: slotOccupancies.channel,
         startsAt: sql`lower(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
         endsAt: sql`upper(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
       })

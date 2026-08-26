@@ -29,6 +29,7 @@ const baseSlot: DayBoardSlot = {
   serviceId: 'service-1',
   serviceName: 'Corte clasico',
   status: 'reservado',
+  channel: 'web',
   startsAt: '2026-09-01T13:00:00.000Z',
   endsAt: '2026-09-01T13:30:00.000Z',
   allowedActions: ['edit', 'cancel', 'mark-completed'],
@@ -36,7 +37,7 @@ const baseSlot: DayBoardSlot = {
 
 const initialBoard: DayBoardResponse = {
   date: '2026-09-01',
-  columns: [{ barberId: 'barber-1', barberName: 'Juan' }],
+  columns: [{ barberId: 'barber-1', barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' }],
   slots: [baseSlot],
 };
 

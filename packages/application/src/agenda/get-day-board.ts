@@ -50,6 +50,7 @@ export class GetDayBoardUseCase {
       serviceId: slot.serviceId,
       serviceName: slot.serviceName,
       status: slot.status,
+      channel: slot.channel,
       startsAt: slot.startsAt.toISOString(),
       endsAt: slot.endsAt.toISOString(),
       clientName: slot.clientName ?? undefined,

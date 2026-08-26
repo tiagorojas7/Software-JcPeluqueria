@@ -27,6 +27,36 @@
   display: contents;
 }
 
+/* The pendientes banner spans the whole grid and sits above every column:
+   README §"El personal se olvida de marcar los turnos" — these have to be
+   the first thing seen on opening the panel, or they pile up and the shop
+   loses the record of what was actually done.
+
+   `[role='status']` is styled green in tokens.css as a success message.
+   This is a warning, so the selector is deliberately two classes' worth of
+   specificity to win regardless of stylesheet order. */
+.day-board__pending[role='status'] {
+  grid-column: 1 / -1;
+  margin: 0 0 var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--status-sin-registrado);
+  border-radius: var(--radius-sm);
+  background: var(--status-sin-registrado-bg);
+  color: var(--status-sin-registrado);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* Counts per barber, so nobody has to tally rows to answer "how did today
+   go for Ana". Each count is tinted with its own status, reusing the badge
+   colours the slots below already use. */
+.day-board__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+
 .day-board__column {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
@@ -36,9 +66,17 @@
 }
 
 .day-board__column h3 {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+/* The barber's real extent for the day, so an empty morning reads
+   differently from a morning they do not work. */
+.day-board__hours {
+  margin: 0 0 var(--space-3);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--color-line);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
 }
 
 .day-board__column > ul {
@@ -92,9 +130,27 @@
 }
 
 .day-board__service {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-ink);
+}
+
+/* Origin is shown only for the two exceptions — a walk-in and a turno taken
+   over the phone. An online booking is the normal path and carries no chip,
+   so these two stay noticeable instead of becoming wallpaper. */
+.day-board__channel {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--color-line-strong);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  white-space: nowrap;
 }
 
 .day-board__client,

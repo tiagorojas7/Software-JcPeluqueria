@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appointmentStatusLabel } from './appointment-status';
+import { appointmentStatusCountLabel, appointmentStatusLabel } from './appointment-status';
 
 // One source of truth for status wording: the day board and the client's
 // account page render the same appointment and must not call its state two
@@ -27,5 +27,28 @@ describe('appointmentStatusLabel', () => {
   // an unexpected status visible instead of rendering an empty badge.
   it('falls back to the raw value for a status it does not know', () => {
     expect(appointmentStatusLabel('held')).toBe('held');
+  });
+});
+
+describe('appointmentStatusCountLabel', () => {
+  it.each([
+    ['realizado', 2, '2 realizados'],
+    ['reservado', 3, '3 reservados'],
+    ['cancelado', 4, '4 cancelados'],
+    ['ausente', 5, '5 ausentes'],
+  ])('pluralises %s', (status, count, expected) => {
+    expect(appointmentStatusCountLabel(status, count)).toBe(expected);
+  });
+
+  it('keeps the singular for exactly one', () => {
+    expect(appointmentStatusCountLabel('realizado', 1)).toBe('1 realizado');
+  });
+
+  // "sin registrar" is a prepositional phrase, not an adjective: it does not
+  // take an `s`. Appending one the way the other four statuses allow would
+  // produce "sin registrars".
+  it('does not inflect "sin registrar" in the plural', () => {
+    expect(appointmentStatusCountLabel('sin_registrado', 2)).toBe('2 sin registrar');
+    expect(appointmentStatusCountLabel('sin_registrado', 1)).toBe('1 sin registrar');
   });
 });
