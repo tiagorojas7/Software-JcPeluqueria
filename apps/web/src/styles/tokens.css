@@ -7,37 +7,104 @@
  * colour, size and gap used anywhere in the app should trace back to one of
  * the custom properties declared below.
  *
- * Brand: black, white and grey only. No blue, no purple, no invented accent
- * — including the browser's own defaults (link colour, visited links, focus
- * rings), which are overridden explicitly below. Near-black rather than pure
- * #000 for large areas; a small grey ramp carries hierarchy instead of
- * colour, matching a real barbershop's signage rather than a dashboard
- * template.
+ * Brand: JC Salón Masculino's own identity — near-black grounds, a warm
+ * tobacco/champagne accent, Barlow Condensed for display and Montserrat for
+ * body. The shop's signage, walls and furniture are dark with warm leather
+ * tones; a light dashboard template would look like someone else's product.
+ * The browser's own defaults (link colour, visited links, focus rings) are
+ * still overridden explicitly below so no stray blue ever appears.
+ *
+ * Token NAMES are stable on purpose: `--color-ink` is always "the text
+ * colour" and `--color-paper` always "the page ground", whatever their
+ * values. Screens keep working when the palette moves.
  */
 
 :root {
-  /* Palette — black, white, grey. No hue anywhere in this list. */
-  --color-ink: #17140f;
-  --color-ink-soft: #4a453e;
-  --color-paper: #f7f5f1;
-  --color-paper-alt: #ece8e1;
-  --color-surface: #ffffff;
-  --color-line: #d8d3c8;
-  --color-line-strong: #b6b0a2;
-  --color-muted: #756f64;
-  --color-on-ink: #f7f5f1;
+  /* Palette — near-black grounds, warm accent, off-white type. */
+  --color-ink: #f3f0ea;
+  --color-ink-soft: rgba(243, 240, 234, 0.74);
+  --color-paper: #0a0a0a;
+  --color-paper-alt: #141210;
+  --color-surface: #1a1714;
+  --color-line: rgba(243, 240, 234, 0.12);
+  --color-line-strong: rgba(243, 240, 234, 0.24);
+  --color-muted: rgba(243, 240, 234, 0.54);
+  --color-on-ink: #0a0a0a;
+
+  /* Brand accent — the only hue in the product. Used for the primary action
+     and for anything the eye must land on first. `--color-on-accent` is
+     white rather than the paper black: tobacco is dark enough that white
+     type clears 4.5:1 while black type does not. */
+  --color-accent: #8b5e3a;
+  --color-accent-strong: linear-gradient(135deg, #9c6b41, #6e4b2c);
+  --color-accent-hover: linear-gradient(135deg, #ad7a4c, #7a5432);
+  --color-accent-border: #7a5230;
+  --color-accent-soft: rgba(139, 94, 58, 0.16);
+  --color-on-accent: #ffffff;
+  --color-champagne: #cdbba1;
+
+  /* Pure white, reserved for headings and for type sitting on the accent.
+     Body copy uses `--color-ink`, which is warmer and softer; full white
+     everywhere would glare against a near-black ground. */
+  --color-heading: #ffffff;
+
+  /* A card that must lift off the page. Flat `--color-surface` is the plain
+     version; this one adds the top-lit falloff that separates a card from
+     the ground without a heavier border. */
+  --surface-card: linear-gradient(165deg, #1e1a16 0%, #141210 100%);
+
+  /* The specular top edge every accent-filled control shares. */
+  --sheen: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --sheen-hover: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --glow-accent: 0 10px 26px rgba(139, 94, 58, 0.4);
+
+  /* A gold hairline that fades out at both ends — how one full-bleed band
+     separates from the next on a page that is dark end to end. */
+  --rule-gold: linear-gradient(
+    90deg,
+    transparent,
+    rgba(139, 94, 58, 0.65) 18%,
+    rgba(205, 187, 161, 0.75) 50%,
+    rgba(139, 94, 58, 0.65) 82%,
+    transparent
+  );
+  --band-alt: linear-gradient(180deg, #181410, #131110);
 
   /* Functional colours (status only, never brand) — desaturated so they
-     read as signals, not as decoration on top of the black/white identity. */
-  --color-danger: #7a2b24;
-  --color-danger-bg: #f5e9e7;
-  --color-success-text: #2c4a2a;
-  --color-success-bg: #eaf0e6;
+     read as signals against the dark ground, not as decoration. */
+  --color-danger: #c98a7c;
+  --color-danger-bg: rgba(201, 138, 124, 0.12);
+  --color-success-text: #8fb582;
+  --color-success-bg: rgba(143, 181, 130, 0.12);
 
-  /* Type: one system stack, no serif/display swap — weight, size, spacing
-     and case carry hierarchy instead. */
+  /* Appointment statuses — the domain's five values, one token pair each
+     (`packages/domain/src/appointments/appointment-status.ts`). Colour is
+     never the only carrier: every badge in the app pairs these with an icon
+     and the status word, so the panel stays operable without colour vision.
+     `sin_registrado` is deliberately the loudest: it is the one state that
+     demands a human decision before the day can close. */
+  --status-reservado: #c6a87c;
+  --status-reservado-bg: rgba(198, 168, 124, 0.13);
+  --status-reservado-ring: inset 0 0 0 1px rgba(198, 168, 124, 0.35);
+  --status-realizado: #8fb582;
+  --status-realizado-bg: rgba(143, 181, 130, 0.13);
+  --status-realizado-ring: inset 0 0 0 1px rgba(143, 181, 130, 0.35);
+  --status-sin-registrado: #e0a458;
+  --status-sin-registrado-bg: rgba(224, 164, 88, 0.15);
+  --status-sin-registrado-ring: inset 0 0 0 1px rgba(224, 164, 88, 0.45);
+  --status-sin-registrado-border: rgba(224, 164, 88, 0.35);
+  --status-ausente: #c97f6e;
+  --status-ausente-bg: rgba(201, 127, 110, 0.14);
+  --status-ausente-ring: inset 0 0 0 1px rgba(201, 127, 110, 0.35);
+  --status-cancelado: rgba(243, 240, 234, 0.5);
+  --status-cancelado-bg: rgba(243, 240, 234, 0.06);
+
+  /* Type: a condensed display face for headings and numbers, a legible
+     humanist sans for everything else. Both carry a full fallback stack —
+     the Google Fonts link in `index.html` can fail. */
+  --font-display: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
   --font-body:
-    -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    'Montserrat', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
@@ -67,10 +134,12 @@
   --radius-md: 12px;
   --radius-pill: 999px;
 
-  --shadow-card: 0 1px 2px rgba(23, 20, 15, 0.06), 0 8px 24px rgba(23, 20, 15, 0.08);
-  --shadow-header: 0 1px 0 rgba(23, 20, 15, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.34);
+  --shadow-header: 0 1px 0 rgba(243, 240, 234, 0.08);
 
-  --focus-ring: 0 0 0 3px rgba(23, 20, 15, 0.18);
+  /* Champagne rather than ink: on a near-black ground an ink ring is
+     invisible, and an invisible focus ring is no focus ring. */
+  --focus-ring: 0 0 0 3px rgba(205, 187, 161, 0.55);
 
   /* Two content widths: the public storefront reads open and airy; the
      panel is a denser work tool. */
@@ -95,14 +164,30 @@ body,
 body {
   margin: 0;
   font-family: var(--font-body);
-  background: var(--color-paper);
+  background-color: var(--color-paper);
   color: var(--color-ink);
   line-height: var(--leading-normal);
   font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* A hair of texture so large dark areas read as material rather than as
+     an empty void. Two cheap gradients, no image request. */
+  background-image:
+    repeating-linear-gradient(
+      135deg,
+      rgba(205, 187, 161, 0.035) 0,
+      rgba(205, 187, 161, 0.035) 1px,
+      transparent 1px,
+      transparent 26px
+    ),
+    radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: auto, 3px 3px;
+  background-attachment: fixed;
 }
 
+/* Headings carry the brand: condensed, uppercase, tightly set. Positive
+   tracking rather than negative — condensed uppercase closes up on its own
+   and needs air, not less of it. */
 h1,
 h2,
 h3,
@@ -110,11 +195,12 @@ h4,
 h5,
 h6 {
   margin: 0 0 0.5em;
-  font-family: inherit;
+  font-family: var(--font-display);
   font-weight: 800;
   line-height: var(--leading-tight);
-  letter-spacing: -0.01em;
-  color: var(--color-ink);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--color-heading);
 }
 
 h1 {
@@ -153,16 +239,17 @@ svg {
 /* Links: explicitly overridden, including :visited, so the browser default
    blue/purple never appears anywhere in the app. */
 a {
-  color: var(--color-ink);
+  color: var(--color-champagne);
   text-decoration-color: var(--color-line-strong);
   text-underline-offset: 3px;
+  transition: color 0.15s ease;
 }
 a:visited {
-  color: var(--color-ink);
+  color: var(--color-champagne);
 }
 a:hover {
-  color: var(--color-ink);
-  text-decoration-color: var(--color-ink);
+  color: var(--color-accent);
+  text-decoration-color: var(--color-accent);
 }
 
 /* Focus is always visible and always neutral (ink), never the platform's
@@ -216,14 +303,24 @@ textarea {
 input:hover,
 select:hover,
 textarea:hover {
-  border-color: var(--color-ink-soft);
+  border-color: var(--color-accent);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--color-ink);
+  border-color: var(--color-accent);
   box-shadow: var(--focus-ring);
+}
+
+/* The browser paints native date/time pickers and select arrows in its own
+   dark-on-light scheme; without this they render as black glyphs on the
+   dark field and disappear. */
+input[type='date'],
+input[type='time'],
+input[type='datetime-local'],
+select {
+  color-scheme: dark;
 }
 
 input:disabled,
@@ -263,34 +360,41 @@ button {
   min-height: 44px;
   padding: 10px 22px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-ink);
-  background: var(--color-ink);
-  color: var(--color-on-ink);
+  border: 1px solid var(--color-accent-border);
+  background: var(--color-accent-strong);
+  color: var(--color-on-accent);
+  box-shadow: var(--sheen);
   font-family: inherit;
   font-size: var(--text-sm);
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
   cursor: pointer;
   transition:
-    background 0.15s ease,
+    background 0.18s ease,
     color 0.15s ease,
-    border-color 0.15s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
     transform 0.05s ease;
 }
 
 button:hover {
-  background: var(--color-ink-soft);
-  border-color: var(--color-ink-soft);
+  background: var(--color-accent-hover);
+  box-shadow:
+    var(--sheen-hover),
+    var(--glow-accent);
 }
 
 button:active {
   transform: translateY(1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 button:disabled {
   background: var(--color-line);
   border-color: var(--color-line);
   color: var(--color-muted);
+  box-shadow: none;
   cursor: not-allowed;
   transform: none;
 }
@@ -298,12 +402,15 @@ button:disabled {
 button[type='button'],
 button.btn-ghost {
   background: transparent;
+  border-color: var(--color-line-strong);
   color: var(--color-ink);
+  box-shadow: none;
 }
 button[type='button']:hover,
 button.btn-ghost:hover {
-  background: var(--color-paper-alt);
-  border-color: var(--color-ink);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  box-shadow: none;
 }
 button[type='button']:disabled,
 button.btn-ghost:disabled {
@@ -313,13 +420,13 @@ button.btn-ghost:disabled {
 }
 
 button.btn-primary {
-  background: var(--color-ink);
-  border-color: var(--color-ink);
-  color: var(--color-on-ink);
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-border);
+  color: var(--color-on-accent);
+  box-shadow: var(--sheen);
 }
 button.btn-primary:hover {
-  background: var(--color-ink-soft);
-  border-color: var(--color-ink-soft);
+  background: var(--color-accent-hover);
 }
 
 /* ---------- Status ---------- */

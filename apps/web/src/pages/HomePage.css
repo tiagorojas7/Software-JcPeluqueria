@@ -1,6 +1,14 @@
+/* The page ground is already near-black, so the hero earns its separation
+   with warmth and light rather than with a darker fill: a tobacco glow off
+   the top-right corner and a champagne hairline closing it off. */
 .home__hero {
-  background: var(--color-ink);
-  color: var(--color-on-ink);
+  position: relative;
+  overflow: hidden;
+  background-image:
+    radial-gradient(720px 420px at 82% 8%, rgba(139, 94, 58, 0.2), transparent 60%),
+    radial-gradient(560px 380px at 8% 92%, rgba(205, 187, 161, 0.09), transparent 62%);
+  color: var(--color-ink);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .home__hero-inner {
@@ -17,16 +25,17 @@
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--color-line);
+  color: var(--color-accent);
 }
 
 .home__hero h1 {
-  color: var(--color-on-ink);
+  color: var(--color-heading);
   margin-bottom: 0;
+  text-wrap: balance;
 }
 
 .home__hero-inner > p {
-  color: var(--color-paper-alt);
+  color: var(--color-ink-soft);
   font-size: var(--text-md);
   max-width: 48ch;
   margin: 0;
@@ -35,27 +44,42 @@
 .home__cta {
   display: inline-block;
   margin-top: var(--space-2);
-  background: var(--color-on-ink);
-  color: var(--color-ink);
+  background: var(--color-accent-strong);
+  color: var(--color-on-accent);
+  border: 1px solid var(--color-accent-border);
+  box-shadow: var(--sheen);
   text-decoration: none;
   padding: 14px 32px;
   border-radius: var(--radius-sm);
   font-weight: 800;
   font-size: var(--text-sm);
-  letter-spacing: 0.02em;
-  transition: background 0.15s ease;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .home__cta:hover {
-  background: var(--color-paper-alt);
+  background: var(--color-accent-hover);
+  color: var(--color-on-accent);
+  box-shadow:
+    var(--sheen-hover),
+    var(--glow-accent);
 }
 
 .home__section {
   padding: var(--space-8) 0;
 }
 
+/* Alternate bands are separated by a gold hairline top and bottom rather
+   than by a colour step: on a near-black page a second dark fill reads as
+   nothing at all. */
 .home__section--alt {
-  background: var(--color-paper-alt);
+  background:
+    var(--rule-gold) top / 100% 1px no-repeat,
+    var(--rule-gold) bottom / 100% 1px no-repeat,
+    var(--band-alt);
 }
 
 .home__section h2 {
@@ -78,11 +102,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   margin-bottom: var(--space-3);
   border-radius: var(--radius-pill);
-  border: 1px solid var(--color-ink);
+  border: 1px solid var(--color-accent);
+  color: var(--color-champagne);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
   font-weight: 800;
 }
 
@@ -104,12 +131,22 @@
 }
 
 .home__card {
-  background: var(--color-surface);
+  background: var(--surface-card);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-card);
   text-align: center;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.home__card:hover {
+  transform: translateY(-4px);
+  border-color: var(--color-line-strong);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
 }
 
 .home__card strong {

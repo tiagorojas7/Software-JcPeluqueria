@@ -11,16 +11,18 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
-  background: var(--color-ink);
-  color: var(--color-on-ink);
+  background: var(--color-paper-alt);
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-ink);
 }
 
 .panel-layout__brand {
-  font-size: var(--text-sm);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-on-ink);
+  color: var(--color-heading);
 }
 
 .panel-layout__session {
@@ -30,10 +32,13 @@
   font-size: var(--text-sm);
 }
 
+/* The role pill is identity, not a call to action: champagne on a tinted
+   accent ground, so it reads as a label next to the brand rather than
+   competing with the panel's real buttons. */
 .panel-layout__role {
-  background: rgba(247, 245, 241, 0.14);
-  color: var(--color-on-ink);
-  border: 1px solid rgba(247, 245, 241, 0.3);
+  background: var(--color-accent-soft);
+  color: var(--color-champagne);
+  border: 1px solid var(--color-accent-border);
   border-radius: var(--radius-pill);
   padding: 3px 12px;
   font-size: var(--text-xs);
@@ -46,13 +51,16 @@
   min-height: 36px;
   padding: 6px 16px;
   background: transparent;
-  color: var(--color-on-ink);
-  border: 1px solid rgba(247, 245, 241, 0.4);
+  color: var(--color-ink-soft);
+  border: 1px solid var(--color-line-strong);
+  box-shadow: none;
 }
 
 .panel-layout__session button:hover {
-  background: rgba(247, 245, 241, 0.12);
-  border-color: var(--color-on-ink);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-ink);
+  box-shadow: none;
 }
 
 .panel-layout__body {
@@ -92,7 +100,7 @@
 .panel-layout__nav a[aria-current='page'] {
   color: var(--color-ink);
   font-weight: 700;
-  border-bottom-color: var(--color-ink);
+  border-bottom-color: var(--color-accent);
 }
 
 .panel-layout__content {

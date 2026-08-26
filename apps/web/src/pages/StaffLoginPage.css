@@ -1,16 +1,25 @@
+/* The login screen is the one place the brand stands alone, with nothing
+   else on screen to carry it: a tobacco glow off-centre behind a single
+   raised card. */
 .staff-login {
   min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-6) var(--space-4);
-  background: var(--color-ink);
+  background-image: radial-gradient(
+    620px 420px at 50% 12%,
+    rgba(139, 94, 58, 0.24),
+    transparent 62%
+  );
 }
 
 .staff-login__card {
   width: 100%;
   max-width: 380px;
-  background: var(--color-surface);
+  background: var(--surface-card);
+  border: 1px solid var(--color-line);
+  border-top: 2px solid var(--color-accent);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
   padding: var(--space-6) var(--space-5);
@@ -19,11 +28,12 @@
 .staff-login__brand {
   display: block;
   text-align: center;
-  font-size: var(--text-xs);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--color-muted);
+  color: var(--color-champagne);
   margin-bottom: var(--space-2);
 }
 
