@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { BarberRevenueResponse } from '@jc-barberia/contracts';
+import type { BarberRevenueResponse, BarberStatsResponse } from '@jc-barberia/contracts';
 
 import { RevenueSummary } from '../barbers/RevenueSummary';
 import { apiGet, describeError } from '../shared/api-client';
@@ -16,6 +16,7 @@ export function RevenuePage({ actor }: RevenuePageProps) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [revenue, setRevenue] = useState<BarberRevenueResponse | null>(null);
+  const [cutCount, setCutCount] = useState<number | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   async function handleLoad(event: FormEvent) {
@@ -24,14 +25,29 @@ export function RevenuePage({ actor }: RevenuePageProps) {
     if (!actor?.barberId) {
       return;
     }
+    const params = new URLSearchParams({ from, to });
     try {
-      const params = new URLSearchParams({ from, to });
       const response = await apiGet<BarberRevenueResponse>(
         `/barbers/${actor.barberId}/revenue?${params.toString()}`,
       );
       setRevenue(response);
     } catch (err) {
       setError(describeError(err));
+      return;
+    }
+
+    // The cut count is a separate endpoint behind a separate permission
+    // (`agenda:read:own`), so it is fetched — and allowed to fail —
+    // separately: a barber who can read their revenue but not their agenda
+    // still gets the number they came for. `undefined` means "not loaded",
+    // which `RevenueSummary` renders as simply absent, never as zero.
+    try {
+      const stats = await apiGet<BarberStatsResponse>(
+        `/barbers/${actor.barberId}/stats?${params.toString()}`,
+      );
+      setCutCount(stats.count);
+    } catch {
+      setCutCount(undefined);
     }
   }
 
@@ -68,7 +84,7 @@ export function RevenuePage({ actor }: RevenuePageProps) {
       </form>
       {revenue ? (
         <div className="card revenue-page__summary">
-          <RevenueSummary revenue={revenue} />
+          <RevenueSummary revenue={revenue} cutCount={cutCount} />
         </div>
       ) : (
         <p className="empty-state">Elegí un período para ver tu facturación teórica.</p>
