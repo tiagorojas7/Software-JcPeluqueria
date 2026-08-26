@@ -11,10 +11,26 @@ import type {
 import { PhoneAppointmentForm } from '../appointments/PhoneAppointmentForm';
 import { apiGet, apiPost, describeError } from '../shared/api-client';
 import type { Actor } from '../shared/actor';
+import { appointmentStatusLabel } from '../shared/appointment-status';
+import { utcIsoToShopLocalDate, utcIsoToShopLocalTime } from '../shared/shop-time';
 import './PhoneAppointmentPage.css';
 
 export interface PhoneAppointmentPageProps {
   readonly actor: Actor | null;
+}
+
+/**
+ * Resolves the name behind one of the ids the created turno comes back with.
+ * `PhoneAppointmentResponse` carries `barberId`/`serviceId` raw, but this
+ * screen already holds both catalogues — it fetched them to build the form —
+ * so the lookup costs nothing and no request is added.
+ *
+ * Falls back to the id rather than to an empty string: on the one-in-a-
+ * thousand case where a barber was deactivated between loading the form and
+ * submitting it, an unhelpful id still beats a sentence with a hole in it.
+ */
+function nameOf(catalogue: readonly { id: string; name: string }[] | null, id: string): string {
+  return catalogue?.find((entry) => entry.id === id)?.name ?? id;
 }
 
 /** Panel's phone-booking form (admin-operations spec, "Creación de turnos
@@ -91,10 +107,29 @@ export function PhoneAppointmentPage({ actor }: PhoneAppointmentPageProps) {
 
       {error && <p role="alert">{error}</p>}
       {loadError && <p role="alert">{loadError}</p>}
+
+      {/* Whoever is using this screen is on the phone with the client right
+          now, so the answer has to be the sentence they are about to read
+          out loud — not the row's primary key and the database's own word
+          for its state, which is what this used to show. The names are
+          resolved from the very lists that populated the form, so no extra
+          request is needed. */}
       {result && (
-        <p role="status">
-          Turno creado: {result.id} — estado {result.status}.
-        </p>
+        <div className="card phone-appointment-page__result" role="status" aria-label="Turno creado">
+          <p className="phone-appointment-page__result-status">{appointmentStatusLabel(result.status)}</p>
+          <p className="phone-appointment-page__result-headline">
+            {nameOf(services, result.serviceId)} con {nameOf(barbers, result.barberId)}
+          </p>
+          <p className="phone-appointment-page__result-when">
+            {utcIsoToShopLocalDate(result.startsAt)} a las {utcIsoToShopLocalTime(result.startsAt)} hs
+          </p>
+          <p className="phone-appointment-page__result-note">
+            Queda sin seña: se cobra todo en el local.
+          </p>
+          <button type="button" onClick={() => setResult(null)}>
+            Cargar otro turno
+          </button>
+        </div>
       )}
 
       {!loadError && !referenceDataReady && <p className="empty-state">Cargando barberos y servicios...</p>}
@@ -102,7 +137,7 @@ export function PhoneAppointmentPage({ actor }: PhoneAppointmentPageProps) {
         <p className="empty-state">Todavía no hay barberos o servicios cargados. Contactá al local.</p>
       )}
 
-      {referenceDataReady && !referenceDataEmpty && (
+      {referenceDataReady && !referenceDataEmpty && !result && (
         <div className="card phone-appointment-page__form-card">
           <PhoneAppointmentForm barbers={barbers} services={services} onSubmit={handleSubmit} />
         </div>
