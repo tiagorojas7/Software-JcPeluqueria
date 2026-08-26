@@ -8,6 +8,7 @@ import type {
 import { AccountAppointmentsList } from './AccountAppointmentsList';
 import { ApiError, apiGet, apiPost, describeError } from '../shared/api-client';
 import { nowMs } from '../shared/now';
+import './MyAccountPage.css';
 
 /** Mirrors `SELF_CANCEL_WINDOW_MINUTES` (packages/application). Duplicated
  *  rather than imported because this SPA never depends on the domain
@@ -90,9 +91,9 @@ export function MyAccountPage() {
 
   if (loggedOut) {
     return (
-      <section>
+      <section className="container my-account">
         <h2>Mi cuenta</h2>
-        <p>Iniciá sesión con tu código de acceso para ver esta pantalla.</p>
+        <p className="empty-state">Iniciá sesión con tu código de acceso para ver esta pantalla.</p>
       </section>
     );
   }
@@ -100,7 +101,7 @@ export function MyAccountPage() {
   const pending = appointments?.find((a) => a.id === confirmingId) ?? null;
 
   return (
-    <section>
+    <section className="container my-account">
       <h2>Mi cuenta</h2>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
@@ -109,7 +110,7 @@ export function MyAccountPage() {
           es una consecuencia que el cliente tiene derecho a conocer mientras
           todavía puede echarse atrás. */}
       {pending && (
-        <div role="alertdialog" aria-label="Confirmar cancelación">
+        <div role="alertdialog" aria-label="Confirmar cancelación" className="my-account__confirm">
           <p>
             {losesDeposit(pending.startsAt)
               ? 'Falta menos de una hora para tu turno, así que por la política de devolución la seña no se devuelve. El horario queda liberado igual. ¿Querés cancelarlo?'
@@ -127,7 +128,7 @@ export function MyAccountPage() {
       {appointments ? (
         <AccountAppointmentsList appointments={appointments} onCancel={setConfirmingId} />
       ) : (
-        <p>Cargando...</p>
+        <p className="empty-state">Cargando...</p>
       )}
     </section>
   );

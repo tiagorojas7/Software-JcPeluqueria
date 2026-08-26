@@ -34,6 +34,22 @@ export function utcIsoToShopLocalTime(iso: string): string {
 }
 
 /**
+ * The shop-local `DD/MM` of an ISO UTC instant, for lists where the time
+ * alone is ambiguous — a client's own turnos are the case that forced it:
+ * two "11:00" rows on different days read as the same turno twice.
+ *
+ * Slicing the ISO date is safe HERE and would not be in general. The shop
+ * opens 09:00 and closes 20:00 local, which is 12:00–23:00 UTC at the fixed
+ * -03:00 offset, so no appointment instant ever lands near UTC midnight —
+ * the only place the offset could push it onto the previous calendar day.
+ * Same no-`Date`-construction posture as the rest of this file, so the
+ * repo-wide Clock-only ESLint rule never applies.
+ */
+export function utcIsoToShopLocalDate(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+/**
  * Minutes between two ISO UTC instants on the SAME `AvailabilitySlot`
  * (`startsAt`/`endsAt`) — used where only the slot's own boundaries are on
  * hand, even though `PublicServiceResponse.durationMinutes` now carries a

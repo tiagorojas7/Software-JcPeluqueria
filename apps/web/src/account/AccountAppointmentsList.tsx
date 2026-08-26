@@ -3,7 +3,7 @@ import type { AccountAppointmentResponse } from '@jc-barberia/contracts';
 
 import { appointmentStatusLabel } from '../shared/appointment-status';
 import { nowMs } from '../shared/now';
-import { utcIsoToShopLocalTime } from '../shared/shop-time';
+import { utcIsoToShopLocalDate, utcIsoToShopLocalTime } from '../shared/shop-time';
 
 export interface AccountAppointmentsListProps {
   readonly appointments: readonly AccountAppointmentResponse[];
@@ -57,11 +57,24 @@ export function AccountAppointmentsList({ appointments, onCancel }: AccountAppoi
         const stillWithinWindow = nowMs() < cutoffMs;
 
         return (
-          <li key={appointment.id}>
-            <span aria-label={`Estado: ${appointmentStatusLabel(appointment.status)}`}>
+          <li
+            key={appointment.id}
+            className={`account-appointments__item account-appointments__item--${appointment.status}`}
+          >
+            <span className="account-appointments__when">
+              <span className="account-appointments__date">
+                {utcIsoToShopLocalDate(appointment.startsAt)}
+              </span>
+              <span className="account-appointments__time">
+                {utcIsoToShopLocalTime(appointment.startsAt)}
+              </span>
+            </span>
+            <span
+              className={`account-appointments__status account-appointments__status--${appointment.status}`}
+              aria-label={`Estado: ${appointmentStatusLabel(appointment.status)}`}
+            >
               {appointmentStatusLabel(appointment.status)}
-            </span>{' '}
-            <span>{utcIsoToShopLocalTime(appointment.startsAt)}</span>
+            </span>
             {isCancellable && !isConfirming && (
               <button type="button" onClick={() => setConfirmingId(appointment.id)}>
                 Cancelar

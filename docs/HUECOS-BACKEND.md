@@ -147,6 +147,31 @@ huérfanos y que la UI pida confirmación con ese número.
 
 ---
 
+## 7. La cuenta del cliente no sabe qué servicio ni con qué barbero
+
+**Dónde está el límite:** `packages/contracts/src/account.ts:10-23` —
+`AccountAppointmentResponse` lleva `barberId` y `serviceId` en crudo, sin
+nombres.
+
+**Qué falta:** el cliente entra a "Mi cuenta" y ve una fecha, una hora y un
+estado. No ve qué se reservó ni con quién. Los UUID no se pueden mostrar, así
+que hoy simplemente no se muestra nada.
+
+**Por qué llama la atención:** el mismo dato ya viaja resuelto del otro lado.
+`DayBoardSlot.serviceName` y `DayBoardColumn.barberName` se computan en el
+servidor precisamente para que el panel no invente lookups en el navegador
+(ver el comentario de `serviceName` en `contracts/agenda.ts`). La cuenta del
+cliente quedó sin ese tratamiento.
+
+**Propuesta:** agregar `serviceName` y `barberName` a
+`AccountAppointmentResponse`, con el mismo join que ya hace el day board.
+
+**Impacto:** es la pantalla donde el cliente confirma si reservó lo que quería
+antes de decidir si lo cancela. Cancelar el turno equivocado por no poder
+distinguirlos cuesta la seña.
+
+---
+
 ## Fuera de esta lista, pero conviene decidirlo
 
 **La seña 50% vive sólo en el dominio.**

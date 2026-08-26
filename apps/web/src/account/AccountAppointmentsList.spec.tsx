@@ -58,6 +58,26 @@ describe('AccountAppointmentsList', () => {
     expect(screen.getByText('14:00')).toBeInTheDocument();
   });
 
+  // A list that showed only `HH:mm` gave two turnos on different days the
+  // same label. The client cannot tell which one they are about to cancel.
+  it('shows the date next to the time, so two turnos are never the same row twice', () => {
+    render(
+      <AccountAppointmentsList
+        appointments={[
+          buildAppointment({ id: 'a-1', startsAt: '2026-05-15T12:00:00.000Z' }),
+          buildAppointment({ id: 'a-2', startsAt: '2026-05-16T12:00:00.000Z' }),
+        ]}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('15/05')).toBeInTheDocument();
+    expect(screen.getByText('16/05')).toBeInTheDocument();
+    // Both turnos are at the same hour: the date is the only thing telling
+    // them apart, which is the whole point.
+    expect(screen.getAllByText('09:00')).toHaveLength(2);
+  });
+
   it('muestra el boton Cancelar unicamente para un turno reservado', () => {
     render(
       <AccountAppointmentsList
