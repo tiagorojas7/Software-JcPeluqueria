@@ -2,8 +2,22 @@ import { useEffect, useState } from 'react';
 
 import { AccessCodeNotice } from '../booking/AccessCodeNotice';
 import { apiPost } from '../shared/api-client';
+import './PaymentReturnPage.css';
 
 type PaymentEstado = 'success' | 'pending' | 'failure' | 'unknown';
+
+/**
+ * One word above the headline saying where the client stands. The four
+ * outcomes used to be visually identical, so a rejected payment and a
+ * received one arrived looking the same — the client had to read a full
+ * paragraph to find out which had happened.
+ */
+const EYEBROW: Record<PaymentEstado, string> = {
+  success: 'Pago recibido',
+  pending: 'Pago en proceso',
+  failure: 'Pago rechazado',
+  unknown: 'Estado desconocido',
+};
 
 const COPY: Record<PaymentEstado, { readonly title: string; readonly body: string }> = {
   success: {
@@ -81,10 +95,18 @@ export function PaymentReturnPage({ search = window.location.search }: PaymentRe
   }, [search, estado]);
 
   return (
-    <section className="container">
-      <div className="card">
+    <section className="container payment-return">
+      <div className={`card payment-return__card payment-return__card--${estado}`}>
+        <p className="payment-return__eyebrow">{EYEBROW[estado]}</p>
         <h2>{title}</h2>
-        <p role="status">{body}</p>
+        {/* A rejected payment is the one outcome on this page the client has
+            to act on, so it is the one announced as an alert. The other
+            three are progress reports: nothing is owed and nothing is
+            broken, and announcing them with the same urgency would teach
+            the client to ignore all four. */}
+        <p role={estado === 'failure' ? 'alert' : 'status'} className="payment-return__body">
+          {body}
+        </p>
         <AccessCodeNotice />
       </div>
     </section>

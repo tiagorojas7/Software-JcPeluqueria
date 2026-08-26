@@ -52,6 +52,24 @@ describe('PaymentReturnPage (cablear-el-mvp item 3)', () => {
     expect(screen.getByText(/no pudimos identificar/i)).toBeInTheDocument();
   });
 
+  // Los tres desenlaces se anunciaban con el mismo `role="status"`, o sea
+  // que un cobro rechazado llegaba al lector de pantalla con el mismo peso
+  // que uno recibido. Un pago que no se completo es lo unico de esta pagina
+  // sobre lo que el cliente tiene que hacer algo.
+  it('anuncia un pago rechazado como alerta, no como un aviso mas', () => {
+    renderReturn('?estado=failure');
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/no se acredit/i);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('anuncia los demas desenlaces como estado, porque no hay nada que resolver', () => {
+    renderReturn('?estado=pending');
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   // cuenta-cliente-persistente: the client may never see this exact page
   // again once he leaves — this is where he needs to learn HOW he gets back
   // in later (a code, not a password), not just that a link exists.

@@ -1,0 +1,86 @@
+/**
+ * Where MercadoPago drops the client back. The four outcomes used to render
+ * as the same neutral card, so a rejected payment and a received one looked
+ * identical until the paragraph was read — on the one screen where the
+ * client most wants to know, at a glance, whether their money went through.
+ *
+ * The colour is carried by an accent bar and the eyebrow word, never by
+ * colour alone: `EYEBROW` states the outcome in words, and a failure is
+ * announced as `role="alert"` while the rest are `role="status"`.
+ */
+.payment-return {
+  padding: var(--space-8) var(--space-5);
+  display: flex;
+  justify-content: center;
+}
+
+.payment-return__card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface-card);
+  border-top: 3px solid var(--color-line-strong);
+}
+
+.payment-return__eyebrow {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.payment-return__body {
+  margin: 0 0 var(--space-5);
+  color: var(--color-ink-soft);
+}
+
+/* `[role='status']` and `[role='alert']` are styled as full message boxes in
+   tokens.css. Here the body IS the message and the card already carries the
+   outcome, so the box treatment is undone — two nested frames around one
+   paragraph reads as a bug, not as emphasis. Attribute + class beats the
+   bare attribute selector regardless of stylesheet order. */
+.payment-return__body[role='status'],
+.payment-return__body[role='alert'] {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--text-base);
+  font-weight: 400;
+}
+
+.payment-return__card--success {
+  border-top-color: var(--status-realizado);
+}
+.payment-return__card--success .payment-return__eyebrow {
+  color: var(--status-realizado);
+}
+
+.payment-return__card--pending {
+  border-top-color: var(--status-sin-registrado);
+}
+.payment-return__card--pending .payment-return__eyebrow {
+  color: var(--status-sin-registrado);
+}
+
+.payment-return__card--failure {
+  border-top-color: var(--color-danger);
+}
+.payment-return__card--failure .payment-return__eyebrow,
+.payment-return__card--failure .payment-return__body {
+  color: var(--color-danger);
+}
+
+/* An unrecognised `estado` stays deliberately neutral: the page does not
+   know what happened, and dressing it in a colour would be inventing an
+   outcome the link never carried. */
+.payment-return__card--unknown {
+  border-top-color: var(--color-line-strong);
+}
+
+@media (max-width: 600px) {
+  .payment-return {
+    padding: var(--space-6) var(--space-4);
+  }
+}
