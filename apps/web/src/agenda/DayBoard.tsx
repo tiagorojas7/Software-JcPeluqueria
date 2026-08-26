@@ -1,5 +1,6 @@
 import type { DayBoardColumn, DayBoardSlot, SlotAction } from '@jc-barberia/contracts';
 
+import { appointmentStatusLabel } from '../shared/appointment-status';
 import { utcIsoToShopLocalTime } from '../shared/shop-time';
 
 export interface DayBoardProps {
@@ -15,6 +16,7 @@ const ACTION_LABELS: Record<SlotAction, string> = {
   'confirm-absence': 'Confirmar ausencia',
 };
 
+
 /**
  * Pure presentational organism (design.md, "Frontend"): draws exactly the
  * `columns`/`slots`/`allowedActions` it receives and never itself decides
@@ -26,37 +28,53 @@ const ACTION_LABELS: Record<SlotAction, string> = {
  */
 export function DayBoard({ columns, slots, onSlotAction }: DayBoardProps) {
   return (
-    <div>
-      {columns.map((column) => (
-        <section key={column.barberId} aria-label={column.barberName}>
-          <h3>{column.barberName}</h3>
-          <ul>
-            {slots
-              .filter((slot) => slot.barberId === column.barberId)
-              .map((slot) => (
-                <li key={slot.id}>
-                  <span>
+    <div className="day-board__columns">
+      {columns.map((column) => {
+        const columnSlots = slots.filter((slot) => slot.barberId === column.barberId);
+
+        return (
+          <section key={column.barberId} aria-label={column.barberName} className="day-board__column">
+            <h3>{column.barberName}</h3>
+            <ul>
+              {columnSlots.map((slot) => (
+                <li key={slot.id} className={`day-board__slot day-board__slot--${slot.status}`}>
+                  <span className="day-board__time">
                     {utcIsoToShopLocalTime(slot.startsAt)}-{utcIsoToShopLocalTime(slot.endsAt)}
                   </span>
-                  <span>{slot.serviceName}</span>
-                  <span>{slot.status}</span>
+                  <span className="day-board__service">{slot.serviceName}</span>
+                  <span
+                    className={`day-board__status day-board__status--${slot.status}`}
+                    aria-label={`Estado: ${appointmentStatusLabel(slot.status)}`}
+                  >
+                    {appointmentStatusLabel(slot.status)}
+                  </span>
                   {slot.clientName ? (
-                    <span>
+                    <span className="day-board__client">
                       {slot.clientName}
                       {slot.clientAge !== undefined ? ` (${slot.clientAge})` : ''}
                     </span>
                   ) : null}
-                  {slot.clientPhone ? <span>{slot.clientPhone}</span> : null}
-                  {slot.allowedActions.map((action) => (
-                    <button key={action} type="button" onClick={() => onSlotAction(slot.id, action)}>
-                      {ACTION_LABELS[action]}
-                    </button>
-                  ))}
+                  {slot.clientPhone ? <span className="day-board__phone">{slot.clientPhone}</span> : null}
+                  {slot.allowedActions.length > 0 ? (
+                    <span className="day-board__actions">
+                      {slot.allowedActions.map((action) => (
+                        <button
+                          key={action}
+                          type="button"
+                          className={action === 'mark-completed' ? 'btn-primary' : undefined}
+                          onClick={() => onSlotAction(slot.id, action)}
+                        >
+                          {ACTION_LABELS[action]}
+                        </button>
+                      ))}
+                    </span>
+                  ) : null}
                 </li>
               ))}
-          </ul>
-        </section>
-      ))}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }

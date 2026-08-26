@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AccountAppointmentResponse } from '@jc-barberia/contracts';
 
+import { appointmentStatusLabel } from '../shared/appointment-status';
 import { nowMs } from '../shared/now';
 import { utcIsoToShopLocalTime } from '../shared/shop-time';
 
@@ -57,7 +58,10 @@ export function AccountAppointmentsList({ appointments, onCancel }: AccountAppoi
 
         return (
           <li key={appointment.id}>
-            <span>{appointment.status}</span> <span>{utcIsoToShopLocalTime(appointment.startsAt)}</span>
+            <span aria-label={`Estado: ${appointmentStatusLabel(appointment.status)}`}>
+              {appointmentStatusLabel(appointment.status)}
+            </span>{' '}
+            <span>{utcIsoToShopLocalTime(appointment.startsAt)}</span>
             {isCancellable && !isConfirming && (
               <button type="button" onClick={() => setConfirmingId(appointment.id)}>
                 Cancelar

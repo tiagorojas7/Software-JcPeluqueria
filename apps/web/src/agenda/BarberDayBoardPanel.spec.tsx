@@ -55,7 +55,7 @@ describe('BarberDayBoardPanel', () => {
 
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/appointments/slot-1/mark-completed'));
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/agenda/day-board?date=2026-09-01'));
-    expect(await screen.findByText('realizado')).toBeInTheDocument();
+    expect(await screen.findByText('Realizado')).toBeInTheDocument();
   });
 
   it("rejects marking a colleague's turno, showing the API's message and never reloading", async () => {

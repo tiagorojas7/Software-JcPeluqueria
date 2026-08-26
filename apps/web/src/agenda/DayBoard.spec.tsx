@@ -38,11 +38,44 @@ describe('DayBoard', () => {
     render(<DayBoard columns={columns} slots={slots} onSlotAction={() => {}} />);
 
     const juanColumn = screen.getByRole('region', { name: 'Juan' });
-    expect(within(juanColumn).getByText('reservado')).toBeInTheDocument();
+    expect(within(juanColumn).getByText('Reservado')).toBeInTheDocument();
     expect(within(juanColumn).queryByText('held')).not.toBeInTheDocument();
 
     const anaColumn = screen.getByRole('region', { name: 'Ana' });
     expect(within(anaColumn).getByText('held')).toBeInTheDocument();
+  });
+
+  // The owner reads this board at a glance to find what still needs a
+  // decision. Each of the domain's five statuses gets the word the shop
+  // actually uses, not the snake_case database value — `sin_registrado` in
+  // particular reads "Sin registrar", the wording the README's status table
+  // uses. Anything else (the `held`/`liberado` hold states the type still
+  // permits) falls back to the raw value rather than rendering blank.
+  it.each([
+    ['reservado', 'Reservado'],
+    ['realizado', 'Realizado'],
+    ['cancelado', 'Cancelado'],
+    ['sin_registrado', 'Sin registrar'],
+    ['ausente', 'Ausente'],
+    ['held', 'held'],
+  ])('labels the %s status as "%s"', (status, label) => {
+    const slots = [buildSlot({ id: 'slot-1', status: status as DayBoardSlot['status'] })];
+
+    render(<DayBoard columns={columns} slots={slots} onSlotAction={() => {}} />);
+
+    expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  // Colour alone must never carry the status: a badge that is only tinted
+  // is unreadable to a colour-blind barber and invisible in a printed or
+  // screenshotted board. The status word is text, and the badge names the
+  // status for assistive tech too.
+  it('exposes the status as text, not as colour alone', () => {
+    const slots = [buildSlot({ id: 'slot-1', status: 'sin_registrado' })];
+
+    render(<DayBoard columns={columns} slots={slots} onSlotAction={() => {}} />);
+
+    expect(screen.getByText('Sin registrar')).toHaveAccessibleName('Estado: Sin registrar');
   });
 
   it('shows the client name and age only when loaded on that slot', () => {

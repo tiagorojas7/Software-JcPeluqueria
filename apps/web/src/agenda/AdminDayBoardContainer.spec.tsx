@@ -46,7 +46,7 @@ describe('AdminDayBoardContainer', () => {
     render(<AdminDayBoardContainer dayBoard={dayBoard} onSlotAction={() => {}} />);
 
     const juanColumn = screen.getByRole('region', { name: 'Juan' });
-    expect(within(juanColumn).getByText('reservado')).toBeInTheDocument();
+    expect(within(juanColumn).getByText('Reservado')).toBeInTheDocument();
     expect(within(juanColumn).getByText('Marcos (34)')).toBeInTheDocument();
 
     const anaColumn = screen.getByRole('region', { name: 'Ana' });

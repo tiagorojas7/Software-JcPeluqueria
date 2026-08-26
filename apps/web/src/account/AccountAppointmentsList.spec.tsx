@@ -54,7 +54,7 @@ describe('AccountAppointmentsList', () => {
       />,
     );
 
-    expect(screen.getByText('realizado')).toBeInTheDocument();
+    expect(screen.getByText('Realizado')).toBeInTheDocument();
     expect(screen.getByText('14:00')).toBeInTheDocument();
   });
 
