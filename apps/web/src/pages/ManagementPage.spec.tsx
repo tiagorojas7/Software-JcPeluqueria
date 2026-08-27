@@ -390,4 +390,16 @@ describe('ManagementPage — barberos que todavia no tienen cuenta', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/escrib. el email de de antes/i);
     expect(apiPost).not.toHaveBeenCalled();
   });
+
+  // Las cuatro situaciones de una cuenta de barbero se distinguian solo por
+  // el texto en una celda. Quien administra escanea esta tabla para saber a
+  // quien le falta acceso: el estado tiene que verse antes de leerlo, y la
+  // diferencia no puede quedar solo en el color.
+  it('marca el estado de cada cuenta como dato, no solo como texto', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByRole('heading', { name: /cuentas de barberos/i });
+
+    expect(screen.getByText(/sin cuenta/i)).toHaveAttribute('data-state', 'sin-cuenta');
+    expect(screen.getByText('Activa')).toHaveAttribute('data-state', 'activa');
+  });
 });

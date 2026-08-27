@@ -565,6 +565,33 @@ const DAY_OF_WEEK_OPTIONS = [
  * used is the one that needs chasing, and it is invisible from every other
  * screen — the barber shows up in the agenda and in availability regardless.
  */
+/**
+ * The four situations a barber's login can be in, derived from the response
+ * rather than sent as an enum — the backend has no such field, it reports
+ * `userId`/`active`/`activated` and the meaning is the combination.
+ *
+ * The id travels to the DOM as `data-state` so the badge's colour is not the
+ * only carrier: the label says it in words, the attribute makes it
+ * assertable, and someone scanning this table for who still cannot get in
+ * sees it before reading it.
+ */
+function accountState(account: {
+  readonly userId: string | null;
+  readonly active: boolean;
+  readonly activated: boolean;
+}): { readonly id: string; readonly label: string } {
+  if (account.userId === null) {
+    return { id: 'sin-cuenta', label: 'Sin cuenta — no puede entrar' };
+  }
+  if (!account.active) {
+    return { id: 'acceso-quitado', label: 'Acceso quitado' };
+  }
+  if (account.activated) {
+    return { id: 'activa', label: 'Activa' };
+  }
+  return { id: 'sin-activar', label: 'Sin activar — todavía no entró' };
+}
+
 function BarberAccountsSection() {
   const [accounts, setAccounts] = useState<readonly BarberAccountResponse[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -676,13 +703,14 @@ function BarberAccountsSection() {
                   )}
                 </td>
                 <td>
-                  {account.userId === null
-                    ? 'Sin cuenta — no puede entrar'
-                    : !account.active
-                      ? 'Acceso quitado'
-                      : account.activated
-                        ? 'Activa'
-                        : 'Sin activar — todavía no entró'}
+                  {(() => {
+                    const state = accountState(account);
+                    return (
+                      <span className="management__state" data-state={state.id}>
+                        {state.label}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td>
                   {account.userId === null ? (

@@ -86,6 +86,127 @@
   font-size: var(--text-xs);
 }
 
+/* ---------- Account states ----------
+ * Four situations, and the one that matters is "cannot get in": whoever
+ * administers this scans the column looking for who is still locked out.
+ * The label says it in words and `data-state` drives the tint, so the badge
+ * never depends on colour alone. */
+
+.management__state {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  background: var(--status-cancelado-bg);
+  color: var(--status-cancelado);
+  box-shadow: inset 0 0 0 1px var(--color-line-strong);
+}
+
+.management__state[data-state='activa'] {
+  background: var(--status-realizado-bg);
+  color: var(--status-realizado);
+  box-shadow: var(--status-realizado-ring);
+}
+
+.management__state[data-state='sin-activar'] {
+  background: var(--status-sin-registrado-bg);
+  color: var(--status-sin-registrado);
+  box-shadow: var(--status-sin-registrado-ring);
+}
+
+.management__state[data-state='sin-cuenta'],
+.management__state[data-state='acceso-quitado'] {
+  background: var(--status-ausente-bg);
+  color: var(--status-ausente);
+  box-shadow: var(--status-ausente-ring);
+}
+
+/* ---------- Week grid ----------
+ * One row per day with its own switch and hours. A day that is off shows no
+ * times at all rather than greyed-out ones: an input that looks editable and
+ * is not is worse than no input. */
+
+.management__week {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+}
+
+.management__week legend {
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.management__week-day {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.management__week-day:last-child {
+  border-bottom: none;
+}
+
+/* The day's own name and checkbox, wide enough that every row's times line
+   up in a column instead of stepping raggedly across the fieldset. */
+.management__week-day > label:first-child {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 120px;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.management__week-day label {
+  margin: 0;
+}
+
+.management__week-day input[type='time'] {
+  width: 118px;
+  max-width: none;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: var(--text-sm);
+}
+
+.management__hint {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+/* Changing a barber's week can orphan turnos already booked on a day being
+   switched off — a warning about other people's reservations, so it gets
+   the warning treatment rather than blending into the form. */
+.management__confirm[role='alert'] {
+  display: block;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--status-sin-registrado);
+  border-radius: var(--radius-sm);
+  background: var(--status-sin-registrado-bg);
+  color: var(--status-sin-registrado);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
 /* A wide table must scroll inside its own box rather than pushing the page
    sideways — the barber-accounts table carries four columns plus two
    buttons per row. */
