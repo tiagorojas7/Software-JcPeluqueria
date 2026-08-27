@@ -1,16 +1,136 @@
+/**
+ * The public booking flow. Four stretches on one URL — search, pick an hour,
+ * leave your details, pay the deposit — so the page has to say where the
+ * visitor is at all times, which is what `BookingSteps` is for.
+ *
+ * Mobile-first: almost every reservation this shop takes starts on a phone,
+ * so the single column is the base and the wider arrangement is the
+ * exception added at a breakpoint.
+ */
+
 .booking-page {
   padding: var(--space-7) 0 var(--space-8);
   max-width: 720px;
 }
 
 .booking-page__intro {
-  text-align: center;
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-5);
 }
 
 .booking-page__intro p {
   margin: 0;
 }
+
+/* ---------- Progress ---------- */
+
+.booking-steps {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-6);
+  padding: 0;
+  list-style: none;
+}
+
+.booking-steps__step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  /* The bar above each step is the progress track: a step's own colour says
+     done / here / not yet, and the number or tick inside the marker says the
+     same thing without relying on colour at all. */
+  border-top: 3px solid var(--color-line);
+  font-size: var(--text-xs);
+}
+
+.booking-steps__marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-line-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--color-muted);
+}
+
+.booking-steps__marker svg {
+  width: 13px;
+  height: 13px;
+}
+
+.booking-steps__label {
+  font-weight: 600;
+  color: var(--color-muted);
+  line-height: 1.25;
+}
+
+.booking-steps__step[data-state='done'] {
+  border-top-color: var(--color-accent);
+}
+.booking-steps__step[data-state='done'] .booking-steps__marker {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-champagne);
+}
+.booking-steps__step[data-state='done'] .booking-steps__label {
+  color: var(--color-ink-soft);
+}
+
+.booking-steps__step[data-state='current'] {
+  border-top-color: var(--color-champagne);
+}
+.booking-steps__step[data-state='current'] .booking-steps__marker {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-strong);
+  box-shadow: var(--sheen);
+  color: var(--color-on-accent);
+}
+.booking-steps__step[data-state='current'] .booking-steps__label {
+  color: var(--color-heading);
+  font-weight: 700;
+}
+
+/* ---------- What was chosen ---------- */
+
+/* Replaces the form once a search has happened, so the visitor can check the
+   reservation against what they meant to book — and so the deposit is on
+   screen before any personal data is typed, not for the first time at
+   checkout. */
+.booking-page__selection {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: 0 0 var(--space-5);
+  padding: var(--space-5);
+  background: var(--surface-card);
+  border: 1px solid var(--color-line);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-md);
+}
+
+.booking-page__selection dt {
+  margin-bottom: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.booking-page__selection dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 800;
+  color: var(--color-heading);
+}
+
+/* ---------- Search form ---------- */
 
 .booking-page__form {
   margin-bottom: var(--space-5);
@@ -26,25 +146,71 @@
   margin-top: var(--space-2);
 }
 
+/* ---------- Results ---------- */
+
 .booking-page__results {
   margin-bottom: var(--space-5);
 }
 
+/* Free hours are the one thing on this screen the visitor is scanning, so
+   they are a grid of equal targets rather than a list of links. 52px tall:
+   this is chosen with a thumb, on a phone, and a mis-tap here books the
+   wrong hour. */
 .booking-page__results ul {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .booking-page__results li {
   list-style: none;
 }
 
-.booking-page__results button {
+.booking-page__results ul button {
   width: 100%;
+  min-height: 52px;
+  padding: 0;
+  background: var(--color-paper-alt);
+  border-color: var(--color-line-strong);
+  color: var(--color-ink);
+  box-shadow: none;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.booking-page__results ul button:hover {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-heading);
+  box-shadow: none;
+  transform: translateY(-2px);
+}
+
+.availability-picker__duration {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
 }
 
 .booking-page__restart {
   text-align: center;
   margin: 0;
+}
+
+@media (max-width: 560px) {
+  /* The four labels do not fit side by side on a phone: the markers stay in
+     a row as the progress track, and only the current step is named. */
+  .booking-steps__step[data-state='done'] .booking-steps__label,
+  .booking-steps__step[data-state='todo'] .booking-steps__label {
+    display: none;
+  }
+
+  .booking-page__selection {
+    grid-template-columns: 1fr 1fr;
+    padding: var(--space-4);
+  }
 }

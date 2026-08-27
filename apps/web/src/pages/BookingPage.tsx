@@ -14,6 +14,7 @@ import type {
 
 import { AccessCodeNotice } from '../booking/AccessCodeNotice';
 import { BookingFlowContainer } from '../booking/BookingFlowContainer';
+import { BookingSteps, type BookingStepId } from '../booking/BookingSteps';
 import { CheckoutStep } from '../booking/CheckoutStep';
 import { HoldCountdown } from '../booking/HoldCountdown';
 import { apiGet, apiPost, describeError } from '../shared/api-client';
@@ -198,12 +199,23 @@ export function BookingPage() {
   const referenceDataReady = barbers !== null && services !== null && !loadError;
   const referenceDataEmpty = referenceDataReady && (barbers.length === 0 || services.length === 0);
 
+  // Which stretch of the flow the visitor is in, derived from the state that
+  // already drives what is rendered rather than tracked separately — a
+  // second source of truth for "where am I" is a second thing that can be
+  // wrong.
+  const currentStep: BookingStepId = clientId ? 'pagar' : hold ? 'datos' : hasSearched ? 'horario' : 'buscar';
+
+  const selectedBarber = barbers?.find((barber) => barber.id === barberId) ?? null;
+  const selectedService = services?.find((service) => service.id === serviceId) ?? null;
+
   return (
     <div className="booking-page container">
       <div className="booking-page__intro">
         <h2>Reservar turno</h2>
         <p>Elegí barbero, servicio y fecha para ver los horarios libres de hoy.</p>
       </div>
+
+      {referenceDataReady && !referenceDataEmpty && <BookingSteps current={currentStep} />}
 
       {loadError && <p role="alert">{loadError}</p>}
       {error && <p role="alert">{error}</p>}
@@ -241,6 +253,39 @@ export function BookingPage() {
 
               <button type="submit">Ver horarios disponibles</button>
             </form>
+          )}
+
+          {/* Once the search has happened the form is replaced by what was
+              chosen, so the visitor can check it against what they meant to
+              book — and the deposit is stated here, before any data is
+              typed, instead of appearing for the first time at checkout. */}
+          {(hold || hasSearched) && selectedBarber && selectedService && (
+            <dl className="booking-page__selection">
+              <div>
+                <dt>Servicio</dt>
+                <dd>{selectedService.name}</dd>
+              </div>
+              <div>
+                <dt>Barbero</dt>
+                <dd>{selectedBarber.name}</dd>
+              </div>
+              <div>
+                <dt>Duración</dt>
+                <dd>{selectedService.durationMinutes} min</dd>
+              </div>
+              <div>
+                {/* `depositCents` comes from the server, which computes it
+                    with the same rule the checkout charges. Re-deriving 50%
+                    here would be a second copy of that rule, free to drift
+                    the day it stops being flat. */}
+                <dt>Seña</dt>
+                <dd>{formatPriceArs(selectedService.depositCents)}</dd>
+              </div>
+              <div>
+                <dt>Total</dt>
+                <dd>{formatPriceArs(selectedService.priceCents)}</dd>
+              </div>
+            </dl>
           )}
 
           {!clientId &&
