@@ -29,12 +29,20 @@ function isActor(value: unknown): value is Actor {
   );
 }
 
+/**
+ * Every storage touch is wrapped, not just the JSON.parse: Safari in private
+ * mode (and any browser with site data blocked) throws on the ACCESS itself,
+ * and `loadPersistedActor` runs synchronously inside App.tsx's initial
+ * `useState` — an unguarded throw there is a blank page before the first
+ * render. Same posture `AccessCodePage` applies to its own key: the only
+ * degradation is having to log in again.
+ */
 export function loadPersistedActor(): Actor | null {
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
   try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
     const parsed: unknown = JSON.parse(raw);
     return isActor(parsed) ? parsed : null;
   } catch {
@@ -43,9 +51,17 @@ export function loadPersistedActor(): Actor | null {
 }
 
 export function savePersistedActor(actor: Actor): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(actor));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(actor));
+  } catch {
+    // Nothing to degrade to — the next refresh just asks for a login again.
+  }
 }
 
 export function clearPersistedActor(): void {
-  window.localStorage.removeItem(STORAGE_KEY);
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // If storage is unreachable there is nothing persisted to clear anyway.
+  }
 }

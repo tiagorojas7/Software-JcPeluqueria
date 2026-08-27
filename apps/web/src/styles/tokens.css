@@ -574,6 +574,21 @@ button.btn-primary:hover {
   color: var(--color-champagne);
 }
 
+/* Global crash screen (ErrorBoundary) — the one screen that must never
+   depend on anything that can itself fail to render. */
+.app-error {
+  padding: var(--space-8) 0;
+  display: flex;
+  justify-content: center;
+}
+
+.app-error__card {
+  max-width: 420px;
+  text-align: center;
+  background: var(--surface-card);
+  border-top: 2px solid var(--color-accent);
+}
+
 .access-code-page__card button[type='submit'] {
   width: 100%;
 }

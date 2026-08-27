@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { clearPersistedActor, loadPersistedActor, savePersistedActor } from './session';
 
@@ -46,5 +46,40 @@ describe('session (D.1)', () => {
     window.localStorage.setItem('jc-barberia:staff-actor', JSON.stringify({ hello: 'world' }));
 
     expect(loadPersistedActor()).toBeNull();
+  });
+});
+
+// Safari en modo privado (y cualquier navegador con storage bloqueado por
+// politica) hace que TOCAR window.localStorage tire. `loadPersistedActor`
+// corre sincronico dentro del `useState` inicial de App.tsx: si tira ahi, la
+// SPA entera muere en blanco antes del primer render. Mismo patron defensivo
+// que AccessCodePage ya aplica a su propia clave.
+describe('session con localStorage bloqueado', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('loadPersistedActor devuelve null si el storage tira', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    expect(loadPersistedActor()).toBeNull();
+  });
+
+  it('savePersistedActor no explota si el storage tira', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    expect(() => savePersistedActor({ userId: 'u1', role: 'owner', barberId: null })).not.toThrow();
+  });
+
+  it('clearPersistedActor no explota si el storage tira', () => {
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('storage blocked');
+    });
+
+    expect(() => clearPersistedActor()).not.toThrow();
   });
 });

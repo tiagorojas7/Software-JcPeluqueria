@@ -16,6 +16,7 @@ import { PhoneAppointmentPage } from './pages/PhoneAppointmentPage';
 import { RevenuePage } from './pages/RevenuePage';
 import { ShopRevenuePage } from './pages/ShopRevenuePage';
 import { StaffLoginPage } from './pages/StaffLoginPage';
+import { ErrorBoundary } from './shared/ErrorBoundary';
 import { apiPost } from './shared/api-client';
 import type { Actor } from './shared/actor';
 import { RouterProvider, useRouter } from './shared/router';
@@ -138,8 +139,10 @@ function AppShell() {
 
 export function App() {
   return (
-    <RouterProvider>
-      <AppShell />
-    </RouterProvider>
+    <ErrorBoundary>
+      <RouterProvider>
+        <AppShell />
+      </RouterProvider>
+    </ErrorBoundary>
   );
 }
