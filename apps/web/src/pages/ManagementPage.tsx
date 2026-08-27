@@ -11,6 +11,7 @@ import type {
 } from '@jc-barberia/contracts';
 
 import { apiGet, apiPost, apiPut, describeError } from '../shared/api-client';
+import { formatPriceArs, parsePriceArsInput } from '../shared/money';
 import { hasPermission } from '../shared/permissions';
 import type { Actor } from '../shared/actor';
 import './ManagementPage.css';
@@ -480,15 +481,25 @@ function PricingSection({ services }: PricingSectionProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // The app itself displays prices as "$8.000" (`formatPriceArs`), so that
+  // is how the owner types them back — and `Number("8.000")` is 8: the price
+  // silently became $8. `parsePriceArsInput` reads the same notation the app
+  // writes, and anything it cannot read stops HERE, never at the API.
+  const parsedPesos = parsePriceArsInput(priceArs);
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!serviceId) {
       return;
     }
-    setError(null);
     setNotice(null);
+    if (parsedPesos === null) {
+      setError('No se entendió el precio. Escribilo como 8000 o 8.000.');
+      return;
+    }
+    setError(null);
     try {
-      await apiPut(`/panel/services/${serviceId}/price`, { priceCents: Math.round(Number(priceArs) * 100) });
+      await apiPut(`/panel/services/${serviceId}/price`, { priceCents: Math.round(parsedPesos * 100) });
       setNotice('Precio actualizado correctamente.');
     } catch (err) {
       setError(describeError(err));
@@ -522,15 +533,24 @@ function PricingSection({ services }: PricingSectionProps) {
         </span>
         <span className="management__field">
           <label htmlFor="mgmt-pricing-price">Precio (ARS)</label>
+          {/* type="text": a number input rejects "8.000"-style typing in some
+              locales and silently accepts it as 8 in others — the text field
+              plus the echo below is the only combination where the owner SEES
+              what is about to be saved. */}
           <input
             id="mgmt-pricing-price"
-            type="number"
-            min="1"
+            type="text"
+            inputMode="numeric"
             required
             value={priceArs}
             onChange={(e) => setPriceArs(e.target.value)}
           />
         </span>
+        {parsedPesos !== null && (
+          <p className="management__price-echo" role="status">
+            Se guarda como <strong>{formatPriceArs(Math.round(parsedPesos * 100))}</strong>
+          </p>
+        )}
         <button type="submit">Actualizar precio</button>
       </form>
     </div>

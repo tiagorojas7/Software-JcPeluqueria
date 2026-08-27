@@ -15,3 +15,23 @@ export function formatPriceArs(priceCents: number): string {
   const withThousandsSeparators = pesos.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return `$${withThousandsSeparators}`;
 }
+
+/**
+ * The inverse reading of `formatPriceArs`'s own notation. The app displays
+ * "$8.000" everywhere, so that IS how the owner types prices back — and
+ * `Number("8.000")` is 8, a thousandfold silent price cut. Dots are accepted
+ * ONLY as full thousands groups ("8.000", "1.234.567"); the decimal
+ * separator is the comma. Anything ambiguous ("8.50") returns `null` —
+ * refusing beats guessing with money.
+ */
+export function parsePriceArsInput(raw: string): number | null {
+  const cleaned = raw.trim().replace(/^\$\s*/, '').trim();
+  const match = /^(?<whole>\d{1,3}(?:\.\d{3})+|\d+)(?:,(?<decimals>\d{1,2}))?$/.exec(cleaned);
+  if (!match?.groups) {
+    return null;
+  }
+  const whole = match.groups.whole!.replace(/\./g, '');
+  const decimals = match.groups.decimals;
+  const pesos = Number(decimals ? `${whole}.${decimals}` : whole);
+  return pesos > 0 ? pesos : null;
+}

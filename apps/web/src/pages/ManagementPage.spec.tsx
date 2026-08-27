@@ -117,7 +117,10 @@ describe('ManagementPage (D.3)', () => {
     expect(apiGet).toHaveBeenCalledWith('/panel/clients');
   });
 
-  it('da de alta un barbero con nombre y una semana completa de horario base, en un solo pedido', async () => {
+  // 10s: five checkbox clicks re-render the whole four-section page under
+  // jsdom — ~4.2s alone on this machine, over the 5s default once the rest
+  // of the file shares the run.
+  it('da de alta un barbero con nombre y una semana completa de horario base, en un solo pedido', { timeout: 10_000 }, async () => {
     vi.mocked(apiPost).mockResolvedValueOnce({ id: 'new-barber', name: 'Nuevo Barbero', active: true });
     const { container } = render(<ManagementPage actor={OWNER} />);
 
@@ -256,6 +259,38 @@ describe('ManagementPage (D.3)', () => {
 
     expect(await screen.findByText(/precio actualizado/i)).toBeInTheDocument();
     expect(apiPut).toHaveBeenCalledWith('/panel/services/s1/price', { priceCents: 900000 });
+  });
+
+  // La propia app muestra los precios como "$8.000" (formatPriceArs), asi que
+  // el duenio los tipea igual — y Number("8.000") es 8: el precio quedaba en
+  // $8 sin ningun aviso. La notacion argentina tiene que guardarse bien.
+  it('entiende "8.000" como ocho mil pesos, no como ocho', async () => {
+    vi.mocked(apiPut).mockResolvedValueOnce({ configured: true });
+    render(<ManagementPage actor={OWNER} />);
+
+    fireEvent.change(await screen.findByLabelText(/precio \(ars\)/i), { target: { value: '8.000' } });
+    fireEvent.click(screen.getByRole('button', { name: /actualizar precio/i }));
+
+    expect(await screen.findByText(/precio actualizado/i)).toBeInTheDocument();
+    expect(apiPut).toHaveBeenCalledWith('/panel/services/s1/price', { priceCents: 800000 });
+  });
+
+  it('muestra en vivo como se interpreta el precio antes de guardar', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    fireEvent.change(await screen.findByLabelText(/precio \(ars\)/i), { target: { value: '8.000' } });
+
+    expect(screen.getByText(/se guarda como/i)).toHaveTextContent('$8.000');
+  });
+
+  it('rechaza un precio ilegible sin llamar a la API', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    fireEvent.change(await screen.findByLabelText(/precio \(ars\)/i), { target: { value: '8.50' } });
+    fireEvent.click(screen.getByRole('button', { name: /actualizar precio/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se entendi/i);
+    expect(apiPut).not.toHaveBeenCalledWith('/panel/services/s1/price', expect.anything());
   });
 
   it('si la carga de referencia falla, muestra el error en vez de secciones vacias', async () => {
