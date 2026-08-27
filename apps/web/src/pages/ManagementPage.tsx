@@ -5,14 +5,13 @@ import type {
   ClientRecordResponse,
   ConfigureBarberWeekResponseBody,
   PublicBarberResponse,
-  PublicBarbersResponse,
   PublicServiceResponse,
-  PublicServicesResponse,
 } from '@jc-barberia/contracts';
 
 import { apiGet, apiPost, apiPut, describeError } from '../shared/api-client';
 import { formatPriceArs, parsePriceArsInput } from '../shared/money';
 import { hasPermission } from '../shared/permissions';
+import { useReferenceData } from '../shared/use-reference-data';
 import type { Actor } from '../shared/actor';
 import './ManagementPage.css';
 
@@ -45,39 +44,12 @@ export function ManagementPage({ actor }: ManagementPageProps) {
   const hasAnySection = canClients || canBarbers || canSchedules || canPricing;
   const needsReferenceData = canBarbers || canSchedules || canPricing;
 
-  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
-  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
-  const [referenceError, setReferenceError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!needsReferenceData) {
-      return;
-    }
-    let cancelled = false;
-    async function load() {
-      try {
-        const [barbersResponse, servicesResponse] = await Promise.all([
-          apiGet<PublicBarbersResponse>('/barbers'),
-          apiGet<PublicServicesResponse>('/services'),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setBarbers(barbersResponse.barbers);
-        setServices(servicesResponse.services);
-      } catch (err) {
-        if (!cancelled) {
-          setReferenceError(describeError(err));
-        }
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [needsReferenceData]);
-
-  const referenceDataReady = barbers !== null && services !== null && !referenceError;
+  const {
+    barbers,
+    services,
+    error: referenceError,
+    ready: referenceDataReady,
+  } = useReferenceData({ enabled: needsReferenceData });
 
   return (
     <section className="management">
@@ -88,13 +60,16 @@ export function ManagementPage({ actor }: ManagementPageProps) {
       {needsReferenceData && !referenceDataReady && !referenceError && (
         <p className="empty-state">Cargando barberos y servicios...</p>
       )}
-      {canBarbers && referenceDataReady && <BarbersSection barbers={barbers} />}
+      {/* `barbers &&`/`services &&` rather than `referenceDataReady`: the
+          flag says the same thing, but only the direct checks narrow the
+          nullable lists for the props below. */}
+      {canBarbers && barbers && <BarbersSection barbers={barbers} />}
       {/* Its own fetch, independent of the barber/service reference data —
           an account exists whether or not the barber is still active, so this
           section must not disappear behind that gate. */}
       {canBarbers && <BarberAccountsSection />}
-      {canSchedules && referenceDataReady && <SchedulesSection barbers={barbers} />}
-      {canPricing && referenceDataReady && <PricingSection services={services} />}
+      {canSchedules && barbers && <SchedulesSection barbers={barbers} />}
+      {canPricing && services && <PricingSection services={services} />}
     </section>
   );
 }

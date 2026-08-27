@@ -3,10 +3,6 @@ import type {
   CreateWalkInRequest,
   DayBoardResponse,
   EditAppointmentRequest,
-  PublicBarberResponse,
-  PublicBarbersResponse,
-  PublicServiceResponse,
-  PublicServicesResponse,
   SlotAction,
 } from '@jc-barberia/contracts';
 
@@ -15,6 +11,7 @@ import { EditAppointmentForm } from './EditAppointmentForm';
 import { slotToEditValues } from './slot-to-edit-values';
 import { WalkInForm } from './WalkInForm';
 import { apiGet, apiPost, apiPut, describeError } from '../shared/api-client';
+import { useReferenceData } from '../shared/use-reference-data';
 
 export interface AdminDayBoardPanelProps {
   readonly dayBoard: DayBoardResponse;
@@ -50,9 +47,7 @@ export function AdminDayBoardPanel({ dayBoard: dayBoardProp }: AdminDayBoardPane
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
-  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
-  const [referenceDataError, setReferenceDataError] = useState<string | null>(null);
+  const { barbers, services, error: referenceDataError } = useReferenceData();
 
   // Keeps this panel in sync when the page above fetches a different date
   // into the SAME mounted instance — internal reloads never touch the
@@ -60,31 +55,6 @@ export function AdminDayBoardPanel({ dayBoard: dayBoardProp }: AdminDayBoardPane
   useEffect(() => {
     setDayBoard(dayBoardProp);
   }, [dayBoardProp]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [barbersResponse, servicesResponse] = await Promise.all([
-          apiGet<PublicBarbersResponse>('/barbers'),
-          apiGet<PublicServicesResponse>('/services'),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setBarbers(barbersResponse.barbers);
-        setServices(servicesResponse.services);
-      } catch (err) {
-        if (!cancelled) {
-          setReferenceDataError(describeError(err));
-        }
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function reload() {
     const fresh = await apiGet<DayBoardResponse>(`/agenda/day-board?date=${encodeURIComponent(dayBoard.date)}`);

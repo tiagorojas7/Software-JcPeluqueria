@@ -60,7 +60,7 @@ describe('session con localStorage bloqueado', () => {
   });
 
   it('loadPersistedActor devuelve null si el storage tira', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
       throw new Error('storage blocked');
     });
 
@@ -68,7 +68,7 @@ describe('session con localStorage bloqueado', () => {
   });
 
   it('savePersistedActor no explota si el storage tira', () => {
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
       throw new Error('storage blocked');
     });
 
@@ -76,7 +76,7 @@ describe('session con localStorage bloqueado', () => {
   });
 
   it('clearPersistedActor no explota si el storage tira', () => {
-    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+    vi.spyOn(window.localStorage, 'removeItem').mockImplementation(() => {
       throw new Error('storage blocked');
     });
 

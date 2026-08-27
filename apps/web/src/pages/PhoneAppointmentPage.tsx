@@ -1,17 +1,11 @@
-import { useEffect, useState } from 'react';
-import type {
-  CreatePhoneAppointmentRequest,
-  PhoneAppointmentResponse,
-  PublicBarberResponse,
-  PublicBarbersResponse,
-  PublicServiceResponse,
-  PublicServicesResponse,
-} from '@jc-barberia/contracts';
+import { useState } from 'react';
+import type { CreatePhoneAppointmentRequest, PhoneAppointmentResponse } from '@jc-barberia/contracts';
 
 import { PhoneAppointmentForm } from '../appointments/PhoneAppointmentForm';
-import { apiGet, apiPost, describeError } from '../shared/api-client';
+import { apiPost, describeError } from '../shared/api-client';
 import type { Actor } from '../shared/actor';
 import { appointmentStatusLabel } from '../shared/appointment-status';
+import { useReferenceData } from '../shared/use-reference-data';
 import { utcIsoToShopLocalDate, utcIsoToShopLocalTime } from '../shared/shop-time';
 import './PhoneAppointmentPage.css';
 
@@ -43,39 +37,10 @@ function nameOf(catalogue: readonly { id: string; name: string }[] | null, id: s
  *  passes the real records through unchanged — `PhoneAppointmentForm`'s own
  *  `{ id, name }` prop shape needed no change at all. */
 export function PhoneAppointmentPage({ actor }: PhoneAppointmentPageProps) {
-  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
-  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { barbers, services, error: loadError } = useReferenceData({ enabled: actor !== null });
   const [result, setResult] = useState<PhoneAppointmentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!actor) {
-      return;
-    }
-    let cancelled = false;
-    async function load() {
-      try {
-        const [barbersResponse, servicesResponse] = await Promise.all([
-          apiGet<PublicBarbersResponse>('/barbers'),
-          apiGet<PublicServicesResponse>('/services'),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setBarbers(barbersResponse.barbers);
-        setServices(servicesResponse.services);
-      } catch (err) {
-        if (!cancelled) {
-          setLoadError(describeError(err));
-        }
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [actor]);
 
   async function handleSubmit(input: CreatePhoneAppointmentRequest) {
     setError(null);

@@ -6,10 +6,6 @@ import type {
   CheckoutResponseBody,
   ConfirmReservationRequest,
   HoldResponse,
-  PublicBarberResponse,
-  PublicBarbersResponse,
-  PublicServiceResponse,
-  PublicServicesResponse,
 } from '@jc-barberia/contracts';
 
 import { AccessCodeNotice } from '../booking/AccessCodeNotice';
@@ -21,6 +17,7 @@ import { apiGet, apiPost, describeError } from '../shared/api-client';
 import { formatPriceArs } from '../shared/money';
 import { nowMs } from '../shared/now';
 import { utcIsoToShopLocalTime } from '../shared/shop-time';
+import { useReferenceData } from '../shared/use-reference-data';
 import './BookingPage.css';
 
 /**
@@ -51,10 +48,8 @@ import './BookingPage.css';
  * flow completely untouched.
  */
 export function BookingPage() {
-  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
-  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
+  const { barbers, services, error: loadError } = useReferenceData();
   const [accountProfile, setAccountProfile] = useState<AccountProfileResponse | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [barberId, setBarberId] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [date, setDate] = useState('');
@@ -72,38 +67,23 @@ export function BookingPage() {
   const [tick, setTick] = useState(nowMs());
   const [error, setError] = useState<string | null>(null);
 
+  // Defaults the two selects to the first option as soon as the catalogues
+  // arrive, so the visitor lands on a usable form instead of two empty
+  // pickers. Guarded on the current value being empty: this must never
+  // overwrite a choice the visitor already made.
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [barbersResponse, servicesResponse] = await Promise.all([
-          apiGet<PublicBarbersResponse>('/barbers'),
-          apiGet<PublicServicesResponse>('/services'),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setBarbers(barbersResponse.barbers);
-        setServices(servicesResponse.services);
-        const [firstBarber] = barbersResponse.barbers;
-        const [firstService] = servicesResponse.services;
-        if (firstBarber) {
-          setBarberId(firstBarber.id);
-        }
-        if (firstService) {
-          setServiceId(firstService.id);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setLoadError(describeError(err));
-        }
-      }
+    const firstBarber = barbers?.[0];
+    if (firstBarber) {
+      setBarberId((current) => current || firstBarber.id);
     }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [barbers]);
+
+  useEffect(() => {
+    const firstService = services?.[0];
+    if (firstService) {
+      setServiceId((current) => current || firstService.id);
+    }
+  }, [services]);
 
   // Best-effort, independent of the barbers/services load above: a returning
   // client's session is optional reference data, never something that can

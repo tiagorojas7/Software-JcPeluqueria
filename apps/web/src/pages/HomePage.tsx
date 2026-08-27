@@ -1,9 +1,6 @@
-import { useEffect, useState } from 'react';
-import type { PublicBarberResponse, PublicBarbersResponse, PublicServiceResponse, PublicServicesResponse } from '@jc-barberia/contracts';
-
-import { apiGet, describeError } from '../shared/api-client';
 import { formatPriceArs } from '../shared/money';
 import { Link } from '../shared/router';
+import { useReferenceData } from '../shared/use-reference-data';
 import './HomePage.css';
 
 const STEPS = [
@@ -45,34 +42,7 @@ const GALLERY = [
  * nothing about the redesign hardcodes a service, a price or a barber.
  */
 export function HomePage() {
-  const [services, setServices] = useState<readonly PublicServiceResponse[] | null>(null);
-  const [barbers, setBarbers] = useState<readonly PublicBarberResponse[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const [servicesResponse, barbersResponse] = await Promise.all([
-          apiGet<PublicServicesResponse>('/services'),
-          apiGet<PublicBarbersResponse>('/barbers'),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setServices(servicesResponse.services);
-        setBarbers(barbersResponse.barbers);
-      } catch (err) {
-        if (!cancelled) {
-          setError(describeError(err));
-        }
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { services, barbers, error } = useReferenceData();
 
   return (
     <div className="home">
