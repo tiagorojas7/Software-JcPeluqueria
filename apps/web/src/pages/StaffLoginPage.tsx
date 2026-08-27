@@ -65,6 +65,12 @@ export function StaffLoginPage({ onLoggedIn }: StaffLoginPageProps) {
           <button type="submit">Ingresar</button>
         </form>
         <p className="staff-login__recovery">¿No recordás tu contraseña? Pedísela al dueño del local.</p>
+        {/* A client who lands here by mistake — this is the only screen in
+            the app with no header — otherwise has no way back to the site
+            except the browser's back button. */}
+        <p className="staff-login__exit">
+          <a href="/">¿Buscabas reservar un turno? Volvé al sitio</a>
+        </p>
       </div>
     </div>
   );

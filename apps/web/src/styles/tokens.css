@@ -517,6 +517,40 @@ button.btn-primary:hover {
   width: 100%;
   max-width: 380px;
   text-align: center;
+  background: var(--surface-card);
+  border-top: 2px solid var(--color-accent);
+}
+
+.access-code-page__brand {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-champagne);
+}
+
+/* Says the quiet part out loud: this account has no password by design. */
+.access-code-page__note {
+  margin: var(--space-4) 0 var(--space-5);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.access-code-page__sent-to {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
+.access-code-page__sent-to strong {
+  color: var(--color-champagne);
+  word-break: break-all;
 }
 
 .access-code-page__card form {

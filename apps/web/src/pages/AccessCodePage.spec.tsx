@@ -157,4 +157,26 @@ describe('AccessCodePage (fix/acceso-cliente-sin-id)', () => {
     // outcome-invariant message — never a branch on whether the email was found.
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
+
+  // Entrar sin contrasenia es lo raro de este flujo, y no estaba explicado en
+  // ningun lado: quien llega busca un campo de password que no existe y
+  // asume que la pantalla esta rota o que perdio la cuenta.
+  it('explica que no hace falta contraseña', () => {
+    const { container } = renderPage();
+
+    expect(container.textContent).toMatch(/sin contrase|no (necesit|hace falta)/i);
+  });
+
+  // Una vez pedido el codigo, el email al que se mando tiene que quedar a la
+  // vista: es el dato que la gente escribe mal, y sin verlo no puede saber
+  // por que el correo no llega.
+  it('muestra a qué email se mandó el código', async () => {
+    vi.mocked(apiPost).mockResolvedValue({ outcome: 'requested' });
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'agustin@mail.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /pedir c.digo/i }));
+
+    expect(await screen.findByText(/agustin@mail\.com/)).toBeInTheDocument();
+  });
 });

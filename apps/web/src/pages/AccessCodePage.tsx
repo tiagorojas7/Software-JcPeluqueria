@@ -206,8 +206,18 @@ export function AccessCodePage() {
   return (
     <section className="container access-code-page">
       <div className="card access-code-page__card">
+        <span className="access-code-page__brand">JC Barbería</span>
         <h2>Ingresar con código</h2>
         <p>Si ya reservaste antes, pedí un código para ver y gestionar tus turnos.</p>
+
+        {/* Entering without a password is the unusual part of this flow and
+            it was nowhere on screen: someone arriving here looks for a
+            password field that does not exist and concludes the page is
+            broken or that they never had an account. */}
+        <p className="access-code-page__note">
+          Sin contraseña: te mandamos un código por email cada vez que quieras entrar.
+        </p>
+
         {error && <p role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
         {screen === 'email' ? (
@@ -217,7 +227,17 @@ export function AccessCodePage() {
             <button type="submit">Pedir código</button>
           </form>
         ) : (
-          <AccessCodeForm status={status} onSubmit={handleSubmitCode} onRequestNewCode={handleRequestNewCode} />
+          <>
+            {/* The address the code went to is the one thing people mistype,
+                and without seeing it they cannot work out why no mail
+                arrived. */}
+            {email && (
+              <p className="access-code-page__sent-to">
+                Código enviado a <strong>{email}</strong>
+              </p>
+            )}
+            <AccessCodeForm status={status} onSubmit={handleSubmitCode} onRequestNewCode={handleRequestNewCode} />
+          </>
         )}
       </div>
     </section>

@@ -59,3 +59,9 @@
   font-size: var(--text-xs);
   color: var(--color-muted);
 }
+
+.staff-login__exit {
+  margin: var(--space-3) 0 0;
+  text-align: center;
+  font-size: var(--text-xs);
+}
