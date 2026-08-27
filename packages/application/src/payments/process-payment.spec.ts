@@ -198,6 +198,55 @@ describe('ProcessPaymentUseCase', () => {
     expect(reminderScheduler.scheduleCalls).toHaveLength(1);
   });
 
+  // The orphaned-charge hole: `POST /holds/checkout` has no per-hold lock, so
+  // two MercadoPago preferences can exist for the same hold (double-click,
+  // retry after timeout, reopened tab). If both get paid, the second approved
+  // payment cannot claim the slot (`hold-not-found`) — real money captured
+  // for a turno that already belongs to the FIRST payment. Keeping it would
+  // be silent theft; the worker must give it back, automatically.
+  it('refunds an approved payment whose hold can no longer be claimed', async () => {
+    const paymentPort = new FakePaymentPort({
+      paymentId: 'payment-8',
+      status: 'approved',
+      amountCents: 250000,
+      externalReference: 'hold-8',
+    });
+    const { useCase, deposits, reminderScheduler, outbox } = buildUseCase(paymentPort);
+    deposits.seedUnclaimableHold('hold-8');
+
+    const result = await useCase.execute('payment-8');
+
+    expect(paymentPort.refundCalls).toEqual([{ paymentId: 'payment-8', amountCents: 250000 }]);
+    expect(result).toEqual({ outcome: 'orphaned-payment-refunded' });
+    // Nothing was confirmed: no reminder, no booking_confirmed email.
+    expect(reminderScheduler.scheduleCalls).toEqual([]);
+    expect(outbox.enqueued).toEqual([]);
+  });
+
+  // A refund that fails must NOT resolve the job as done — propagating lets
+  // pg-boss retry with backoff, and the rolled-back deposit insert means the
+  // retry runs the whole attempt again instead of short-circuiting into
+  // 'already-processed' with the money still kept.
+  it('propagates a refund failure so the job retries instead of silently keeping the charge', async () => {
+    const paymentPort = new FakePaymentPort({
+      paymentId: 'payment-9',
+      status: 'approved',
+      amountCents: 250000,
+      externalReference: 'hold-9',
+    });
+    const { useCase, deposits } = buildUseCase(paymentPort);
+    deposits.seedUnclaimableHold('hold-9');
+    paymentPort.refundError = new Error('gateway down');
+
+    await expect(useCase.execute('payment-9')).rejects.toThrow('gateway down');
+
+    paymentPort.refundError = null;
+    const retry = await useCase.execute('payment-9');
+
+    expect(retry).toEqual({ outcome: 'orphaned-payment-refunded' });
+    expect(paymentPort.refundCalls).toHaveLength(2);
+  });
+
   // Task 5.15 — client-booking spec: "Falla el cobro de la seña". design.md
   // line 152: "Si MercadoPago responde `rejected` o `cancelled`, se libera
   // de inmediato sin esperar los 15 minutos." A `rejected` payment MUST NOT

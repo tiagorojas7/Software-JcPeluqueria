@@ -10,6 +10,12 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { deposits } from '../db/schema/payments';
 import { slotOccupancies } from '../db/schema/slot-occupancy';
 
+/** Local rollback signal for `recordSettledPayment` — throwing it inside
+ *  `db.transaction` aborts the whole transaction (postgres semantics), which
+ *  is exactly how the deposit insert gets discarded on a failed claim. Never
+ *  escapes the repository. */
+class HoldNotClaimableError extends Error {}
+
 /**
  * The idempotency guard lives entirely in `deposits.payment_id`'s `UNIQUE`
  * constraint: `onConflictDoNothing` makes a retried `payment_id` insert
@@ -20,29 +26,48 @@ import { slotOccupancies } from '../db/schema/slot-occupancy';
 export class DrizzleDepositRepository implements DepositRepository {
   constructor(private readonly db: PostgresJsDatabase) {}
 
+  /** Insert + claim are ONE transaction on purpose: a deposit row that
+   *  survived a failed claim would be captured money linked to no turno
+   *  (`findDepositForAppointment` only resolves through
+   *  `slot_occupancies.deposit_id`), and its `payment_id` UNIQUE hit would
+   *  turn every webhook retry into 'already-processed' — permanently burying
+   *  the refund `ProcessPaymentUseCase` owes on 'hold-not-found'. Rolling
+   *  back instead makes the retry a fresh attempt until that refund lands. */
   async recordSettledPayment(input: {
     holdId: string;
     paymentId: string;
     amountCents: number;
   }): Promise<RecordSettledPaymentResult> {
-    const inserted = await this.db
-      .insert(deposits)
-      .values({ amountCents: input.amountCents, paymentId: input.paymentId, state: 'settled' })
-      .onConflictDoNothing({ target: deposits.paymentId })
-      .returning({ id: deposits.id });
+    try {
+      return await this.db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(deposits)
+          .values({ amountCents: input.amountCents, paymentId: input.paymentId, state: 'settled' })
+          .onConflictDoNothing({ target: deposits.paymentId })
+          .returning({ id: deposits.id });
 
-    const insertedDeposit = inserted[0];
-    if (!insertedDeposit) {
-      return 'already-processed';
+        const insertedDeposit = inserted[0];
+        if (!insertedDeposit) {
+          return 'already-processed';
+        }
+
+        const updated = await tx
+          .update(slotOccupancies)
+          .set({ status: 'reservado', depositId: insertedDeposit.id, paymentPending: false })
+          .where(and(eq(slotOccupancies.id, input.holdId), eq(slotOccupancies.status, 'held')))
+          .returning({ id: slotOccupancies.id });
+
+        if (updated.length === 0) {
+          throw new HoldNotClaimableError();
+        }
+        return 'confirmed';
+      });
+    } catch (error) {
+      if (error instanceof HoldNotClaimableError) {
+        return 'hold-not-found';
+      }
+      throw error;
     }
-
-    const updated = await this.db
-      .update(slotOccupancies)
-      .set({ status: 'reservado', depositId: insertedDeposit.id, paymentPending: false })
-      .where(and(eq(slotOccupancies.id, input.holdId), eq(slotOccupancies.status, 'held')))
-      .returning({ id: slotOccupancies.id });
-
-    return updated.length > 0 ? 'confirmed' : 'hold-not-found';
   }
 
   // Terminal-failure release for the webhook worker

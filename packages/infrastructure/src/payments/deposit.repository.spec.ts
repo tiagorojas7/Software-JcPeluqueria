@@ -101,6 +101,29 @@ describe('DrizzleDepositRepository (Testcontainers)', () => {
     expect(outcome).toBe('hold-not-found');
   });
 
+  // The orphaned-charge hole: checkout has no per-hold lock, so a SECOND
+  // payment can settle for a hold already reservado through the first one.
+  // The insert-then-claim pair must be atomic — a deposit row that survives
+  // a failed claim is captured money linked to nothing (`findDepositForAppointment`
+  // only resolves through `slot_occupancies.deposit_id`), and its
+  // `payment_id` UNIQUE hit would turn every webhook retry into
+  // 'already-processed', permanently burying the refund the worker owes.
+  it('rolls the deposit insert back when the hold cannot be claimed — no orphaned settled row survives', async () => {
+    const holdId = await newWebHold();
+    const repo = new DrizzleDepositRepository(db);
+    await repo.recordSettledPayment({ holdId, paymentId: 'payment-first', amountCents: 250000 });
+
+    const second = await repo.recordSettledPayment({ holdId, paymentId: 'payment-second', amountCents: 250000 });
+
+    expect(second).toBe('hold-not-found');
+    const rows = await client`select count(*)::int as total from deposits where payment_id = 'payment-second'`;
+    expect([...rows]).toEqual([{ total: 0 }]);
+    // And the retry is a FRESH attempt (fresh insert, fresh claim, fresh
+    // hold-not-found for the caller to refund) — never 'already-processed'.
+    const retry = await repo.recordSettledPayment({ holdId, paymentId: 'payment-second', amountCents: 250000 });
+    expect(retry).toBe('hold-not-found');
+  });
+
   // Task 5.15/5.16 — `releaseHoldOnRejectedPayment` is the symmetric,
   // idempotent DB counterpart of `recordSettledPayment` for the terminal-
   // failure side of the webhook (design.md line 152). Same atomic

@@ -15,7 +15,11 @@ import type {
 import type { ScheduleAppointmentReminder } from '../booking/appointment-reminder';
 
 export type ProcessPaymentResult =
-  | { readonly outcome: RecordSettledPaymentResult }
+  | { readonly outcome: Exclude<RecordSettledPaymentResult, 'hold-not-found'> }
+  /** An approved payment whose hold could not be claimed (already reservado
+   *  through another payment, or released): the charge was given back in
+   *  full. `hold-not-found` itself never escapes this use case. */
+  | { readonly outcome: 'orphaned-payment-refunded' }
   | { readonly outcome: ReleaseRejectedPaymentResult; readonly status: 'rejected' | 'cancelled' }
   | { readonly outcome: 'ignored'; readonly status: PaymentStatus };
 
@@ -84,6 +88,24 @@ export class ProcessPaymentUseCase {
           });
           await this.notifyBookingConfirmed(appointment);
         }
+        return { outcome };
+      }
+      if (outcome === 'hold-not-found') {
+        // Real money was captured for a hold this payment can no longer
+        // claim — checkout has no per-hold lock, so a second preference for
+        // the same hold can get paid too, and expired holds can settle late.
+        // `recordSettledPayment` rolled its deposit insert back, so nothing
+        // links this charge to any turno: give it back, in full, NOW. A
+        // throwing refund (gateway down, 428) propagates on purpose —
+        // pg-boss retries the whole job, the claim fails the same way, and
+        // the refund is attempted again; the adapter treats MercadoPago's
+        // "already refunded" as success, so a crash after a successful
+        // refund retries into a no-op, never a double give-back.
+        await this.paymentPort.refund({
+          paymentId: payment.paymentId,
+          amountCents: payment.amountCents,
+        });
+        return { outcome: 'orphaned-payment-refunded' };
       }
       return { outcome };
     }

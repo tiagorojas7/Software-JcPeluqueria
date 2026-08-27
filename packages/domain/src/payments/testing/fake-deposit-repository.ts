@@ -34,6 +34,7 @@ export class FakeDepositRepository implements DepositRepository {
   readonly findCalls: string[] = [];
   private readonly processedPaymentIds = new Set<string>();
   private readonly releasedHoldIds = new Set<string>();
+  private readonly unclaimableHoldIds = new Set<string>();
   /**
    * Test seed: appointment id → the deposit attached to it. Use
    * `seedNotApplicableAppointment` for a phone/walk-in row (no deposit
@@ -50,6 +51,12 @@ export class FakeDepositRepository implements DepositRepository {
     this.calls.push(input);
     if (this.processedPaymentIds.has(input.paymentId)) {
       return 'already-processed';
+    }
+    // Mirrors the real repository's transactional rollback: a claim that
+    // fails leaves NO deposit row behind, so a retried payment_id runs the
+    // whole attempt again — it must never observe 'already-processed'.
+    if (this.unclaimableHoldIds.has(input.holdId)) {
+      return 'hold-not-found';
     }
     this.processedPaymentIds.add(input.paymentId);
     return 'confirmed';
@@ -124,5 +131,12 @@ export class FakeDepositRepository implements DepositRepository {
 
   seedNotApplicableAppointment(appointmentId: string): void {
     this.notApplicableAppointments.add(appointmentId);
+  }
+
+  /** Marks a hold as no longer claimable (already reservado via another
+   *  payment, or released) so `recordSettledPayment` reports
+   *  `'hold-not-found'` — the orphaned-charge scenario. */
+  seedUnclaimableHold(holdId: string): void {
+    this.unclaimableHoldIds.add(holdId);
   }
 }
