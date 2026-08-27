@@ -8,3 +8,4 @@ export * from './identity';
 export * from './notifications';
 export * from './panel';
 export * from './payments';
+export * from './shop';

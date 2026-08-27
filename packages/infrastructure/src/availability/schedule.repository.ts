@@ -8,7 +8,7 @@ import {
   type ScheduleRepository,
   type ShopHours,
 } from '@jc-barberia/domain';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, notInArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import { barberSchedules, barberTimeOff, shopHours } from '../db/schema/availability';
@@ -63,6 +63,22 @@ export class DrizzleScheduleRepository implements ScheduleRepository {
       )
       .returning({ barberId: barberSchedules.barberId });
     return updated.length > 0;
+  }
+
+  /**
+   * `keepDaysOfWeek.length === 0` skips the `notInArray` clause entirely and
+   * deletes every row for `barberId` outright — an empty array otherwise
+   * risks becoming `day_of_week NOT IN ()`, which some drivers read as
+   * vacuously true and some as vacuously false; neither is the "delete
+   * everything" this method's contract promises for that input, so it is
+   * handled explicitly rather than left to whatever the SQL dialect decides.
+   */
+  async deleteBarberScheduleForDaysNotIn(barberId: string, keepDaysOfWeek: readonly DayOfWeek[]): Promise<void> {
+    const scope =
+      keepDaysOfWeek.length === 0
+        ? eq(barberSchedules.barberId, barberId)
+        : and(eq(barberSchedules.barberId, barberId), notInArray(barberSchedules.dayOfWeek, [...keepDaysOfWeek]));
+    await this.db.delete(barberSchedules).where(scope);
   }
 
   async createBarberTimeOff(timeOff: BarberTimeOff): Promise<void> {

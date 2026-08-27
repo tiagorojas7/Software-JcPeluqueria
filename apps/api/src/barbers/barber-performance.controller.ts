@@ -42,7 +42,12 @@ export class BarberPerformanceController {
     if (result.outcome === 'forbidden') {
       throw new ForbiddenException(`Actor is not entitled to barber "${barberId}"'s stats.`);
     }
-    return { count: result.count };
+    return {
+      count: result.count,
+      cancelledCount: result.cancelledCount,
+      absentCount: result.absentCount,
+      unresolvedCount: result.unresolvedCount,
+    };
   }
 
   @RequiresPermission('finance:read:own')
@@ -57,7 +62,11 @@ export class BarberPerformanceController {
     if (result.outcome === 'forbidden') {
       throw new ForbiddenException(`Actor is not entitled to barber "${barberId}"'s revenue.`);
     }
-    return { totalListPriceCents: result.totalListPriceCents, disclaimer: result.disclaimer };
+    return {
+      totalListPriceCents: result.totalListPriceCents,
+      disclaimer: result.disclaimer,
+      byService: result.byService,
+    };
   }
 
   /** `from`/`to` are calendar dates (`YYYY-MM-DD`), never a raw instant —

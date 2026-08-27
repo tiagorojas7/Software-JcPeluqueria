@@ -198,7 +198,43 @@ describe('ManagementPage (D.3)', () => {
         { dayOfWeek: 2, opensAt: '10:00', closesAt: '19:00' },
         { dayOfWeek: 4, opensAt: '09:00', closesAt: '18:00' },
       ],
+      confirm: false,
     });
+  });
+
+  // docs/HUECOS-BACKEND.md #6, segunda parte: el backend puede responder que
+  // NO escribio nada porque un turno reservado quedaria huerfano. Mostrar
+  // "Horario actualizado" igual seria la misma mentira que el hueco #6
+  // original, un piso mas arriba.
+  it('pide confirmacion y NO dice "actualizado" cuando quedarian turnos huerfanos', async () => {
+    vi.mocked(apiPut).mockResolvedValueOnce({ configured: false, affectedAppointmentIds: ['apt-1', 'apt-2'] });
+    const { container } = render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByRole('heading', { name: /horarios/i });
+    fireEvent.click(container.querySelector('#mgmt-schedule-week-2-enabled')!);
+    fireEvent.click(screen.getByRole('button', { name: /guardar horario/i }));
+
+    expect(await screen.findByText(/2 turnos reservados/i)).toBeInTheDocument();
+    expect(screen.queryByText(/horario actualizado/i)).not.toBeInTheDocument();
+  });
+
+  it('reenvia con confirm:true cuando el dueno confirma, y ahi si muestra exito', async () => {
+    vi.mocked(apiPut).mockResolvedValueOnce({ configured: false, affectedAppointmentIds: ['apt-1'] });
+    const { container } = render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByRole('heading', { name: /horarios/i });
+    fireEvent.click(container.querySelector('#mgmt-schedule-week-2-enabled')!);
+    fireEvent.click(screen.getByRole('button', { name: /guardar horario/i }));
+    await screen.findByText(/1 turno reservado/i);
+
+    vi.mocked(apiPut).mockResolvedValueOnce({ configured: true });
+    fireEvent.click(screen.getByRole('button', { name: /guardar igual/i }));
+
+    expect(await screen.findByText(/horario actualizado/i)).toBeInTheDocument();
+    expect(apiPut).toHaveBeenLastCalledWith(
+      '/panel/barbers/b1/schedule/week',
+      expect.objectContaining({ confirm: true }),
+    );
   });
 
   it('no guarda un horario sin al menos un dia de trabajo elegido', async () => {

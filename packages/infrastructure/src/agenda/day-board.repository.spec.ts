@@ -1,5 +1,5 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { createBarber, createService, type ActorContext } from '@jc-barberia/domain';
+import { createBarber, createService, dayOfWeekOf, type ActorContext } from '@jc-barberia/domain';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
@@ -10,8 +10,9 @@ import { DrizzleServiceRepository } from '../availability/service.repository';
 import { ShopClock } from '../shared/clock/shop-clock';
 import { DrizzleDayBoardRepository } from './day-board.repository';
 
-const DAY = '2026-09-01';
-const OTHER_DAY = '2026-09-02';
+const DAY = '2026-09-01'; // a Tuesday
+const OTHER_DAY = '2026-09-02'; // a Wednesday
+const DAY_OF_WEEK = dayOfWeekOf(DAY);
 
 // Row-level narrowing by barber_id is a database guarantee here (task 8.7,
 // reusing 3b.7's rule), so — like agenda.repository.spec.ts — it can only be
@@ -60,6 +61,15 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
     barberBId = barberB.id;
     serviceId = service.id;
 
+    // Barber A works the fixture's day of week; barber B has NO row for it —
+    // proves the join distinguishes "no schedule" from "schedule elsewhere".
+    await client`insert into barber_schedules (barber_id, day_of_week, opens_at, closes_at)
+                 values (${barberAId}, ${DAY_OF_WEEK}, '09:00', '18:00')`;
+    // Barber B's row exists, but only for a DIFFERENT day of week — proves the
+    // join is keyed on the requested date's weekday, not just "has any row".
+    await client`insert into barber_schedules (barber_id, day_of_week, opens_at, closes_at)
+                 values (${barberBId}, ${(DAY_OF_WEEK + 1) % 7}, '10:00', '19:00')`;
+
     // The board carries BOTH channels, so the fixture does too. Phase 5's
     // `web_channel_requires_deposit_once_settled` makes a web row past the
     // hold stage without a deposit unrepresentable ("pagar despues" on the
@@ -98,17 +108,34 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
 
     expect(result.columns).toEqual(
       expect.arrayContaining([
-        { barberId: barberAId, barberName: 'Juan' },
-        { barberId: barberBId, barberName: 'Ana' },
+        { barberId: barberAId, barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+        { barberId: barberBId, barberName: 'Ana', opensAt: null, closesAt: null },
       ]),
     );
     expect(result.slots).toHaveLength(2);
     expect(result.slots).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ barberId: barberAId, status: 'reservado' }),
-        expect.objectContaining({ barberId: barberBId, status: 'reservado' }),
+        expect.objectContaining({ barberId: barberAId, status: 'reservado', channel: 'web' }),
+        expect.objectContaining({ barberId: barberBId, status: 'reservado', channel: 'telefonico' }),
       ]),
     );
+  });
+
+  // El hueco que bloqueaba el rediseño del panel: `DayBoardColumn` no traía el
+  // horario del día, así que la columna no podía dibujar su propio horario ni
+  // calcular huecos libres — y un día sin turnos no dice nada sobre el
+  // horario, así que no era derivable del lado del cliente.
+  it("expone el horario del barbero para ESE día de la semana, y null si no trabaja ese día — el hueco #1", async () => {
+    const result = await repository.findDayBoard(DAY, OWNER);
+
+    const columnA = result.columns.find((c) => c.barberId === barberAId);
+    const columnB = result.columns.find((c) => c.barberId === barberBId);
+
+    expect(columnA).toEqual({ barberId: barberAId, barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' });
+    // Barbero B SÍ tiene una fila en barber_schedules, pero para OTRO día de la
+    // semana — probar solo "tiene o no tiene fila" no alcanzaría para detectar
+    // un join mal condicionado.
+    expect(columnB).toEqual({ barberId: barberBId, barberName: 'Ana', opensAt: null, closesAt: null });
   });
 
   // El dueño dio de baja a un barbero desde el panel y la agenda le siguio
@@ -134,7 +161,9 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
     const result = await repository.findDayBoard(DAY, OWNER);
 
     expect(result.columns).toEqual(
-      expect.arrayContaining([{ barberId: retirado!.id, barberName: 'Retirado con turno' }]),
+      expect.arrayContaining([
+        { barberId: retirado!.id, barberName: 'Retirado con turno', opensAt: null, closesAt: null },
+      ]),
     );
     expect(result.slots).toEqual(
       expect.arrayContaining([expect.objectContaining({ barberId: retirado!.id, status: 'reservado' })]),
@@ -146,10 +175,12 @@ describe('DrizzleDayBoardRepository (Testcontainers)', () => {
 
     const result = await repository.findDayBoard(DAY, barberActor);
 
-    expect(result.columns).toEqual([{ barberId: barberAId, barberName: 'Juan' }]);
+    expect(result.columns).toEqual([
+      { barberId: barberAId, barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+    ]);
     expect(result.slots).toHaveLength(1);
     expect(result.slots[0]).toEqual(
-      expect.objectContaining({ barberId: barberAId, status: 'reservado' }),
+      expect.objectContaining({ barberId: barberAId, status: 'reservado', channel: 'web' }),
     );
   });
 

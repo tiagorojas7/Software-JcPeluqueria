@@ -59,7 +59,27 @@ describe('GET /barbers, GET /services (App Nest levantada en memoria)', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
-      services: [{ id: SERVICE_ID, name: 'Corte clásico', durationMinutes: 30, priceCents: 800000 }],
+      services: [
+        { id: SERVICE_ID, name: 'Corte clásico', durationMinutes: 30, priceCents: 800000, depositCents: 400000 },
+      ],
     });
+  });
+
+  // docs/HUECOS-BACKEND.md, "fuera de esta lista": the panel's Precios
+  // screen wants to show the seña next to each price. Deriving it in the
+  // browser (`priceCents / 2`) would duplicate `depositAmountCents` in a
+  // second place, and the day the seña stops being a flat 50% one of the two
+  // would go stale. Rounds the same way `depositAmountCents` does — an odd
+  // price is a real case (nothing in `configureServicePrice` requires an
+  // even number of cents).
+  it('rounds an odd priceCents the same way depositAmountCents does', async () => {
+    await services.create(
+      createService({ id: 'service-odd', name: 'Arreglo de barba', durationMinutes: 15, priceCents: 150001 }),
+    );
+
+    const response = await request(app.getHttpServer()).get('/services');
+
+    const odd = response.body.services.find((s: { id: string }) => s.id === 'service-odd');
+    expect(odd).toMatchObject({ priceCents: 150001, depositCents: 75001 });
   });
 });

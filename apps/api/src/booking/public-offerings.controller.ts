@@ -1,6 +1,7 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import { ListPublicBarbersUseCase, ListPublicServicesUseCase } from '@jc-barberia/application';
 import type { PublicBarbersResponse, PublicServicesResponse } from '@jc-barberia/contracts';
+import { depositAmountCents } from '@jc-barberia/domain';
 
 import { Public } from '../access-control/decorators/public.decorator';
 
@@ -45,6 +46,7 @@ export class ListPublicServicesController {
         name: service.name,
         durationMinutes: service.durationMinutes,
         priceCents: service.priceCents,
+        depositCents: depositAmountCents(service.priceCents),
       })),
     };
   }

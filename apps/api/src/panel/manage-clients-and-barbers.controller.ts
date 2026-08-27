@@ -18,6 +18,7 @@ import {
   ConfigureServicePriceRequestSchema,
   type BarberResponse,
   type ClientsListResponse,
+  type ConfigureBarberWeekResponseBody,
 } from '@jc-barberia/contracts';
 import type { DayOfWeek } from '@jc-barberia/domain';
 
@@ -113,22 +114,34 @@ export class ManageClientsAndBarbersController {
    * instead of one PUT per day — the per-day route above stays untouched for
    * any other caller.
    */
+  /**
+   * docs/HUECOS-BACKEND.md #6, segunda parte: turning off a day here can
+   * orphan a turno that is still `reservado` on it, so this no longer
+   * always writes. Without `confirm: true`, a day removal that would orphan
+   * a turno answers `{ configured: false, affectedAppointmentIds }` and
+   * writes NOTHING — the panel is expected to show that count and let the
+   * owner retry the exact same request with `confirm: true` once they
+   * accept it.
+   */
   @RequiresPermission('schedule:configure')
   @Put('barbers/:barberId/schedule/week')
   @HttpCode(200)
   async configureBarberWeek(
     @Param('barberId') barberId: string,
     @Body() body: unknown,
-  ): Promise<{ configured: true }> {
+  ): Promise<ConfigureBarberWeekResponseBody> {
     const parsed = ConfigureBarberWeekRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.flatten());
     }
-    await this.manage.configureBarberWeek(
+    const result = await this.manage.configureBarberWeek(
       barberId,
       parsed.data.schedule.map((day) => ({ ...day, dayOfWeek: asDayOfWeek(day.dayOfWeek) })),
+      { confirm: parsed.data.confirm },
     );
-    return { configured: true };
+    return result.outcome === 'configured'
+      ? { configured: true }
+      : { configured: false, affectedAppointmentIds: result.affectedAppointmentIds };
   }
 
   @RequiresPermission('pricing:configure')

@@ -62,4 +62,13 @@ export class FakeAppointmentRepository implements AppointmentRepository {
   async findByClientId(clientId: string): Promise<Appointment[]> {
     return [...this.byId.values()].filter((appointment) => appointment.clientId === clientId);
   }
+
+  async findReservedByBarberFrom(barberId: string, from: Date): Promise<Appointment[]> {
+    return [...this.byId.values()].filter(
+      (appointment) =>
+        appointment.barberId === barberId &&
+        appointment.status === 'reservado' &&
+        appointment.timeRange.start >= from,
+    );
+  }
 }

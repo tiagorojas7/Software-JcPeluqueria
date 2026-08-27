@@ -1,10 +1,14 @@
 import {
   createBarber,
+  dayOfWeekOf,
+  type AppointmentRepository,
   type Barber,
   type BarberRepository,
   type BarberSchedule,
+  type Clock,
   type Client,
   type ClientRepository,
+  type DayOfWeek,
   type ScheduleRepository,
   type ServiceRepository,
 } from '@jc-barberia/domain';
@@ -29,6 +33,11 @@ export interface AddBarberInput {
 export type AddBarberResult =
   | { readonly outcome: 'added'; readonly barber: Barber; readonly userId: string }
   | { readonly outcome: 'email-taken' };
+
+/** docs/HUECOS-BACKEND.md #6 — `configureBarberWeek`'s answer. */
+export type ConfigureBarberWeekResult =
+  | { readonly outcome: 'configured' }
+  | { readonly outcome: 'needs-confirmation'; readonly affectedAppointmentIds: readonly string[] };
 
 /**
  * admin-operations spec, "Gestión de clientes y de barberos":
@@ -59,6 +68,10 @@ export class ManageClientsAndBarbersUseCase {
      *  "invitar a un barbero" cannot drift into two different meanings of
      *  the same act. */
     private readonly accounts: ManageBarberAccountsUseCase,
+    /** `configureBarberWeek`'s orphan-turno check — see that method's own
+     *  doc comment. */
+    private readonly appointments: AppointmentRepository,
+    private readonly clock: Clock,
   ) {}
 
   /** "ver... los registros de clientes." */
@@ -134,19 +147,55 @@ export class ManageClientsAndBarbersUseCase {
    * configuring day-by-day through `configureBarberSchedule` used to be the
    * panel's only option, and it only ever made ONE such call, which is why
    * every barber created or rescheduled through the panel ended up with a
-   * single `barber_schedules` row. Loops the exact same create-or-update
-   * fallback `configureBarberSchedule` already applies, one day at a time,
-   * so this is not a second way of writing a schedule row — it is that same
-   * write, repeated for every day the caller sends.
+   * single `barber_schedules` row.
    *
-   * Never deletes a day's row for a day left OUT of `days` — neither this
-   * method nor `configureBarberSchedule` has ever been able to remove a
-   * working day, only create or update one.
+   * docs/HUECOS-BACKEND.md #6, "Apagar un día en Horarios no apaga el día":
+   * `days` is now treated as the barber's COMPLETE week, not a set of
+   * additions. It used to only ever create or update — a day the owner
+   * unchecked in the panel simply vanished from the outgoing payload, and
+   * the backend left the old row exactly as it was: the operator saw a
+   * success message and the barber kept working a day the screen said was
+   * off.
+   *
+   * The doc's own "segunda parte" is this method's second half: turning off
+   * a day can orphan an already-`reservado` turno that still sits on it.
+   * Rather than silently deleting the day out from under that turno, this
+   * checks FIRST — every future `reservado` appointment whose day of week is
+   * about to lose its schedule row — and, unless the caller already passed
+   * `confirm: true`, refuses to write anything at all, returning exactly
+   * which appointments would be orphaned. The owner decides with that number
+   * in hand; a second call with `confirm: true` performs the exact same
+   * write this method always did. No affected turnos means no question to
+   * ask, so the write proceeds immediately either way.
    */
-  async configureBarberWeek(barberId: string, days: readonly Omit<BarberSchedule, 'barberId'>[]): Promise<void> {
+  async configureBarberWeek(
+    barberId: string,
+    days: readonly Omit<BarberSchedule, 'barberId'>[],
+    options?: { readonly confirm?: boolean },
+  ): Promise<ConfigureBarberWeekResult> {
+    const keptDaysOfWeek = new Set<DayOfWeek>(days.map((day) => day.dayOfWeek));
+
+    if (!options?.confirm) {
+      const currentSchedule = await this.schedules.listBarberSchedule(barberId);
+      const removedDaysOfWeek = new Set(
+        currentSchedule.map((day) => day.dayOfWeek).filter((dayOfWeek) => !keptDaysOfWeek.has(dayOfWeek)),
+      );
+      if (removedDaysOfWeek.size > 0) {
+        const futureAppointments = await this.appointments.findReservedByBarberFrom(barberId, this.clock.now());
+        const affectedAppointmentIds = futureAppointments
+          .filter((appointment) => removedDaysOfWeek.has(dayOfWeekOf(this.clock.calendarDateOf(appointment.timeRange.start))))
+          .map((appointment) => appointment.id);
+        if (affectedAppointmentIds.length > 0) {
+          return { outcome: 'needs-confirmation', affectedAppointmentIds };
+        }
+      }
+    }
+
+    await this.schedules.deleteBarberScheduleForDaysNotIn(barberId, [...keptDaysOfWeek]);
     for (const day of days) {
       await this.configureBarberSchedule({ barberId, ...day });
     }
+    return { outcome: 'configured' };
   }
 
   /** "precios de servicios" — `false` means no service with that id exists. */

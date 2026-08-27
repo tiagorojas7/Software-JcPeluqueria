@@ -26,30 +26,58 @@ const AUGUST: TimeWindow = {
 describe('GetOwnStatsUseCase', () => {
   it("counts only the barber's own completed appointments inside the requested period", async () => {
     const performance = new FakeBarberPerformanceRepository();
-    performance.seed(OWN_BARBER_ID, [
-      { appointmentId: 'a1', serviceId: 'svc-1', listPriceCents: 500_000 },
-      { appointmentId: 'a2', serviceId: 'svc-2', listPriceCents: 300_000 },
-      { appointmentId: 'a3', serviceId: 'svc-1', listPriceCents: 500_000 },
-    ]);
-    performance.seed(COLLEAGUE_BARBER_ID, [
-      { appointmentId: 'b1', serviceId: 'svc-1', listPriceCents: 500_000 },
-    ]);
+    performance.seedStatusCounts(OWN_BARBER_ID, { realizado: 3 });
+    performance.seedStatusCounts(COLLEAGUE_BARBER_ID, { realizado: 1 });
 
     const useCase = new GetOwnStatsUseCase(performance);
     const result = await useCase.execute(OWN_BARBER_ID, AUGUST, OWN_ACTOR);
 
     // "sin incluir cortes de otros barberos": barber-colleague's single
     // completed appointment must never inflate barber-own's count.
-    expect(result).toEqual({ outcome: 'ok', count: 3 });
+    expect(result).toEqual({ outcome: 'ok', count: 3, cancelledCount: 0, absentCount: 0, unresolvedCount: 0 });
   });
 
   it('rejects a request for a different barber id — the requirement text itself: "sin incluir cortes de otros barberos"', async () => {
     const performance = new FakeBarberPerformanceRepository();
-    performance.seed(COLLEAGUE_BARBER_ID, [{ appointmentId: 'b1', serviceId: 'svc-1', listPriceCents: 500_000 }]);
+    performance.seedStatusCounts(COLLEAGUE_BARBER_ID, { realizado: 1 });
 
     const useCase = new GetOwnStatsUseCase(performance);
     const result = await useCase.execute(COLLEAGUE_BARBER_ID, AUGUST, OWN_ACTOR);
 
     expect(result).toEqual({ outcome: 'forbidden' });
+  });
+
+  // docs/HUECOS-BACKEND.md #4, "El barbero no puede ver cómo cerraron sus
+  // turnos": a bare realizado count with no context — five ausente this
+  // month explains a low number, and is exactly the visibility README's
+  // absence-tracking story depends on being real.
+  it('reports cancelled, absent and unresolved counts alongside realizado — not just the completed count', async () => {
+    const performance = new FakeBarberPerformanceRepository();
+    performance.seedStatusCounts(OWN_BARBER_ID, {
+      realizado: 10,
+      cancelado: 2,
+      ausente: 5,
+      sin_registrado: 1,
+    });
+
+    const useCase = new GetOwnStatsUseCase(performance);
+    const result = await useCase.execute(OWN_BARBER_ID, AUGUST, OWN_ACTOR);
+
+    expect(result).toEqual({
+      outcome: 'ok',
+      count: 10,
+      cancelledCount: 2,
+      absentCount: 5,
+      unresolvedCount: 1,
+    });
+  });
+
+  it('reports every count as zero for a period with nothing at all', async () => {
+    const performance = new FakeBarberPerformanceRepository();
+
+    const useCase = new GetOwnStatsUseCase(performance);
+    const result = await useCase.execute(OWN_BARBER_ID, AUGUST, OWN_ACTOR);
+
+    expect(result).toEqual({ outcome: 'ok', count: 0, cancelledCount: 0, absentCount: 0, unresolvedCount: 0 });
   });
 });

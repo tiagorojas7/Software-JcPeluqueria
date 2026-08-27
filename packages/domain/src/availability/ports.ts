@@ -1,4 +1,4 @@
-import type { Barber, BarberSchedule, BarberTimeOff, Service, ShopHours } from './entities';
+import type { Barber, BarberSchedule, BarberTimeOff, DayOfWeek, Service, ShopHours } from './entities';
 
 /**
  * Repository ports for the availability model. Phase 1 is read-only from
@@ -56,6 +56,17 @@ export interface ScheduleRepository {
    * duplicate-key exception surfacing as the answer.
    */
   updateBarberSchedule(schedule: BarberSchedule): Promise<boolean>;
+
+  /**
+   * docs/HUECOS-BACKEND.md #6, "Apagar un día en Horarios no apaga el día":
+   * `configureBarberWeek` treats its incoming array as the barber's WHOLE
+   * week, so a day left OUT of it has to stop being a working day — never
+   * silently survive because nothing asked to remove it. `keepDaysOfWeek` is
+   * the complete set of days the caller is about to (re)write; every OTHER
+   * `barber_schedules` row for this barber is deleted. Scoped to `barberId`
+   * alone — replacing one barber's week must never touch another's rows.
+   */
+  deleteBarberScheduleForDaysNotIn(barberId: string, keepDaysOfWeek: readonly DayOfWeek[]): Promise<void>;
 
   createBarberTimeOff(timeOff: BarberTimeOff): Promise<void>;
   listBarberTimeOff(barberId: string): Promise<BarberTimeOff[]>;

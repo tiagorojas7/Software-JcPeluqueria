@@ -223,4 +223,45 @@ describe('availability repositories (Testcontainers)', () => {
       createBarberSchedule({ barberId: barber.id, dayOfWeek: 1, opensAt: '10:00', closesAt: '19:00' }),
     ]);
   });
+
+  // docs/HUECOS-BACKEND.md #6, "Apagar un día en Horarios no apaga el día":
+  // the real bug — the operator unchecked a day, saved, and the barber kept
+  // working it. Proven against real Postgres because the whole point is
+  // whether the DELETE actually reaches the row.
+  it('deleteBarberScheduleForDaysNotIn() borra los dias que no vienen en la lista, y respeta los que si', async () => {
+    const barberRepo = new DrizzleBarberRepository(db);
+    const scheduleRepo = new DrizzleScheduleRepository(db);
+    const barber = createBarber({ id: crypto.randomUUID(), name: 'Lucas', active: true });
+    await barberRepo.create(barber);
+    for (const dayOfWeek of [1, 2, 3] as const) {
+      await scheduleRepo.createBarberSchedule(
+        createBarberSchedule({ barberId: barber.id, dayOfWeek, opensAt: '09:00', closesAt: '18:00' }),
+      );
+    }
+
+    await scheduleRepo.deleteBarberScheduleForDaysNotIn(barber.id, [1, 3]);
+
+    const own = await scheduleRepo.listBarberSchedule(barber.id);
+    expect(own.map((day) => day.dayOfWeek).sort()).toEqual([1, 3]);
+  });
+
+  it('deleteBarberScheduleForDaysNotIn() nunca toca la fila de OTRO barbero', async () => {
+    const barberRepo = new DrizzleBarberRepository(db);
+    const scheduleRepo = new DrizzleScheduleRepository(db);
+    const barberA = createBarber({ id: crypto.randomUUID(), name: 'A', active: true });
+    const barberB = createBarber({ id: crypto.randomUUID(), name: 'B', active: true });
+    await barberRepo.create(barberA);
+    await barberRepo.create(barberB);
+    await scheduleRepo.createBarberSchedule(
+      createBarberSchedule({ barberId: barberA.id, dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
+    );
+    await scheduleRepo.createBarberSchedule(
+      createBarberSchedule({ barberId: barberB.id, dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
+    );
+
+    await scheduleRepo.deleteBarberScheduleForDaysNotIn(barberA.id, []);
+
+    expect(await scheduleRepo.listBarberSchedule(barberA.id)).toEqual([]);
+    expect(await scheduleRepo.listBarberSchedule(barberB.id)).toHaveLength(1);
+  });
 });

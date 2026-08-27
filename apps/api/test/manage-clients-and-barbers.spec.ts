@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import {
   createBarber,
   FakeActorContextRepository,
+  FakeAppointmentRepository,
   FakeAuthChallengeRepository,
   FakeBarberRepository,
   FakeClientRepository,
@@ -21,6 +22,7 @@ import { ACTOR_CONTEXT_REPOSITORY, ROLE_PERMISSION_REPOSITORY } from '../src/acc
 import { SESSION_COOKIE_NAME } from '../src/access-control/session-cookie';
 import { AppModule } from '../src/app.module';
 import {
+  APPOINTMENT_REPOSITORY,
   AUTH_CHALLENGE_REPOSITORY,
   BARBER_REPOSITORY,
   CLIENT_REPOSITORY,
@@ -54,6 +56,9 @@ import {
 
 const OWNER_SESSION = 'session-owner';
 const SECRETARY_SESSION = 'session-secretary';
+/** Only ever used to build fixed instants for test fixtures — the module's
+ *  own CLOCK is fixed separately at `2026-09-01T12:00:00.000Z` (a Tuesday). */
+const dateBuilder = new FakeClock();
 
 const actorContexts = new FakeActorContextRepository();
 actorContexts.seed(OWNER_SESSION, { userId: 'owner-user-id', role: 'owner' });
@@ -77,6 +82,7 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
   let schedules: FakeScheduleRepository;
   let staffAccounts: FakeStaffAccountRepository;
   let outbox: FakeNotificationOutboxRepository;
+  let appointments: FakeAppointmentRepository;
 
   beforeAll(async () => {
     barbers = new FakeBarberRepository();
@@ -84,6 +90,7 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
     schedules = new FakeScheduleRepository();
     staffAccounts = new FakeStaffAccountRepository();
     outbox = new FakeNotificationOutboxRepository();
+    appointments = new FakeAppointmentRepository();
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(ROLE_PERMISSION_REPOSITORY)
@@ -109,6 +116,11 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
       .useValue(outbox)
       .overrideProvider(CLOCK)
       .useValue(new FakeClock(-180, new FakeClock().parseInstant('2026-09-01T12:00:00.000Z')))
+      // `configureBarberWeek`'s orphan-turno check (docs/HUECOS-BACKEND.md
+      // #6) — without this override the real Drizzle repository would try
+      // to reach a database.
+      .overrideProvider(APPOINTMENT_REPOSITORY)
+      .useValue(appointments)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -200,6 +212,71 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
     expect(response.body).toEqual({ configured: true });
     const stored = await schedules.listBarberSchedule('week-barber');
     expect(stored).toHaveLength(5);
+  });
+
+  // docs/HUECOS-BACKEND.md #6, segunda parte: "el backend responda cuántos
+  // turnos quedarían huérfanos y que la UI pida confirmación con ese
+  // número." El reloj de este modulo esta fijo en 2026-09-01T12:00:00Z (un
+  // martes); el turno queda en el martes SIGUIENTE (2026-09-08), asi que es
+  // futuro respecto de ese reloj. El barbero conserva el lunes y se le saca
+  // el martes — el contrato exige al menos un dia, asi que "apagar TODO" no
+  // es el camino real de este endpoint.
+  it('pide confirmacion, sin escribir nada, cuando sacar un dia dejaria un turno reservado huerfano', async () => {
+    await barbers.create(createBarber({ id: 'week-barber-5', name: 'Con Turno', active: true }));
+    await schedules.createBarberSchedule({ barberId: 'week-barber-5', dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' });
+    await schedules.createBarberSchedule({ barberId: 'week-barber-5', dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' });
+    appointments.seed({
+      id: 'apt-huerfano',
+      barberId: 'week-barber-5',
+      serviceId: 'service-1',
+      clientId: 'client-1',
+      channel: 'web',
+      timeRange: {
+        start: dateBuilder.localTimeToUtc('2026-09-08', '10:00'),
+        end: dateBuilder.localTimeToUtc('2026-09-08', '10:30'),
+      },
+      status: 'reservado',
+      deposit: { kind: 'not_applicable' },
+    });
+
+    const response = await withSession(
+      request(app.getHttpServer()).put('/panel/barbers/week-barber-5/schedule/week'),
+      OWNER_SESSION,
+    ).send({ schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }] });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ configured: false, affectedAppointmentIds: ['apt-huerfano'] });
+    // Nada se escribio: los DOS dias siguen exactamente como estaban.
+    expect(await schedules.listBarberSchedule('week-barber-5')).toHaveLength(2);
+  });
+
+  it('escribe el cambio cuando el dueno ya confirmo con confirm:true', async () => {
+    await barbers.create(createBarber({ id: 'week-barber-6', name: 'Con Turno', active: true }));
+    await schedules.createBarberSchedule({ barberId: 'week-barber-6', dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' });
+    await schedules.createBarberSchedule({ barberId: 'week-barber-6', dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' });
+    appointments.seed({
+      id: 'apt-huerfano-2',
+      barberId: 'week-barber-6',
+      serviceId: 'service-1',
+      clientId: 'client-1',
+      channel: 'web',
+      timeRange: {
+        start: dateBuilder.localTimeToUtc('2026-09-08', '10:00'),
+        end: dateBuilder.localTimeToUtc('2026-09-08', '10:30'),
+      },
+      status: 'reservado',
+      deposit: { kind: 'not_applicable' },
+    });
+
+    const response = await withSession(
+      request(app.getHttpServer()).put('/panel/barbers/week-barber-6/schedule/week'),
+      OWNER_SESSION,
+    ).send({ schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }], confirm: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ configured: true });
+    const stored = await schedules.listBarberSchedule('week-barber-6');
+    expect(stored.map((day) => day.dayOfWeek)).toEqual([1]);
   });
 
   it('MUST reject the secretary configuring a week — schedule:configure is owner-only', async () => {

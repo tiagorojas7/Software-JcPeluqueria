@@ -154,6 +154,55 @@ export class DrizzleAppointmentRepository implements AppointmentRepository {
   }
 
   /**
+   * docs/HUECOS-BACKEND.md #6 — deciding whether turning off a recurring
+   * weekly working day would orphan an already-booked turno needs every
+   * FUTURE `reservado` appointment for this barber, unbounded above: a
+   * `barber_schedules` day has no end date of its own, so no fixed
+   * `TimeWindow` could ever cover "every appointment this change might
+   * affect". `WHERE barber_id = :barberId` is the query's own shape, the
+   * same structural narrowing `findReservedByBarberInRange` uses.
+   */
+  async findReservedByBarberFrom(barberId: string, from: Date): Promise<Appointment[]> {
+    const rows = await this.db
+      .select({
+        id: slotOccupancies.id,
+        barberId: slotOccupancies.barberId,
+        serviceId: slotOccupancies.serviceId,
+        clientId: slotOccupancies.clientId,
+        channel: slotOccupancies.channel,
+        status: slotOccupancies.status,
+        start: sql`lower(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
+        end: sql`upper(${slotOccupancies.timeRange})`.mapWith(slotOccupancies.holdExpiresAt),
+        depositId: deposits.id,
+        depositState: deposits.state,
+        paymentId: deposits.paymentId,
+        amountCents: deposits.amountCents,
+      })
+      .from(slotOccupancies)
+      .leftJoin(deposits, eq(slotOccupancies.depositId, deposits.id))
+      .where(
+        and(
+          eq(slotOccupancies.barberId, barberId),
+          eq(slotOccupancies.status, 'reservado'),
+          sql`lower(${slotOccupancies.timeRange}) >= ${from.toISOString()}::timestamptz`,
+        ),
+      );
+
+    return rows
+      .filter((row) => row.clientId !== null)
+      .map((row) => ({
+        id: row.id,
+        barberId: row.barberId,
+        serviceId: row.serviceId,
+        clientId: row.clientId as string,
+        channel: row.channel as OccupancyChannel,
+        timeRange: { start: row.start, end: row.end },
+        status: row.status as AppointmentStatus,
+        deposit: toDepositState(row),
+      }));
+  }
+
+  /**
    * cablear-el-mvp C.3 — "Mi cuenta" needs every appointment belonging to
    * the client, any status, structural narrowing the same way
    * `findReservedByBarberInRange` scopes to one barber: `WHERE client_id =

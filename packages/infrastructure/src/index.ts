@@ -52,3 +52,4 @@ export { DrizzleClientContextRepository } from './identity/client-context.reposi
 export { DrizzleAppointmentRepository } from './appointments/appointment.repository';
 export { DrizzleAbsenceRecordRepository } from './appointments/absence-record.repository';
 export { DrizzleBarberPerformanceRepository } from './barbers/barber-performance.repository';
+export { DrizzleShopRevenueRepository } from './shop/shop-revenue.repository';

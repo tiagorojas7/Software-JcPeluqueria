@@ -22,5 +22,12 @@ export const AUTH_CHALLENGE_REPOSITORY = Symbol('PANEL_AUTH_CHALLENGE_REPOSITORY
 export const NOTIFICATION_OUTBOX_REPOSITORY = Symbol('PANEL_NOTIFICATION_OUTBOX_REPOSITORY');
 
 /** DI token for the `Clock` port (`ChallengeService` computes the invite's
- *  expiry through it). */
+ *  expiry through it, and `configureBarberWeek` uses it to decide which
+ *  future turnos an about-to-be-removed day would orphan). */
 export const CLOCK = Symbol('PANEL_CLOCK');
+
+/** DI token for the `AppointmentRepository` port — `configureBarberWeek`'s
+ *  orphan-turno check (docs/HUECOS-BACKEND.md #6). Its own instance, never
+ *  shared with `AppointmentsModule`'s token, per the one-token-per-module
+ *  rule. */
+export const APPOINTMENT_REPOSITORY = Symbol('PANEL_APPOINTMENT_REPOSITORY');

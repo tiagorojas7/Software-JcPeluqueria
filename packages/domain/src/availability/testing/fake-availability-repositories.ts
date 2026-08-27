@@ -1,4 +1,4 @@
-import type { Barber, BarberSchedule, BarberTimeOff, Service, ShopHours } from '../entities';
+import type { Barber, BarberSchedule, BarberTimeOff, DayOfWeek, Service, ShopHours } from '../entities';
 import type { BarberRepository, ScheduleRepository, ServiceRepository } from '../ports';
 
 /**
@@ -91,6 +91,16 @@ export class FakeScheduleRepository implements ScheduleRepository {
     }
     this.barberSchedules[index] = schedule;
     return true;
+  }
+
+  async deleteBarberScheduleForDaysNotIn(barberId: string, keepDaysOfWeek: readonly DayOfWeek[]): Promise<void> {
+    const keep = new Set<DayOfWeek>(keepDaysOfWeek);
+    for (let i = this.barberSchedules.length - 1; i >= 0; i--) {
+      const row = this.barberSchedules[i]!;
+      if (row.barberId === barberId && !keep.has(row.dayOfWeek)) {
+        this.barberSchedules.splice(i, 1);
+      }
+    }
   }
 
   async createBarberTimeOff(timeOff: BarberTimeOff): Promise<void> {

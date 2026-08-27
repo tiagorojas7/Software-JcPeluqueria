@@ -247,6 +247,46 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
     });
   });
 
+  // docs/HUECOS-BACKEND.md #6 — no upper bound, unlike
+  // findReservedByBarberInRange: a barber_schedules day has no end date, so
+  // the orphan-turno check needs every future reservado appointment, not one
+  // bounded window.
+  describe('findReservedByBarberFrom', () => {
+    it('returns only THIS barber\'s FUTURE reservado appointments, excluding a past one and another barber\'s', async () => {
+      const barber = await newBarber();
+      const otherBarber = await newBarber();
+      const future = await insertAppointment(barber, '17:00', '17:30');
+      await insertAppointment(barber, '08:00', '08:30'); // before `from` — excluded
+      await insertAppointment(otherBarber, '17:00', '17:30'); // another barber — excluded
+      const repo = new DrizzleAppointmentRepository(db);
+
+      const found = await repo.findReservedByBarberFrom(barber, at('09:00'));
+
+      expect(found.map((a) => a.id)).toEqual([future]);
+    });
+
+    it('includes an appointment starting at EXACTLY `from`', async () => {
+      const barber = await newBarber();
+      const id = await insertAppointment(barber, '09:00', '09:30');
+      const repo = new DrizzleAppointmentRepository(db);
+
+      const found = await repo.findReservedByBarberFrom(barber, at('09:00'));
+
+      expect(found.map((a) => a.id)).toEqual([id]);
+    });
+
+    it('excludes a cancelled future appointment — only reservado counts', async () => {
+      const barber = await newBarber();
+      const id = await insertAppointment(barber, '17:00', '17:30');
+      const repo = new DrizzleAppointmentRepository(db);
+      await repo.updateStatus(id, 'cancelado');
+
+      const found = await repo.findReservedByBarberFrom(barber, at('09:00'));
+
+      expect(found).toEqual([]);
+    });
+  });
+
   // cablear-el-mvp C.3 — "Mi cuenta" needs every one of the client's OWN
   // appointments, any status, and structurally none of anybody else's.
   describe('findByClientId (C.3)', () => {

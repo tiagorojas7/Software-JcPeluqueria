@@ -40,7 +40,7 @@ function seedOneSlot(
   overrides: { clientName?: string | null; clientAge?: number | null; clientPhone?: string | null } = {},
 ): void {
   repository.seed('2026-08-20', {
-    columns: [{ barberId: 'barber-a', barberName: 'Juan' }],
+    columns: [{ barberId: 'barber-a', barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' }],
     slots: [
       {
         id: 'slot-1',
@@ -52,6 +52,7 @@ function seedOneSlot(
         clientAge: overrides.clientAge ?? null,
         clientPhone: overrides.clientPhone ?? null,
         status,
+        channel: 'web',
         startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
         endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
       },
@@ -153,7 +154,9 @@ describe('GetDayBoardUseCase', () => {
     const result = await useCase.execute('2026-08-20', BARBER_A);
 
     expect(repository.calls).toEqual([{ calendarDate: '2026-08-20', actor: BARBER_A }]);
-    expect(result.columns).toEqual([{ barberId: 'barber-a', barberName: 'Juan' }]);
+    expect(result.columns).toEqual([
+      { barberId: 'barber-a', barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+    ]);
     expect(result.date).toBe('2026-08-20');
   });
 

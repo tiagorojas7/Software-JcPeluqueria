@@ -32,7 +32,16 @@ export {
   CreateWalkInRequestSchema,
   EditAppointmentRequestSchema,
 } from './appointments';
-export type { BarberRevenueResponse, BarberStatsResponse } from './barbers';
+export type {
+  BarberRevenueResponse,
+  BarberStatsResponse,
+  RevenueByServiceResponse,
+} from './barbers';
+export type {
+  ShopRevenueByBarberResponse,
+  ShopRevenueByServiceResponse,
+  ShopRevenueResponse,
+} from './shop';
 export type {
   ActivateStaffRequest,
   ActivateStaffResponseBody,
@@ -84,6 +93,7 @@ export type {
   ClientsListResponse,
   ConfigureBarberScheduleRequest,
   ConfigureBarberWeekRequest,
+  ConfigureBarberWeekResponseBody,
   ConfigureServicePriceRequest,
   InviteBarberAccountRequest,
   SetBarberAccountActiveRequest,

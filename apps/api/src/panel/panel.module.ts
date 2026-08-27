@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ChallengeService, ManageBarberAccountsUseCase, ManageClientsAndBarbersUseCase } from '@jc-barberia/application';
 import {
   db,
+  DrizzleAppointmentRepository,
   DrizzleAuthChallengeRepository,
   DrizzleBarberRepository,
   DrizzleClientRepository,
@@ -12,6 +13,7 @@ import {
   ShopClock,
 } from '@jc-barberia/infrastructure';
 import type {
+  AppointmentRepository,
   AuthChallengeRepository,
   BarberRepository,
   ClientRepository,
@@ -26,6 +28,7 @@ import { AccessControlModule } from '../access-control/access-control.module';
 import { BarberAccountsController } from './barber-accounts.controller';
 import { ManageClientsAndBarbersController } from './manage-clients-and-barbers.controller';
 import {
+  APPOINTMENT_REPOSITORY,
   AUTH_CHALLENGE_REPOSITORY,
   BARBER_REPOSITORY,
   CLIENT_REPOSITORY,
@@ -59,6 +62,7 @@ import {
     { provide: SCHEDULE_REPOSITORY, useFactory: () => new DrizzleScheduleRepository(db) },
     { provide: SERVICE_REPOSITORY, useFactory: () => new DrizzleServiceRepository(db) },
     { provide: STAFF_ACCOUNT_REPOSITORY, useFactory: () => new DrizzleStaffAccountRepository(db) },
+    { provide: APPOINTMENT_REPOSITORY, useFactory: () => new DrizzleAppointmentRepository(db) },
     { provide: AUTH_CHALLENGE_REPOSITORY, useFactory: () => new DrizzleAuthChallengeRepository(db) },
     { provide: NOTIFICATION_OUTBOX_REPOSITORY, useFactory: () => new DrizzleNotificationOutboxRepository(db) },
     { provide: CLOCK, useFactory: () => new ShopClock() },
@@ -85,6 +89,8 @@ import {
         SCHEDULE_REPOSITORY,
         SERVICE_REPOSITORY,
         ManageBarberAccountsUseCase,
+        APPOINTMENT_REPOSITORY,
+        CLOCK,
       ],
       useFactory: (
         clients: ClientRepository,
@@ -92,7 +98,9 @@ import {
         schedules: ScheduleRepository,
         services: ServiceRepository,
         accounts: ManageBarberAccountsUseCase,
-      ) => new ManageClientsAndBarbersUseCase(clients, barbers, schedules, services, accounts),
+        appointments: AppointmentRepository,
+        clock: Clock,
+      ) => new ManageClientsAndBarbersUseCase(clients, barbers, schedules, services, accounts, appointments, clock),
     },
   ],
 })

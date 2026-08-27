@@ -40,8 +40,8 @@ const rolePermissions = new FakeRolePermissionRepository(
 const dayBoardRepository = new FakeDayBoardRepository();
 dayBoardRepository.seed('2026-08-20', {
   columns: [
-    { barberId: BARBER_A_ID, barberName: 'Juan' },
-    { barberId: BARBER_B_ID, barberName: 'Ana' },
+    { barberId: BARBER_A_ID, barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+    { barberId: BARBER_B_ID, barberName: 'Ana', opensAt: '10:00', closesAt: '19:00' },
   ],
   slots: [
     {
@@ -54,6 +54,7 @@ dayBoardRepository.seed('2026-08-20', {
       clientAge: null,
       clientPhone: null,
       status: 'reservado',
+      channel: 'web',
       startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
       endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
     },
@@ -67,6 +68,7 @@ dayBoardRepository.seed('2026-08-20', {
       clientAge: null,
       clientPhone: null,
       status: 'reservado',
+      channel: 'telefonico',
       startsAt: clock.localTimeToUtc('2026-08-20', '10:00'),
       endsAt: clock.localTimeToUtc('2026-08-20', '10:30'),
     },
@@ -115,8 +117,8 @@ describe('GET /agenda/day-board (App Nest levantada en memoria)', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.columns).toEqual([
-      { barberId: BARBER_A_ID, barberName: 'Juan' },
-      { barberId: BARBER_B_ID, barberName: 'Ana' },
+      { barberId: BARBER_A_ID, barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+      { barberId: BARBER_B_ID, barberName: 'Ana', opensAt: '10:00', closesAt: '19:00' },
     ]);
     expect(response.body.slots).toEqual([
       expect.objectContaining({ id: 'slot-a1', allowedActions: ['edit', 'cancel', 'mark-completed'] }),
@@ -131,7 +133,9 @@ describe('GET /agenda/day-board (App Nest levantada en memoria)', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.body.columns).toEqual([{ barberId: BARBER_A_ID, barberName: 'Juan' }]);
+    expect(response.body.columns).toEqual([
+      { barberId: BARBER_A_ID, barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+    ]);
     expect(response.body.slots).toEqual([
       expect.objectContaining({ id: 'slot-a1', allowedActions: ['mark-completed'] }),
     ]);

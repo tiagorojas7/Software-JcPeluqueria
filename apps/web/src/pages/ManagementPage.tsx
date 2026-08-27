@@ -3,6 +3,7 @@ import type {
   BarberAccountResponse,
   BarberAccountsListResponse,
   ClientRecordResponse,
+  ConfigureBarberWeekResponseBody,
   PublicBarberResponse,
   PublicBarbersResponse,
   PublicServiceResponse,
@@ -354,6 +355,14 @@ interface SchedulesSectionProps {
  * request to `/panel/barbers/:id/schedule/week` — same `WeekScheduleFields`
  * `BarbersSection` uses for alta, so both screens configure a week the same
  * way.
+ *
+ * docs/HUECOS-BACKEND.md #6, segunda parte: turning a day off can orphan an
+ * already-`reservado` turno still sitting on it. The endpoint answers
+ * `{ configured: false, affectedAppointmentIds }` WITHOUT writing anything
+ * in that case, and this screen has to actually stop and ask — showing the
+ * "Horario actualizado" notice regardless of the response body would be the
+ * exact lie #6 was about, just moved one layer up: the owner would see
+ * success while nothing was saved.
  */
 function SchedulesSection({ barbers }: SchedulesSectionProps) {
   const [firstBarber] = barbers;
@@ -361,6 +370,22 @@ function SchedulesSection({ barbers }: SchedulesSectionProps) {
   const [week, setWeek] = useState<readonly WeekDayEntry[]>(buildDefaultWeek);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingConfirmCount, setPendingConfirmCount] = useState<number | null>(null);
+
+  async function save(confirm: boolean) {
+    const schedule = weekToScheduleDays(week);
+    const result = await apiPut<ConfigureBarberWeekResponseBody>(`/panel/barbers/${barberId}/schedule/week`, {
+      schedule,
+      confirm,
+    });
+    if (result.configured) {
+      setNotice('Horario actualizado correctamente.');
+      setPendingConfirmCount(null);
+      return;
+    }
+    // Nothing was written — the owner has to see the count and decide.
+    setPendingConfirmCount(result.affectedAppointmentIds.length);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -371,13 +396,22 @@ function SchedulesSection({ barbers }: SchedulesSectionProps) {
     if (schedule.length === 0) {
       setError('Elegí al menos un día de trabajo.');
       setNotice(null);
+      setPendingConfirmCount(null);
       return;
     }
     setError(null);
     setNotice(null);
     try {
-      await apiPut(`/panel/barbers/${barberId}/schedule/week`, { schedule });
-      setNotice('Horario actualizado correctamente.');
+      await save(false);
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  async function handleConfirm() {
+    setError(null);
+    try {
+      await save(true);
     } catch (err) {
       setError(describeError(err));
     }
@@ -397,10 +431,30 @@ function SchedulesSection({ barbers }: SchedulesSectionProps) {
       <h3>Horarios</h3>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
+      {pendingConfirmCount !== null && (
+        <p role="alert" className="management__confirm">
+          {pendingConfirmCount === 1
+            ? 'Hay 1 turno reservado que quedaría sin horario si guardás este cambio.'
+            : `Hay ${pendingConfirmCount} turnos reservados que quedarían sin horario si guardás este cambio.`}{' '}
+          <button type="button" onClick={() => void handleConfirm()}>
+            Guardar igual
+          </button>{' '}
+          <button type="button" onClick={() => setPendingConfirmCount(null)}>
+            Cancelar
+          </button>
+        </p>
+      )}
       <form className="management__form" onSubmit={handleSubmit}>
         <span className="management__field">
           <label htmlFor="mgmt-schedule-barber">Barbero</label>
-          <select id="mgmt-schedule-barber" value={barberId} onChange={(e) => setBarberId(e.target.value)}>
+          <select
+            id="mgmt-schedule-barber"
+            value={barberId}
+            onChange={(e) => {
+              setBarberId(e.target.value);
+              setPendingConfirmCount(null);
+            }}
+          >
             {barbers.map((barber) => (
               <option key={barber.id} value={barber.id}>
                 {barber.name}

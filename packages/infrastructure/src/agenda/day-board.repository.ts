@@ -1,8 +1,15 @@
-import type { ActorContext, Clock, DayBoardQueryResult, DayBoardRepository } from '@jc-barberia/domain';
+import {
+  dayOfWeekOf,
+  type ActorContext,
+  type Clock,
+  type DayBoardQueryResult,
+  type DayBoardRepository,
+  type OccupancyChannel,
+} from '@jc-barberia/domain';
 import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
-import { barbers, services } from '../db/schema/availability';
+import { barberSchedules, barbers, services } from '../db/schema/availability';
 import { clients } from '../db/schema/clients';
 import { slotOccupancies } from '../db/schema/slot-occupancy';
 
@@ -30,10 +37,17 @@ export class DrizzleDayBoardRepository implements DayBoardRepository {
     );
     // Los slots se resuelven PRIMERO porque las columnas dependen de ellos:
     // ver `columnsFor`.
-    const slots =
+    const rawSlots =
       actor.barberId !== undefined
         ? await this.selectSlots().where(and(inWindow, eq(slotOccupancies.barberId, actor.barberId)))
         : await this.selectSlots().where(inWindow);
+    // `channel` is a plain `varchar` column — Drizzle infers `string`, not the
+    // domain's closed `OccupancyChannel` union. Every write path only ever
+    // stores one of its three values, so this cast states a fact the schema
+    // itself cannot express, the same way every other reader of this column
+    // in this codebase already does (`appointment.repository.ts`,
+    // `hold.repository.ts`).
+    const slots = rawSlots.map((slot) => ({ ...slot, channel: slot.channel as OccupancyChannel }));
 
     const columns = await this.columnsFor(actor, slots, calendarDate);
 

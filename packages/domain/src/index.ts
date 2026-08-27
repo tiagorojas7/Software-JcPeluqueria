@@ -10,3 +10,4 @@ export * from './clients';
 export * from './identity';
 export * from './notifications';
 export * from './payments';
+export * from './shop';

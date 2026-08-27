@@ -35,10 +35,12 @@ describe('GetOwnRevenueUseCase', () => {
   it('sums only the list price of the own completed appointments in the period', async () => {
     const performance = new FakeBarberPerformanceRepository();
     performance.seed(OWN_BARBER_ID, [
-      { appointmentId: 'a1', serviceId: 'svc-1', listPriceCents: 500_000 },
-      { appointmentId: 'a2', serviceId: 'svc-2', listPriceCents: 300_000 },
+      { appointmentId: 'a1', serviceId: 'svc-1', serviceName: 'Corte clásico', listPriceCents: 500_000 },
+      { appointmentId: 'a2', serviceId: 'svc-2', serviceName: 'Barba', listPriceCents: 300_000 },
     ]);
-    performance.seed(COLLEAGUE_BARBER_ID, [{ appointmentId: 'b1', serviceId: 'svc-1', listPriceCents: 999_999 }]);
+    performance.seed(COLLEAGUE_BARBER_ID, [
+      { appointmentId: 'b1', serviceId: 'svc-1', serviceName: 'Corte clásico', listPriceCents: 999_999 },
+    ]);
 
     const useCase = new GetOwnRevenueUseCase(performance);
     const result = await useCase.execute(OWN_BARBER_ID, AUGUST, OWN_ACTOR);
@@ -55,7 +57,9 @@ describe('GetOwnRevenueUseCase', () => {
   // dropping any one of them must fail this test.
   it('labels the figure explicitly as list-price billing — not profit, not money actually collected, and discloses the untracked 50%', async () => {
     const performance = new FakeBarberPerformanceRepository();
-    performance.seed(OWN_BARBER_ID, [{ appointmentId: 'a1', serviceId: 'svc-1', listPriceCents: 500_000 }]);
+    performance.seed(OWN_BARBER_ID, [
+      { appointmentId: 'a1', serviceId: 'svc-1', serviceName: 'Corte clásico', listPriceCents: 500_000 },
+    ]);
 
     const useCase = new GetOwnRevenueUseCase(performance);
     const result = await useCase.execute(OWN_BARBER_ID, AUGUST, OWN_ACTOR);
@@ -71,11 +75,50 @@ describe('GetOwnRevenueUseCase', () => {
 
   it('rejects a request for the shop total or a colleague — "MUST rechazar el acceso"', async () => {
     const performance = new FakeBarberPerformanceRepository();
-    performance.seed(COLLEAGUE_BARBER_ID, [{ appointmentId: 'b1', serviceId: 'svc-1', listPriceCents: 500_000 }]);
+    performance.seed(COLLEAGUE_BARBER_ID, [
+      { appointmentId: 'b1', serviceId: 'svc-1', serviceName: 'Corte clásico', listPriceCents: 500_000 },
+    ]);
 
     const useCase = new GetOwnRevenueUseCase(performance);
     const result = await useCase.execute(COLLEAGUE_BARBER_ID, AUGUST, OWN_ACTOR);
 
     expect(result).toEqual({ outcome: 'forbidden' });
+  });
+
+  // docs/HUECOS-BACKEND.md #3, "La facturación del barbero no se puede
+  // desglosar": cuántos cortes de cada servicio hizo el barbero en el
+  // período, y cuánto facturó cada uno — no un total sin abrir.
+  it('breaks the total down by service — one row per service, count and its own total', async () => {
+    const performance = new FakeBarberPerformanceRepository();
+    performance.seed(OWN_BARBER_ID, [
+      { appointmentId: 'a1', serviceId: 'svc-1', serviceName: 'Corte clásico', listPriceCents: 500_000 },
+      { appointmentId: 'a2', serviceId: 'svc-1', serviceName: 'Corte clásico', listPriceCents: 500_000 },
+      { appointmentId: 'a3', serviceId: 'svc-2', serviceName: 'Barba', listPriceCents: 300_000 },
+    ]);
+
+    const useCase = new GetOwnRevenueUseCase(performance);
+    const result = await useCase.execute(OWN_BARBER_ID, AUGUST, OWN_ACTOR);
+
+    expect(result.outcome).toBe('ok');
+    if (result.outcome !== 'ok') throw new Error('unreachable');
+    expect(result.byService).toEqual(
+      expect.arrayContaining([
+        { serviceId: 'svc-1', serviceName: 'Corte clásico', count: 2, totalListPriceCents: 1_000_000 },
+        { serviceId: 'svc-2', serviceName: 'Barba', count: 1, totalListPriceCents: 300_000 },
+      ]),
+    );
+    expect(result.byService).toHaveLength(2);
+  });
+
+  it('returns an empty breakdown, not an error, for a period with no completed appointments', async () => {
+    const performance = new FakeBarberPerformanceRepository();
+
+    const useCase = new GetOwnRevenueUseCase(performance);
+    const result = await useCase.execute(OWN_BARBER_ID, AUGUST, OWN_ACTOR);
+
+    expect(result.outcome).toBe('ok');
+    if (result.outcome !== 'ok') throw new Error('unreachable');
+    expect(result.byService).toEqual([]);
+    expect(result.totalListPriceCents).toBe(0);
   });
 });

@@ -15,17 +15,38 @@ export const REVENUE_DISCLAIMER =
   'Facturación teórica según precio de lista: no es tu ganancia ni la plata efectivamente cobrada. ' +
   'El sistema no registra el 50% restante que se cobra en efectivo en el mostrador.';
 
+/**
+ * docs/HUECOS-BACKEND.md #3, "La facturación del barbero no se puede
+ * desglosar": one row per service actually performed in the period, never
+ * one per appointment — a barber who did five haircuts of the same service
+ * needs ONE row saying "5 cortes", not five identical ones. The average
+ * ticket per service is deliberately NOT a field here: it is exactly
+ * `totalListPriceCents / count`, and the caller already has both numbers to
+ * derive it — sending a third, redundant number invites the two to drift.
+ */
+export interface RevenueByService {
+  readonly serviceId: string;
+  readonly serviceName: string;
+  readonly count: number;
+  readonly totalListPriceCents: number;
+}
+
 export type OwnRevenueResult =
   | { readonly outcome: 'forbidden' }
-  | { readonly outcome: 'ok'; readonly totalListPriceCents: number; readonly disclaimer: string };
+  | {
+      readonly outcome: 'ok';
+      readonly totalListPriceCents: number;
+      readonly disclaimer: string;
+      readonly byService: readonly RevenueByService[];
+    };
 
 /**
  * The barber's own theoretical billing: the sum of list prices of their
- * `realizado` appointments in a caller-chosen period. Shares
- * `BarberPerformanceRepository` with `GetOwnStatsUseCase` — one query, two
- * thin aggregations (count vs. sum) — so the narrowing rule and the
- * "`realizado`-only" filter are defined exactly once, in the port, not
- * duplicated per use case.
+ * `realizado` appointments in a caller-chosen period, plus the same total
+ * broken down by service. Shares `BarberPerformanceRepository` with
+ * `GetOwnStatsUseCase` — one query, two thin aggregations (count vs. sum) —
+ * so the narrowing rule and the "`realizado`-only" filter are defined
+ * exactly once, in the port, not duplicated per use case.
  */
 export class GetOwnRevenueUseCase {
   constructor(private readonly performance: BarberPerformanceRepository) {}
@@ -36,6 +57,23 @@ export class GetOwnRevenueUseCase {
       return { outcome: 'forbidden' };
     }
     const totalListPriceCents = result.appointments.reduce((sum, item) => sum + item.listPriceCents, 0);
-    return { outcome: 'ok', totalListPriceCents, disclaimer: REVENUE_DISCLAIMER };
+
+    const byServiceId = new Map<string, RevenueByService>();
+    for (const appointment of result.appointments) {
+      const existing = byServiceId.get(appointment.serviceId);
+      byServiceId.set(appointment.serviceId, {
+        serviceId: appointment.serviceId,
+        serviceName: appointment.serviceName,
+        count: (existing?.count ?? 0) + 1,
+        totalListPriceCents: (existing?.totalListPriceCents ?? 0) + appointment.listPriceCents,
+      });
+    }
+
+    return {
+      outcome: 'ok',
+      totalListPriceCents,
+      disclaimer: REVENUE_DISCLAIMER,
+      byService: [...byServiceId.values()],
+    };
   }
 }

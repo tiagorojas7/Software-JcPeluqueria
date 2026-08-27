@@ -95,6 +95,14 @@ export interface PublicServiceResponse {
   readonly name: string;
   readonly durationMinutes: number;
   readonly priceCents: number;
+  /**
+   * docs/HUECOS-BACKEND.md, "fuera de esta lista": the seña the checkout
+   * will actually charge for this service — `depositAmountCents(priceCents)`,
+   * computed here so the panel's Precios screen can show it next to the
+   * price without re-deriving the 50% rule client-side, which would risk
+   * drifting from the checkout's own rule the day it stops being flat.
+   */
+  readonly depositCents: number;
 }
 
 export interface PublicServicesResponse {

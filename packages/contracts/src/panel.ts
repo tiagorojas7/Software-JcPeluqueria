@@ -130,9 +130,29 @@ export type ConfigureBarberScheduleRequest = z.infer<typeof ConfigureBarberSched
  */
 export const ConfigureBarberWeekRequestSchema = z.object({
   schedule: z.array(BarberScheduleDaySchema).min(1, 'El horario semanal es obligatorio'),
+  /**
+   * docs/HUECOS-BACKEND.md #6, segunda parte: turning off a day here can
+   * orphan a turno that is still `reservado` on it. Omitted (or `false`)
+   * means "ask first" — if any turno would be orphaned, nothing is written
+   * and the response names them instead. Only a second call with
+   * `confirm: true`, from a panel screen that already showed the owner that
+   * count, performs the write.
+   */
+  confirm: z.boolean().optional(),
 });
 
 export type ConfigureBarberWeekRequest = z.infer<typeof ConfigureBarberWeekRequestSchema>;
+
+/**
+ * `configured: true` is the same success shape this endpoint always
+ * returned. `configured: false` is new: the write did NOT happen, and
+ * `affectedAppointmentIds` names every turno that a day being turned off
+ * would leave without a working schedule under it — the number the owner
+ * needs before deciding to retry with `confirm: true`.
+ */
+export type ConfigureBarberWeekResponseBody =
+  | { readonly configured: true }
+  | { readonly configured: false; readonly affectedAppointmentIds: readonly string[] };
 
 export const ConfigureServicePriceRequestSchema = z.object({
   priceCents: z.number().int().positive('El precio debe ser mayor a cero'),

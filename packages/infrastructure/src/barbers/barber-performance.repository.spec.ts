@@ -79,6 +79,14 @@ describe('DrizzleBarberPerformanceRepository (Testcontainers)', () => {
     // Barber B: one realizado in August — must never appear in barber A's result.
     await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
                  values (${barberBId}, ${serviceId}, 'telefonico', 'realizado', ${range('2026-08-06', '09:00', '09:30')}::tstzrange)`;
+    // Barber A, August, the other three statuses `countByStatus` tracks —
+    // proves the GROUP BY actually separates them, not just that it counts.
+    await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
+                 values (${barberAId}, ${serviceId}, 'telefonico', 'cancelado', ${range('2026-08-14', '09:00', '09:30')}::tstzrange)`;
+    await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
+                 values (${barberAId}, ${serviceId}, 'telefonico', 'ausente', ${range('2026-08-15', '09:00', '09:30')}::tstzrange)`;
+    await client`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
+                 values (${barberAId}, ${serviceId}, 'telefonico', 'sin_registrado', ${range('2026-08-16', '09:00', '09:30')}::tstzrange)`;
   }, 300_000);
 
   afterAll(async () => {
@@ -97,6 +105,7 @@ describe('DrizzleBarberPerformanceRepository (Testcontainers)', () => {
     for (const appointment of result.appointments) {
       expect(appointment.listPriceCents).toBe(500_000);
       expect(appointment.serviceId).toBe(serviceId);
+      expect(appointment.serviceName).toBe('Corte clasico');
     }
   });
 
@@ -116,5 +125,39 @@ describe('DrizzleBarberPerformanceRepository (Testcontainers)', () => {
     expect(result.outcome).toBe('allowed');
     if (result.outcome !== 'allowed') throw new Error('unreachable');
     expect(result.appointments).toHaveLength(1);
+  });
+
+  // docs/HUECOS-BACKEND.md #4 — proves the GROUP BY actually separates every
+  // status, against a real database, not just that it counts rows.
+  describe('countByStatus', () => {
+    it("groups this barber's August turnos by status — reservado excluded, every tracked status counted", async () => {
+      const actor: ActorContext = { userId: 'barber-a-user', role: 'barber', barberId: barberAId };
+
+      const result = await repository.countByStatus(barberAId, AUGUST_RANGE, actor);
+
+      expect(result).toEqual({
+        outcome: 'allowed',
+        counts: { realizado: 2, cancelado: 1, ausente: 1, sin_registrado: 1 },
+      });
+    });
+
+    it("rejects a request for a colleague's id — never runs the query scoped to that colleague", async () => {
+      const actor: ActorContext = { userId: 'barber-a-user', role: 'barber', barberId: barberAId };
+
+      const result = await repository.countByStatus(barberBId, AUGUST_RANGE, actor);
+
+      expect(result).toEqual({ outcome: 'forbidden' });
+    });
+
+    it('an actor with no barberId (owner/secretary) can address any barber id directly', async () => {
+      const owner: ActorContext = { userId: 'owner-1', role: 'owner' };
+
+      const result = await repository.countByStatus(barberBId, AUGUST_RANGE, owner);
+
+      expect(result).toEqual({
+        outcome: 'allowed',
+        counts: { realizado: 1, cancelado: 0, ausente: 0, sin_registrado: 0 },
+      });
+    });
   });
 });

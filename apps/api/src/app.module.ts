@@ -9,6 +9,7 @@ import { BookingModule } from './booking/booking.module';
 import { IdentityModule } from './identity/identity.module';
 import { PanelModule } from './panel/panel.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ShopModule } from './shop/shop.module';
 
 /**
  * Composition root. `PermissionsGuard` is registered globally here via
@@ -27,11 +28,14 @@ import { PaymentsModule } from './payments/payments.module';
  * was no real `PAYMENT_JOB_QUEUE` to give it; `PanelModule` (task 10.14/10.15,
  * client/barber management) is the sixth; `AbsenceReassignmentModule`
  * (Phase 12, barber-absence-reassignment's detection entry point) is the
- * seventh of the tracker; and `IdentityModule` (arranque slice, NOT one of
- * the 40 tracked requirements) is the eighth and last: `StaffLoginUseCase`/
+ * seventh of the tracker; `IdentityModule` (arranque slice, NOT one of
+ * the 40 tracked requirements) is the eighth: `StaffLoginUseCase`/
  * `SessionService` existed since Phase 3a but had no HTTP route, so every
  * `@RequiresPermission` endpoint above was unreachable in practice — there
- * was no way to ever obtain a `session_id` cookie.
+ * was no way to ever obtain a `session_id` cookie. `ShopModule`
+ * (docs/HUECOS-BACKEND.md #5, "«Facturación del local» no existe") is the
+ * ninth and last: `finance:read:shop` was a real, seeded permission with no
+ * controller anywhere that reached it.
  *
  * `main.ts` (arranque slice) makes this a listening HTTP server, not only a
  * module graph.
@@ -47,6 +51,7 @@ import { PaymentsModule } from './payments/payments.module';
     PanelModule,
     AbsenceReassignmentModule,
     IdentityModule,
+    ShopModule,
   ],
 })
 export class AppModule {}

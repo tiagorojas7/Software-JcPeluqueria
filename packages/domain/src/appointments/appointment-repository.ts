@@ -62,4 +62,16 @@ export interface AppointmentRepository {
    * a barber — never a filter applied after a wider read.
    */
   findByClientId(clientId: string): Promise<Appointment[]>;
+
+  /**
+   * Every STILL-`reservado` appointment belonging to `barberId` whose start
+   * is at or after `from` — no upper bound, unlike
+   * `findReservedByBarberInRange`. docs/HUECOS-BACKEND.md #6, "Apagar un día
+   * en Horarios no apaga el día": deciding whether removing a recurring
+   * weekly working day would orphan any already-booked turno needs every
+   * future one, not a bounded window, because a barber_schedules day has no
+   * end date of its own. Scoped to exactly one barber by construction, the
+   * same structural-narrowing shape every other finder here uses.
+   */
+  findReservedByBarberFrom(barberId: string, from: Date): Promise<Appointment[]>;
 }

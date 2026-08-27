@@ -38,8 +38,17 @@ const rolePermissions = new FakeRolePermissionRepository(
 );
 
 const performanceRepository = new FakeBarberPerformanceRepository();
-performanceRepository.seed(BARBER_A_ID, [{ appointmentId: 'a1', serviceId: 'svc-1', listPriceCents: 500_000 }]);
-performanceRepository.seed(BARBER_B_ID, [{ appointmentId: 'b1', serviceId: 'svc-1', listPriceCents: 300_000 }]);
+performanceRepository.seed(BARBER_A_ID, [
+  { appointmentId: 'a1', serviceId: 'svc-1', serviceName: 'Corte clásico', listPriceCents: 500_000 },
+]);
+performanceRepository.seed(BARBER_B_ID, [
+  { appointmentId: 'b1', serviceId: 'svc-1', serviceName: 'Corte clásico', listPriceCents: 300_000 },
+]);
+// `GetOwnStatsUseCase` reads `countByStatus`, a separate store from `.seed()`
+// above (docs/HUECOS-BACKEND.md #4) — kept consistent with it here so both
+// endpoints this suite exercises describe the same one appointment each.
+performanceRepository.seedStatusCounts(BARBER_A_ID, { realizado: 1 });
+performanceRepository.seedStatusCounts(BARBER_B_ID, { realizado: 1 });
 
 function withSession(req: request.Test, sessionId: string): request.Test {
   return req.set('Cookie', `${SESSION_COOKIE_NAME}=${sessionId}`);

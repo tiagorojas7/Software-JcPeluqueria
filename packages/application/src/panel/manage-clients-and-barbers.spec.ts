@@ -2,6 +2,7 @@ import {
   createBarberSchedule,
   createService,
   createShopHours,
+  FakeAppointmentRepository,
   FakeAuthChallengeRepository,
   FakeBarberRepository,
   FakeClientRepository,
@@ -55,11 +56,12 @@ const at = (time: string) => clock.localTimeToUtc('2026-09-07', time); // a Mond
 // is about the barber becoming assignable, not about the time of day.
 const bookingClock = new FakeClock(-180, at('00:00'));
 
-function buildUseCase() {
+function buildUseCase(useCaseClock: FakeClock = bookingClock) {
   const clients = new FakeClientRepository();
   const barbers = new FakeBarberRepository();
   const schedules = new FakeScheduleRepository();
   const services = new FakeServiceRepository();
+  const appointments = new FakeAppointmentRepository();
   const accountsRepository = new FakeStaffAccountRepository();
   const outbox = new FakeNotificationOutboxRepository();
   const accounts = new ManageBarberAccountsUseCase(
@@ -68,8 +70,16 @@ function buildUseCase() {
     new ChallengeService(new FakeAuthChallengeRepository(), bookingClock),
     outbox,
   );
-  const useCase = new ManageClientsAndBarbersUseCase(clients, barbers, schedules, services, accounts);
-  return { useCase, clients, barbers, schedules, services, accounts, accountsRepository, outbox };
+  const useCase = new ManageClientsAndBarbersUseCase(
+    clients,
+    barbers,
+    schedules,
+    services,
+    accounts,
+    appointments,
+    useCaseClock,
+  );
+  return { useCase, clients, barbers, schedules, services, appointments, accounts, accountsRepository, outbox };
 }
 
 /** Every pre-existing test in this file is about the barber becoming
@@ -243,6 +253,188 @@ describe('ManageClientsAndBarbersUseCase (10.14/10.15)', () => {
     const own = await schedules.listBarberSchedule('barber-5');
     expect(own).toHaveLength(5);
     expect(own.map((day) => day.dayOfWeek).sort()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  // RED — docs/HUECOS-BACKEND.md #6, "Apagar un día en Horarios no apaga el
+  // día": el operador destildaba un día, guardaba, veía un mensaje de éxito, y
+  // el barbero seguía trabajando ese día. El array recibido tiene que ser el
+  // estado COMPLETO de la semana: un día que no viene en la lista deja de ser
+  // un día de trabajo, no queda como estaba.
+  it('desconfigura un dia que se saco de la semana — el bug que reporto el dueno', async () => {
+    const { useCase, schedules } = buildUseCase();
+    await useCase.addBarber({
+      id: 'barber-7',
+      name: 'Semana Que Se Achica',
+      email: anEmail(),
+      schedule: [],
+    });
+    await useCase.configureBarberWeek('barber-7', [
+      { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 3, opensAt: '09:00', closesAt: '18:00' },
+    ]);
+
+    // El dueño destilda el martes (dayOfWeek 2) y vuelve a guardar.
+    const result = await useCase.configureBarberWeek('barber-7', [
+      { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 3, opensAt: '09:00', closesAt: '18:00' },
+    ]);
+
+    // Sin turnos reservados en el martes que se apaga, la escritura se hace
+    // sola — pedir confirmación solo tiene sentido cuando hay algo que perder.
+    expect(result).toEqual({ outcome: 'configured' });
+    const own = await schedules.listBarberSchedule('barber-7');
+    expect(own.map((day) => day.dayOfWeek).sort()).toEqual([1, 3]);
+  });
+
+  it('no toca los dias de OTRO barbero al reemplazar la semana de este', async () => {
+    const { useCase, schedules } = buildUseCase();
+    await useCase.addBarber({
+      id: 'barber-8a',
+      name: 'Uno',
+      email: anEmail(),
+      schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }],
+    });
+    await useCase.addBarber({
+      id: 'barber-8b',
+      name: 'Otro',
+      email: anEmail(),
+      schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }],
+    });
+
+    await useCase.configureBarberWeek('barber-8a', [{ dayOfWeek: 2, opensAt: '10:00', closesAt: '19:00' }]);
+
+    const other = await schedules.listBarberSchedule('barber-8b');
+    expect(other.map((day) => day.dayOfWeek)).toEqual([1]);
+  });
+
+  // docs/HUECOS-BACKEND.md #6, segunda parte: "decidir qué pasa con los
+  // turnos ya reservados en un día que se apaga... lo correcto es que el
+  // backend responda cuántos turnos quedarían huérfanos y que la UI pida
+  // confirmación con ese número." El front hoy solo avisa con texto; esto es
+  // lo que ese aviso necesitaba para dejar de ser un parche.
+  describe('configureBarberWeek — turnos huerfanos al apagar un dia', () => {
+    async function withBarberWorkingMonday(useCaseClock?: FakeClock) {
+      const context = buildUseCase(useCaseClock);
+      await context.useCase.addBarber({
+        id: 'barber-9',
+        name: 'Con Turno El Lunes',
+        email: anEmail(),
+        schedule: [{ dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }],
+      });
+      return context;
+    }
+
+    it('pide confirmacion, y NO escribe nada, cuando apagar el dia dejaria un turno reservado huerfano', async () => {
+      const { useCase, appointments, schedules } = await withBarberWorkingMonday();
+      appointments.seed({
+        id: 'apt-lunes',
+        barberId: 'barber-9',
+        serviceId: 'service-1',
+        clientId: 'client-1',
+        channel: 'web',
+        timeRange: { start: at('10:00'), end: at('10:30') }, // 2026-09-07 es lunes
+        status: 'reservado',
+        deposit: { kind: 'not_applicable' },
+      });
+
+      const result = await useCase.configureBarberWeek('barber-9', []);
+
+      expect(result).toEqual({ outcome: 'needs-confirmation', affectedAppointmentIds: ['apt-lunes'] });
+      // Ni un dia se toco: pedir confirmacion es DECIDIDAMENTE no escribir
+      // todavia, nunca un aviso post-facto sobre algo ya guardado.
+      expect(await schedules.listBarberSchedule('barber-9')).toHaveLength(1);
+    });
+
+    it('escribe el cambio cuando el llamador ya confirmo, con turnos huerfanos y todo', async () => {
+      const { useCase, appointments, schedules } = await withBarberWorkingMonday();
+      appointments.seed({
+        id: 'apt-lunes',
+        barberId: 'barber-9',
+        serviceId: 'service-1',
+        clientId: 'client-1',
+        channel: 'web',
+        timeRange: { start: at('10:00'), end: at('10:30') },
+        status: 'reservado',
+        deposit: { kind: 'not_applicable' },
+      });
+
+      const result = await useCase.configureBarberWeek('barber-9', [], { confirm: true });
+
+      expect(result).toEqual({ outcome: 'configured' });
+      expect(await schedules.listBarberSchedule('barber-9')).toEqual([]);
+    });
+
+    it('no pide nada cuando el dia que se apaga no tiene ningun turno reservado', async () => {
+      const { useCase, schedules } = await withBarberWorkingMonday();
+
+      const result = await useCase.configureBarberWeek('barber-9', []);
+
+      expect(result).toEqual({ outcome: 'configured' });
+      expect(await schedules.listBarberSchedule('barber-9')).toEqual([]);
+    });
+
+    it('ignora un turno YA cancelado en ese dia — solo lo reservado queda huerfano', async () => {
+      const { useCase, appointments, schedules } = await withBarberWorkingMonday();
+      appointments.seed({
+        id: 'apt-cancelado',
+        barberId: 'barber-9',
+        serviceId: 'service-1',
+        clientId: 'client-1',
+        channel: 'web',
+        timeRange: { start: at('10:00'), end: at('10:30') },
+        status: 'cancelado',
+        deposit: { kind: 'not_applicable' },
+      });
+
+      const result = await useCase.configureBarberWeek('barber-9', []);
+
+      expect(result).toEqual({ outcome: 'configured' });
+      expect(await schedules.listBarberSchedule('barber-9')).toEqual([]);
+    });
+
+    it('ignora un turno reservado que YA paso — solo lo futuro cuenta como huerfano', async () => {
+      // El reloj de este caso de uso lee las 11:00 ese mismo lunes — el
+      // turno de las 10:00 ya paso para cuando se pide apagar el dia.
+      const { useCase, appointments, schedules } = await withBarberWorkingMonday(new FakeClock(-180, at('11:00')));
+      appointments.seed({
+        id: 'apt-viejo',
+        barberId: 'barber-9',
+        serviceId: 'service-1',
+        clientId: 'client-1',
+        channel: 'web',
+        timeRange: { start: at('10:00'), end: at('10:30') },
+        status: 'reservado',
+        deposit: { kind: 'not_applicable' },
+      });
+
+      const result = await useCase.configureBarberWeek('barber-9', []);
+
+      expect(result).toEqual({ outcome: 'configured' });
+      expect(await schedules.listBarberSchedule('barber-9')).toEqual([]);
+    });
+
+    it('no toca los turnos de un dia que sigue prendido', async () => {
+      const { useCase, appointments, schedules } = await withBarberWorkingMonday();
+      appointments.seed({
+        id: 'apt-lunes',
+        barberId: 'barber-9',
+        serviceId: 'service-1',
+        clientId: 'client-1',
+        channel: 'web',
+        timeRange: { start: at('10:00'), end: at('10:30') },
+        status: 'reservado',
+        deposit: { kind: 'not_applicable' },
+      });
+
+      // El lunes se mantiene tal cual — nada que preguntar.
+      const result = await useCase.configureBarberWeek('barber-9', [
+        { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
+      ]);
+
+      expect(result).toEqual({ outcome: 'configured' });
+      expect(await schedules.listBarberSchedule('barber-9')).toHaveLength(1);
+    });
   });
 
   it('configuring a week updates a day already on file instead of duplicating it', async () => {

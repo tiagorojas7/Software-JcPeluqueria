@@ -31,8 +31,8 @@ const rolePermissions = new FakeRolePermissionRepository(
 const dayBoardRepository = new FakeDayBoardRepository();
 dayBoardRepository.seed('2026-08-21', {
   columns: [
-    { barberId: BARBER_A_ID, barberName: 'Juan' },
-    { barberId: BARBER_B_ID, barberName: 'Ana' },
+    { barberId: BARBER_A_ID, barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+    { barberId: BARBER_B_ID, barberName: 'Ana', opensAt: '10:00', closesAt: '19:00' },
   ],
   slots: [
     {
@@ -45,6 +45,7 @@ dayBoardRepository.seed('2026-08-21', {
       clientAge: null,
       clientPhone: null,
       status: 'reservado',
+      channel: 'web',
       startsAt: clock.localTimeToUtc('2026-08-21', '09:00'),
       endsAt: clock.localTimeToUtc('2026-08-21', '09:30'),
     },
@@ -58,6 +59,7 @@ dayBoardRepository.seed('2026-08-21', {
       clientAge: null,
       clientPhone: null,
       status: 'reservado',
+      channel: 'web',
       startsAt: clock.localTimeToUtc('2026-08-21', '10:00'),
       endsAt: clock.localTimeToUtc('2026-08-21', '10:30'),
     },
@@ -109,7 +111,9 @@ describe('GET /agenda/day-board — barber-profile: agenda propia filtrada', () 
     );
 
     expect(response.status).toBe(200);
-    expect(response.body.columns).toEqual([{ barberId: BARBER_A_ID, barberName: 'Juan' }]);
+    expect(response.body.columns).toEqual([
+      { barberId: BARBER_A_ID, barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' },
+    ]);
     expect(response.body.slots).toHaveLength(1);
     expect(response.body.slots[0].barberId).toBe(BARBER_A_ID);
   });

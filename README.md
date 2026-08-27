@@ -523,8 +523,10 @@ criterio de aceptación distinto y más duro:
 - **Agenda del día** — marcar realizado, confirmar ausencia, editar, cancelar y
   cargar walk-ins; un barbero solo resuelve los suyos, y el límite está en la
   consulta, no en la pantalla
-- **Turno telefónico**, gestión de clientes y barberos, facturación del barbero y
-  del local
+- **Turno telefónico**, gestión de clientes y barberos, facturación del barbero
+  — desglosada por servicio, con cuántos cortes de cada uno hizo y cuánto
+  facturó — y sus propias estadísticas con ausentes/cancelados/sin registrar,
+  no solo el conteo de realizados
 - **Cuentas de barberos** — el alta crea barbero, horarios y usuario en el mismo
   acto y manda la invitación; el dueño ve quién activó, reenvía el enlace y
   quita o devuelve el acceso; el barbero elige su contraseña desde el enlace
@@ -540,6 +542,7 @@ criterio de aceptación distinto y más duro:
 | **A.7 · reembolso al vencer un hold** | La rama `refunded-and-notified` de `ExpireHold` exige un reembolso exitoso contra MercadoPago real. Bloqueada por la fila de arriba: sin credenciales coherentes no hay reembolso posible |
 | **B.7 · click-through completo del panel** | Las acciones están verificadas por HTTP contra PostgreSQL real y por tests sobre los componentes de producción, pero falta la sesión de navegador entera |
 | **E.3 · ofertas por ausencia en pantalla** | La mitad del recordatorio de 2h está verificada; falta marcar un barbero ausente desde el panel y ver salir la oferta |
+| **Pantalla de facturación del local** | `GET /shop/revenue` ya existe — total, desglose por barbero, por servicio, mismo disclaimer que la facturación propia, solo el dueño — pero `ShopRevenuePage.tsx` sigue siendo el placeholder de "en construcción": nadie construyó la pantalla que consume el endpoint todavía |
 | **Cambios de UX/UI** | El dueño los define después de terminar de probar |
 | **Aterrizar a `main`** | `main` sigue en `2173dac`, solo documentación. Hay 21 PRs abiertos y el trabajo vive en `feat/turnero-integracion` |
 | **Producción** | Deploy, dominio, HTTPS, backups, monitoreo |
@@ -564,10 +567,10 @@ criterio de aceptación distinto y más duro:
 | Paquete | Archivos | Tests |
 |---------|:---:|:---:|
 | `domain` | 12 | 64 |
-| `application` | 44 | 245 |
-| `apps/web` | 33 | 183 |
-| `apps/api` | 19 | 150 |
-| **Total rápido** | **108** | **642** |
+| `application` | 45 | 262 |
+| `apps/web` | 37 | 236 |
+| `apps/api` | 20 | 157 |
+| **Total rápido** | **114** | **719** |
 
 `infrastructure` corre aparte: sus suites levantan un PostgreSQL real con
 Testcontainers, así que tardan minutos en vez de segundos. En cada corrida

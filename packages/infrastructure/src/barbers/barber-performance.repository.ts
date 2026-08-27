@@ -1,7 +1,9 @@
 import type {
   ActorContext,
+  AppointmentStatusCounts,
   BarberPerformanceAccessResult,
   BarberPerformanceRepository,
+  BarberStatusCountsResult,
   TimeWindow,
 } from '@jc-barberia/domain';
 import { and, eq, sql } from 'drizzle-orm';
@@ -41,6 +43,7 @@ export class DrizzleBarberPerformanceRepository implements BarberPerformanceRepo
       .select({
         appointmentId: slotOccupancies.id,
         serviceId: slotOccupancies.serviceId,
+        serviceName: services.name,
         listPriceCents: services.priceCents,
       })
       .from(slotOccupancies)
@@ -56,5 +59,48 @@ export class DrizzleBarberPerformanceRepository implements BarberPerformanceRepo
       );
 
     return { outcome: 'allowed', appointments: rows };
+  }
+
+  /**
+   * docs/HUECOS-BACKEND.md #4 — every status this barber's turnos in
+   * `range` resolved to, in ONE grouped query rather than one `COUNT` per
+   * status. `GROUP BY status` only ever returns rows for statuses that
+   * actually occurred, so every count defaults to 0 before the query's rows
+   * are folded in — a status with zero turnos must read as 0, never be
+   * missing from the result.
+   */
+  async countByStatus(
+    requestedBarberId: string,
+    range: TimeWindow,
+    actor: ActorContext,
+  ): Promise<BarberStatusCountsResult> {
+    if (actor.barberId !== undefined && actor.barberId !== requestedBarberId) {
+      return { outcome: 'forbidden' };
+    }
+
+    const rangeLiteral = `[${range.start.toISOString()},${range.end.toISOString()})`;
+    const rows = await this.db
+      .select({ status: slotOccupancies.status, count: sql<number>`count(*)::int` })
+      .from(slotOccupancies)
+      .where(
+        and(
+          eq(slotOccupancies.barberId, requestedBarberId),
+          sql`${slotOccupancies.timeRange} && ${rangeLiteral}::tstzrange`,
+        ),
+      )
+      .groupBy(slotOccupancies.status);
+
+    const counts: Record<keyof AppointmentStatusCounts, number> = {
+      realizado: 0,
+      cancelado: 0,
+      ausente: 0,
+      sin_registrado: 0,
+    };
+    for (const row of rows) {
+      if (row.status in counts) {
+        counts[row.status as keyof AppointmentStatusCounts] = row.count;
+      }
+    }
+    return { outcome: 'allowed', counts };
   }
 }
