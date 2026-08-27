@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { emailField } from './email-field';
+
 /**
  * Wire contract for the staff login entrypoint (`apps/api/src/identity`).
  * `StaffLoginUseCase` and `SessionService` were both built and tested in
@@ -9,7 +11,7 @@ import { z } from 'zod';
  * to the exact same shape/idiom every other contract in this package uses.
  */
 export const StaffLoginRequestSchema = z.object({
-  email: z.string().email('Email inválido'),
+  email: emailField('Email inválido'),
   password: z.string().min(1, 'La contraseña es obligatoria'),
 });
 
@@ -41,7 +43,7 @@ export type StaffLoginResponseBody =
  * this flow).
  */
 export const RequestClientAccessRequestSchema = z.object({
-  email: z.string().email('Email inválido'),
+  email: emailField('Email inválido'),
 });
 
 export type RequestClientAccessRequest = z.infer<typeof RequestClientAccessRequestSchema>;
@@ -83,7 +85,7 @@ export type ClientLoginRequest = z.infer<typeof ClientLoginRequestSchema>;
  * which emails are registered customers.
  */
 export const ClientLoginByEmailRequestSchema = z.object({
-  email: z.string().email('Email inválido'),
+  email: emailField('Email inválido'),
   secret: z.string().min(1, 'El código es obligatorio'),
 });
 

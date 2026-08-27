@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { emailField } from './email-field';
+
 /**
  * client-booking spec, "Exploración sin cuenta": query params for the public
  * availability endpoint. No session, no account field anywhere in this
@@ -54,7 +56,7 @@ export const ConfirmReservationRequestSchema = z.object({
     // contract): client-booking spec says access without a password depends
     // on it, so the web flow cannot accept a missing email the way a phone
     // booking can.
-    email: z.string().min(1, 'El email es obligatorio').email('Email inválido'),
+    email: emailField('Email inválido', 'El email es obligatorio'),
     age: z.number().int().positive().nullable().optional(),
   }),
 });

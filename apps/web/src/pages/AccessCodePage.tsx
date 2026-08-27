@@ -174,6 +174,19 @@ export function AccessCodePage() {
     }
   }
 
+  function handleUseAnotherEmail() {
+    // Clearing the persisted email is the load-bearing half: it is what makes
+    // the email screen the landing point again on the NEXT visit too —
+    // without it, `loadPersistedEmail()` on mount bounces a mistyped address
+    // right back to the code screen forever.
+    clearPersistedEmail();
+    setEmail('');
+    setScreen('email');
+    setStatus({ outcome: 'idle' });
+    setNotice(null);
+    setError(null);
+  }
+
   async function handleRequestNewCode() {
     setError(null);
     if (!email) {
@@ -237,6 +250,9 @@ export function AccessCodePage() {
               </p>
             )}
             <AccessCodeForm status={status} onSubmit={handleSubmitCode} onRequestNewCode={handleRequestNewCode} />
+            <button type="button" className="access-code-page__change-email" onClick={handleUseAnotherEmail}>
+              Usar otro email
+            </button>
           </>
         )}
       </div>

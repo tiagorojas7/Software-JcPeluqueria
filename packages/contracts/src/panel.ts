@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { emailField } from './email-field';
+
 /**
  * Wire contracts for the panel's client/barber management screens
  * (admin-operations spec, "Gestión de clientes y de barberos", tasks
@@ -45,7 +47,7 @@ export const AddBarberRequestSchema = z.object({
    *  alta captures where the activation invite goes and what they will log
    *  in as. Required — an alta without it produced a barber who could be
    *  assigned turnos and could never open the panel. */
-  email: z.string().email('Email inválido'),
+  email: emailField('Email inválido'),
   schedule: z.array(BarberScheduleDaySchema).min(1, 'El horario base es obligatorio'),
 });
 
@@ -77,7 +79,7 @@ export interface BarberAccountResponse {
  *  one step for new barbers, and this is the same act for everyone else. */
 export const InviteBarberAccountRequestSchema = z.object({
   barberId: z.string().min(1, 'Falta el barbero'),
-  email: z.string().email('Email inválido'),
+  email: emailField('Email inválido'),
 });
 
 export type InviteBarberAccountRequest = z.infer<typeof InviteBarberAccountRequestSchema>;

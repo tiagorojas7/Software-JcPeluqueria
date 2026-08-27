@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { emailField } from './email-field';
+
 /**
  * Wire contract for the panel's phone-appointment form (admin-operations
  * spec, "Creación de turnos telefónicos sin seña"). Time travels as
@@ -30,7 +32,7 @@ export const CreatePhoneAppointmentRequestSchema = z.object({
   client: z.object({
     name: z.string().min(1, 'El nombre es obligatorio'),
     phone: z.string().min(1, 'El teléfono es obligatorio'),
-    email: z.string().email('Email inválido').nullable().optional(),
+    email: emailField('Email inválido').nullable().optional(),
     age: z.number().int().positive().nullable().optional(),
   }),
 });

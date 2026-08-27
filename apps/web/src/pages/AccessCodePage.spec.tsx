@@ -167,6 +167,22 @@ describe('AccessCodePage (fix/acceso-cliente-sin-id)', () => {
     expect(container.textContent).toMatch(/sin contrase|no (necesit|hace falta)/i);
   });
 
+  // El paso del codigo mostraba el email pero no dejaba corregirlo: un email
+  // mal tipeado quedaba persistido en localStorage y la unica salida era
+  // borrar el storage a mano. "Usar otro email" tiene que volver al paso del
+  // email Y limpiar lo persistido, o recargar la pagina te devuelve al mismo
+  // callejon.
+  it('permite corregir el email desde el paso del codigo', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ outcome: 'requested' } satisfies RequestClientAccessResponseBody);
+    renderPage();
+    await requestCode();
+
+    fireEvent.click(screen.getByRole('button', { name: /usar otro email/i }));
+
+    expect(await screen.findByLabelText(/^email$/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem('jc-barberia:access-email')).toBeNull();
+  });
+
   // Una vez pedido el codigo, el email al que se mando tiene que quedar a la
   // vista: es el dato que la gente escribe mal, y sin verlo no puede saber
   // por que el correo no llega.
