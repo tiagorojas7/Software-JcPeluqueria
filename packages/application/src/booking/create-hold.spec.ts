@@ -87,4 +87,37 @@ describe('CreateHold — schedules hold.expire', () => {
       { holdId: 'hold-1', startAfter: at('10:00') },
     ]);
   });
+
+  // The Nest wiring never actually shares a transaction between the hold
+  // insert and the job enqueue (`PgBossHoldExpireScheduler` is constructed
+  // without `currentTransaction` in every module), so the two writes can
+  // fail independently. The dangerous order is create-then-schedule: a
+  // committed hold whose enqueue failed has NO expiry job, and for an
+  // absence-offer hold that means the origin's seña is never refunded.
+  // Schedule-first restores the invariant — a job for a hold that never
+  // committed is a documented no-op in `ExpireHold` (`!view → 'no-op'`).
+  it('si el encolado de la expiración falla, el hold no se persiste', async () => {
+    const clock = new FakeClock(-180, at('09:45'));
+    const holds = new FakeHoldRepository();
+    const failingScheduler = {
+      async scheduleExpire(): Promise<void> {
+        throw new Error('pg-boss down');
+      },
+    };
+    const useCase = new CreateHold(holds, clock, failingScheduler);
+
+    await expect(
+      useCase.execute({
+        id: 'hold-9',
+        barberId: 'barber-1',
+        serviceId: 'service-1',
+        clientId: null,
+        channel: 'web',
+        timeRange,
+        searchWindow,
+      }),
+    ).rejects.toThrow('pg-boss down');
+
+    expect(holds.createCalls).toEqual([]);
+  });
 });

@@ -2,7 +2,7 @@ import {
   AppointmentStateMachine,
   type AppointmentRepository,
   type HoldExpireViewRepository,
-  type NotificationPort,
+  type NotificationOutboxRepository,
 } from '@jc-barberia/domain';
 import type { RefundUseCase } from '../payments/refund';
 
@@ -47,12 +47,20 @@ export type ExpireHoldOutcome =
  *
  * Idempotent on retry through both the `ExpiredHoldView.isHeld` gate and
  * `RefundUseCase`'s own `already-refunded` short-circuit.
+ *
+ * The notification goes to the OUTBOX, never straight to `NotificationPort`
+ * — the same discipline every other writer in this codebase follows. Sending
+ * directly meant a transient SMTP failure threw the whole job AFTER the
+ * refund had already succeeded; the pg-boss retry then hit
+ * `already-refunded`, which never re-notifies. The money came back and the
+ * client was never told. Delivery and its backoff belong to the outbox
+ * consumer.
  */
 export class ExpireHold {
   constructor(
     private readonly views: HoldExpireViewRepository,
     private readonly refund: RefundUseCase,
-    private readonly notifications: NotificationPort,
+    private readonly outbox: NotificationOutboxRepository,
     private readonly appointments: AppointmentRepository,
   ) {}
 
@@ -79,10 +87,10 @@ export class ExpireHold {
         // The notification fires only when money moved AND the client has an
         // email registrado (notification-port spec: no email → no dispatch).
         if (view.originClientEmail) {
-          await this.notifications.send({
-            to: view.originClientEmail,
-            template: 'cancellation_with_refund',
-            data: { refundId: result.refundId, amountCents: String(result.amountCents) },
+          await this.outbox.enqueue({
+            notificationType: 'cancellation_with_refund',
+            recipientEmail: view.originClientEmail,
+            payload: { refundId: result.refundId, amountCents: String(result.amountCents) },
           });
           return 'refunded-and-notified';
         }

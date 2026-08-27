@@ -5,6 +5,7 @@ import '@jc-barberia/infrastructure/env';
 import 'reflect-metadata';
 
 import { NestFactory } from '@nestjs/core';
+import { assertRequiredEnv } from '@jc-barberia/infrastructure';
 import cookieParser from 'cookie-parser';
 
 import { AppModule } from './app.module';
@@ -30,6 +31,13 @@ import { AppModule } from './app.module';
  * eager-vs-lazy factory, just at shutdown instead of at boot.
  */
 async function bootstrap(): Promise<void> {
+  // BEFORE the module graph is built: every payment provider reads
+  // `MERCADOPAGO_ACCESS_TOKEN ?? ''` during construction, so an empty token
+  // produces a perfectly booted API whose first real deposit fails with
+  // `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES`. Failing here costs a
+  // restart; failing there costs a customer mid-payment.
+  assertRequiredEnv(['DATABASE_URL', 'MERCADOPAGO_ACCESS_TOKEN']);
+
   const app = await NestFactory.create(AppModule);
 
   app.use(cookieParser());

@@ -33,13 +33,14 @@ export interface CreateHoldInput {
  * never supply `holdExpiresAt` themselves, and `HoldRepository.create` only
  * knows how to persist an already-formed `Hold`.
  *
- * Per design.md "Encolado transaccional", the `hold.expire` job is enqueued
- * in the SAME transaction that persists the hold, so a rollback discards
- * both — no orphan expiry jobs that would refund + notify for a hold that
- * never committed. The transactional binding is the pg-boss adapter's
- * responsibility; here the contract is "after the hold commits, ask the
- * scheduler to fire its expiry no earlier than the hold's own `holdExpiresAt`",
- * which the same `Clock` computed — never a fresh wall-clock read.
+ * design.md's "Encolado transaccional" wants the hold and its `hold.expire`
+ * job to commit together. `PgBossHoldExpireScheduler` can do that — it takes
+ * an optional `currentTransaction` — but no composition root supplies one,
+ * so in production these are two independent writes. The ordering below is
+ * what makes that safe; see `execute`'s own comment.
+ *
+ * `startAfter` is always the hold's own `holdExpiresAt`, computed by the
+ * same `Clock` — never a fresh wall-clock read.
  */
 export class CreateHold {
   constructor(
@@ -59,8 +60,17 @@ export class CreateHold {
       holdExpiresAt: this.clock.addMinutes(this.clock.now(), HOLD_DURATION_MINUTES),
       originOccupancyId: input.originOccupancyId ?? null,
     };
-    await this.holds.create(hold, input.searchWindow);
+    // Schedule BEFORE persisting, deliberately. The two writes are not
+    // actually transactional in production — every Nest module builds
+    // `PgBossHoldExpireScheduler` without its optional `currentTransaction`,
+    // so the enqueue is an independent network call that can fail on its
+    // own. Of the two possible orders only this one is safe: a job for a
+    // hold that never committed is an explicit no-op in `ExpireHold` (its
+    // `!view` gate), while a committed hold with no job never expires — and
+    // for an absence-offer hold that means the origin's settled seña is
+    // never refunded and the origin turno never auto-cancels, permanently.
     await this.holdExpire.scheduleExpire({ holdId: hold.id, startAfter: hold.holdExpiresAt });
+    await this.holds.create(hold, input.searchWindow);
     return hold;
   }
 }

@@ -25,6 +25,7 @@ import {
   PAYMENT_PROCESS_QUEUE,
   PgBossAppointmentReminderScheduler,
   ShopClock,
+  assertRequiredEnv,
   createNotificationPort,
   createTemplateRegistry,
   db,
@@ -77,6 +78,13 @@ const connectionString =
   process.env.DATABASE_URL ?? 'postgres://jc_barberia:jc_barberia@localhost:5432/jc_barberia_test';
 
 async function main(): Promise<void> {
+  // Same reason as `apps/api`'s own bootstrap: this process refunds real
+  // money (`hold.expire`) and settles real deposits (`payment.process`)
+  // through an adapter that takes `MERCADOPAGO_ACCESS_TOKEN ?? ''`. An
+  // empty token here means every refund silently 403s in a background job
+  // nobody is watching.
+  assertRequiredEnv(['DATABASE_URL', 'MERCADOPAGO_ACCESS_TOKEN']);
+
   const boss = new PgBoss(connectionString);
   // Same reason as the producer's handler in `job-producer.ts`: pg-boss is an
   // EventEmitter and an unhandled 'error' event crashes the Node process
@@ -199,7 +207,11 @@ async function main(): Promise<void> {
       new DrizzleDepositRepository(db),
       new MercadoPagoPaymentAdapter(process.env.MERCADOPAGO_ACCESS_TOKEN ?? ''),
     ),
-    notifications,
+    // The outbox, not `notifications` directly: a failed send must not throw
+    // the job after the refund already moved the money (the retry would hit
+    // `already-refunded` and never re-notify). The consumer below owns
+    // delivery and its backoff.
+    new DrizzleNotificationOutboxRepository(db),
     new DrizzleAppointmentRepository(db),
   );
   await boss.work<{ holdId: string }>(HOLD_EXPIRE_QUEUE, async (jobs) => {

@@ -15,7 +15,6 @@ export { verifyMercadoPagoSignature } from './payments/mercadopago-signature';
 export type { WebhookSignatureInput } from './payments/mercadopago-signature';
 export { PAYMENT_PROCESS_QUEUE, PgBossPaymentJobQueue } from './payments/pg-boss-payment-job-queue';
 export { ConsoleNotificationAdapter } from './notifications/console-notification.adapter';
-export { ConsoleNotificationOutboxRepository } from './notifications/console-notification-outbox.repository';
 export { GmailNotificationAdapter } from './notifications/gmail-notification.adapter';
 export type { GmailAdapterConfig, GmailAdapterDeps } from './notifications/gmail-notification.adapter';
 export { createNotificationPort } from './notifications/notification-adapter';
@@ -53,3 +52,4 @@ export { DrizzleAppointmentRepository } from './appointments/appointment.reposit
 export { DrizzleAbsenceRecordRepository } from './appointments/absence-record.repository';
 export { DrizzleBarberPerformanceRepository } from './barbers/barber-performance.repository';
 export { DrizzleShopRevenueRepository } from './shop/shop-revenue.repository';
+export { assertRequiredEnv, missingRequiredEnv } from './config/required-env';

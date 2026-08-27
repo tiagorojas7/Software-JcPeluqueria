@@ -3,7 +3,7 @@ import {
   FakeClock,
   FakeDepositRepository,
   FakeHoldExpireViewRepository,
-  FakeNotificationPort,
+  FakeNotificationOutboxRepository,
   FakePaymentPort,
   InsufficientMoneyForRefundError,
   type Appointment,
@@ -61,22 +61,26 @@ describe('ExpireHold', () => {
       amountCents: 250000,
     });
     const refund = new RefundUseCase(deposits, new FakePaymentPort());
-    const notifications = new FakeNotificationPort();
+    const outbox = new FakeNotificationOutboxRepository();
     const views = new FakeHoldExpireViewRepository();
     views.seed(aView());
     const appointments = new FakeAppointmentRepository();
     appointments.seed(anOriginAppointment({ deposit: { kind: 'settled', paymentId: 'mp-1', amountCents: 250000 } }));
-    const useCase = new ExpireHold(views, refund, notifications, appointments);
+    const useCase = new ExpireHold(views, refund, outbox, appointments);
 
     const outcome = await useCase.execute(HOLD);
 
     expect(outcome).toBe('refunded-and-notified');
     expect(deposits.findCalls).toEqual([ORIGIN]);
-    expect(notifications.sentMessages).toEqual([
+    // Al outbox, nunca directo al transporte: si el mail se cae despues de
+    // que la plata volvio, el reintento del job encuentra 'already-refunded'
+    // y NO reintenta la notificacion — el cliente no se entera nunca de su
+    // reembolso. La entrega con reintentos es del consumidor del outbox.
+    expect(outbox.enqueued).toEqual([
       {
-        to: EMAIL,
-        template: 'cancellation_with_refund',
-        data: { refundId: 'fake-refund-1', amountCents: '250000' },
+        notificationType: 'cancellation_with_refund',
+        recipientEmail: EMAIL,
+        payload: { refundId: 'fake-refund-1', amountCents: '250000' },
       },
     ]);
     // 12.10/12.11 — the origin turno MUST transition to cancelado, not just
@@ -96,17 +100,17 @@ describe('ExpireHold', () => {
       amountCents: 250000,
     });
     const refund = new RefundUseCase(deposits, new FakePaymentPort());
-    const notifications = new FakeNotificationPort();
+    const outbox = new FakeNotificationOutboxRepository();
     const views = new FakeHoldExpireViewRepository();
     views.seed(aView({ isHeld: false }));
     const appointments = new FakeAppointmentRepository();
-    const useCase = new ExpireHold(views, refund, notifications, appointments);
+    const useCase = new ExpireHold(views, refund, outbox, appointments);
 
     const outcome = await useCase.execute(HOLD);
 
     expect(outcome).toBe('no-op');
     expect(deposits.findCalls).toEqual([]);
-    expect(notifications.sentMessages).toEqual([]);
+    expect(outbox.enqueued).toEqual([]);
     expect(appointments.updateStatusCalls).toEqual([]);
   });
 
@@ -121,17 +125,17 @@ describe('ExpireHold', () => {
       amountCents: 250000,
     });
     const refund = new RefundUseCase(deposits, new FakePaymentPort());
-    const notifications = new FakeNotificationPort();
+    const outbox = new FakeNotificationOutboxRepository();
     const views = new FakeHoldExpireViewRepository();
     views.seed(aView({ paymentPending: true }));
     const appointments = new FakeAppointmentRepository();
-    const useCase = new ExpireHold(views, refund, notifications, appointments);
+    const useCase = new ExpireHold(views, refund, outbox, appointments);
 
     const outcome = await useCase.execute(HOLD);
 
     expect(outcome).toBe('no-op');
     expect(deposits.findCalls).toEqual([]);
-    expect(notifications.sentMessages).toEqual([]);
+    expect(outbox.enqueued).toEqual([]);
     expect(appointments.updateStatusCalls).toEqual([]);
   });
 
@@ -142,17 +146,17 @@ describe('ExpireHold', () => {
   it('is a no-op for an expired hold without an origin occupancy', async () => {
     const deposits = new FakeDepositRepository();
     const refund = new RefundUseCase(deposits, new FakePaymentPort());
-    const notifications = new FakeNotificationPort();
+    const outbox = new FakeNotificationOutboxRepository();
     const views = new FakeHoldExpireViewRepository();
     views.seed(aView({ originOccupancyId: null }));
     const appointments = new FakeAppointmentRepository();
-    const useCase = new ExpireHold(views, refund, notifications, appointments);
+    const useCase = new ExpireHold(views, refund, outbox, appointments);
 
     const outcome = await useCase.execute(HOLD);
 
     expect(outcome).toBe('no-op');
     expect(deposits.findCalls).toEqual([]);
-    expect(notifications.sentMessages).toEqual([]);
+    expect(outbox.enqueued).toEqual([]);
     expect(appointments.updateStatusCalls).toEqual([]);
   });
 
@@ -170,18 +174,18 @@ describe('ExpireHold', () => {
       amountCents: 250000,
     });
     const refund = new RefundUseCase(deposits, new FakePaymentPort());
-    const notifications = new FakeNotificationPort();
+    const outbox = new FakeNotificationOutboxRepository();
     const views = new FakeHoldExpireViewRepository();
     views.seed(aView());
     const appointments = new FakeAppointmentRepository();
     appointments.seed(anOriginAppointment({ status: 'cancelado' }));
-    const useCase = new ExpireHold(views, refund, notifications, appointments);
+    const useCase = new ExpireHold(views, refund, outbox, appointments);
 
     const outcome = await useCase.execute(HOLD);
 
     expect(outcome).toBe('no-op');
     expect(deposits.findCalls).toEqual([ORIGIN]);
-    expect(notifications.sentMessages).toEqual([]);
+    expect(outbox.enqueued).toEqual([]);
     expect(appointments.updateStatusCalls).toEqual([]);
   });
 
@@ -202,17 +206,17 @@ describe('ExpireHold', () => {
       '{"error":"insufficient_money_for_refund"}',
     );
     const refund = new RefundUseCase(deposits, paymentPort);
-    const notifications = new FakeNotificationPort();
+    const outbox = new FakeNotificationOutboxRepository();
     const views = new FakeHoldExpireViewRepository();
     views.seed(aView());
     const appointments = new FakeAppointmentRepository();
     appointments.seed(anOriginAppointment({ deposit: { kind: 'settled', paymentId: 'mp-1', amountCents: 250000 } }));
-    const useCase = new ExpireHold(views, refund, notifications, appointments);
+    const useCase = new ExpireHold(views, refund, outbox, appointments);
 
     const outcome = await useCase.execute(HOLD);
 
     expect(outcome).toBe('retry');
-    expect(notifications.sentMessages).toEqual([]);
+    expect(outbox.enqueued).toEqual([]);
     expect(appointments.updateStatusCalls).toEqual([]);
   });
 
@@ -234,18 +238,18 @@ describe('ExpireHold', () => {
     const deposits = new FakeDepositRepository();
     deposits.seedNotApplicableAppointment(ORIGIN);
     const refund = new RefundUseCase(deposits, new FakePaymentPort());
-    const notifications = new FakeNotificationPort();
+    const outbox = new FakeNotificationOutboxRepository();
     const views = new FakeHoldExpireViewRepository();
     views.seed(aView({ originClientEmail: null }));
     const appointments = new FakeAppointmentRepository();
     appointments.seed(anOriginAppointment({ channel: 'telefonico', deposit: { kind: 'not_applicable' } }));
-    const useCase = new ExpireHold(views, refund, notifications, appointments);
+    const useCase = new ExpireHold(views, refund, outbox, appointments);
 
     const outcome = await useCase.execute(HOLD);
 
     expect(outcome).toBe('cancelled-no-refund');
     expect(appointments.updateStatusCalls).toEqual([{ id: ORIGIN, status: 'cancelado' }]);
     // No seña existed — nothing for PaymentPort/RefundUseCase to move.
-    expect(notifications.sentMessages).toEqual([]);
+    expect(outbox.enqueued).toEqual([]);
   });
 });
