@@ -65,7 +65,7 @@ function renderPanelRoute(pathname: string, actor: Actor) {
     case '/panel/facturacion':
       return <RevenuePage actor={actor} />;
     case '/panel/facturacion-local':
-      return <ShopRevenuePage />;
+      return <ShopRevenuePage actor={actor} />;
     default:
       return <NotFound />;
   }
