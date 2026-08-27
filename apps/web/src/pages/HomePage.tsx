@@ -77,10 +77,17 @@ export function HomePage() {
   return (
     <div className="home">
       <section className="home__hero">
+        {/* The hero photograph IS the largest contentful paint of the whole
+            public site: eager and high-priority on purpose, unlike the
+            gallery below it, which is lazy. Its box is reserved by CSS
+            (`position: absolute; inset: 0`), so no width/height is needed
+            to keep the layout stable. */}
         <img
           className="home__hero-photo"
           src="/fotos/fachada.jpg"
           alt="Frente de JC Barbería, en Córdoba Capital"
+          fetchPriority="high"
+          decoding="async"
         />
         <div className="home__hero-veil" />
         <div className="container home__hero-inner">

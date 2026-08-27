@@ -18,6 +18,7 @@ import { ShopRevenuePage } from './pages/ShopRevenuePage';
 import { StaffLoginPage } from './pages/StaffLoginPage';
 import { ErrorBoundary } from './shared/ErrorBoundary';
 import { apiPost } from './shared/api-client';
+import { documentTitleFor } from './shared/document-title';
 import type { Actor } from './shared/actor';
 import { RouterProvider, useRouter } from './shared/router';
 import { clearPersistedActor, loadPersistedActor, savePersistedActor } from './shared/session';
@@ -95,6 +96,12 @@ function AppShell() {
       navigate(redirect);
     }
   }, [pathname, actor, navigate]);
+
+  // `index.html` carries one static <title> for all eleven sections; this is
+  // the only place that keeps the tab honest about where the visitor is.
+  useEffect(() => {
+    document.title = documentTitleFor(pathname);
+  }, [pathname]);
 
   async function handleLogout() {
     try {
