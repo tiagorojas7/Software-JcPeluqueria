@@ -31,12 +31,38 @@ describe('HomePage (D.2)', () => {
     vi.mocked(apiGet).mockReset();
   });
 
-  it('tiene un titulo principal y una llamada a la accion hacia reservar', () => {
+  // El h1 pasa a ser la promesa, no el nombre del local: es lo que decide a
+  // alguien que llega sin conocer la barberia. El nombre sigue en pantalla
+  // (cabecera y hero), asi que no se pierde — cambia de lugar, no desaparece.
+  it('encabeza con la promesa y deja el nombre del local visible igual', () => {
+    vi.mocked(apiGet).mockResolvedValue({ services: [], barbers: [] });
+    const { container } = renderHome();
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/tu mejor versi.n/i);
+    expect(container.textContent).toMatch(/jc barber/i);
+  });
+
+  it('lleva a reservar desde el hero', () => {
     vi.mocked(apiGet).mockResolvedValue({ services: [], barbers: [] });
     renderHome();
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/jc barber/i);
-    expect(screen.getByRole('link', { name: /reservar/i })).toHaveAttribute('href', '/reservar');
+    expect(screen.getAllByRole('link', { name: /reservar turno/i })[0]).toHaveAttribute(
+      'href',
+      '/reservar',
+    );
+  });
+
+  // El local es oscuro, con madera y cuero, y eso no se transmite con texto.
+  // Las fotos reales del lugar son la unica prueba de como se ve.
+  it('muestra fotos reales del local, con texto alternativo', () => {
+    vi.mocked(apiGet).mockResolvedValue({ services: [], barbers: [] });
+    renderHome();
+
+    const fotos = screen.getAllByRole('img');
+    expect(fotos.length).toBeGreaterThan(0);
+    for (const foto of fotos) {
+      expect(foto).toHaveAccessibleName();
+    }
   });
 
   it('muestra los servicios del local con su precio real', async () => {
@@ -53,8 +79,25 @@ describe('HomePage (D.2)', () => {
     });
     renderHome();
 
-    expect(await screen.findByText(/corte cl.sico \(\$8\.000\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/corte \+ barba \(\$12\.000\)/i)).toBeInTheDocument();
+    // Nombre, duracion y precio son tres datos distintos y se leen como
+    // tres: apretados en un solo string ("Corte clasico ($8.000)") nadie
+    // compara dos servicios de un vistazo.
+    expect(await screen.findByText('Corte clásico')).toBeInTheDocument();
+    expect(screen.getByText('$8.000')).toBeInTheDocument();
+    expect(screen.getByText('30 min')).toBeInTheDocument();
+
+    expect(screen.getByText('Corte + Barba')).toBeInTheDocument();
+    expect(screen.getByText('$12.000')).toBeInTheDocument();
+    expect(screen.getByText('45 min')).toBeInTheDocument();
+  });
+
+  // La senia del 50% es la parte que mas dudas genera al reservar, asi que
+  // se dice en la pagina publica y no recien en el checkout.
+  it('avisa que la reserva se asegura con una seña del 50%', () => {
+    vi.mocked(apiGet).mockResolvedValue({ services: [], barbers: [] });
+    const { container } = renderHome();
+
+    expect(container.textContent).toMatch(/50%/);
   });
 
   it('muestra el equipo de barberos activos', async () => {

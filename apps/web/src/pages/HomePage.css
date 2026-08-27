@@ -1,26 +1,72 @@
-/* The page ground is already near-black, so the hero earns its separation
-   with warmth and light rather than with a darker fill: a tobacco glow off
-   the top-right corner and a champagne hairline closing it off. */
+/**
+ * The public landing page. Mobile-first throughout: almost every enquiry
+ * this shop gets arrives from a phone, so the single-column layout is the
+ * base and the wider arrangements are the exceptions added at breakpoints.
+ *
+ * The page leads with a photograph of the real storefront rather than a
+ * coloured block. The shop is dark, with wood and leather, and that is the
+ * thing a stranger is deciding about — it does not come across in text.
+ */
+
 .home__hero {
   position: relative;
   overflow: hidden;
-  background-image:
-    radial-gradient(720px 420px at 82% 8%, rgba(139, 94, 58, 0.2), transparent 60%),
-    radial-gradient(560px 380px at 8% 92%, rgba(205, 187, 161, 0.09), transparent 62%);
-  color: var(--color-ink);
+  min-height: 78vh;
+  display: flex;
+  align-items: flex-end;
   border-bottom: 1px solid var(--color-line);
 }
 
+.home__hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Two layers, not one: a vertical ramp so the copy at the bottom always has
+   a dark ground under it whatever the photo does there, plus a warm glow
+   that ties the photograph to the brand's accent. Without the ramp the
+   headline's legibility depends on the image, which is not something a
+   layout should gamble on. */
+.home__hero-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(10, 10, 10, 0.55) 0%, rgba(10, 10, 10, 0.72) 42%, rgba(10, 10, 10, 0.96) 100%),
+    radial-gradient(60% 45% at 85% 10%, rgba(139, 94, 58, 0.34), transparent 62%);
+}
+
 .home__hero-inner {
+  position: relative;
+  padding: var(--space-9) var(--space-5) var(--space-7);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-9) var(--space-5) var(--space-8);
-  text-align: center;
+  align-items: flex-start;
+  gap: var(--space-4);
+  text-align: left;
+}
+
+.home__hero h1 {
+  margin: 0;
+  font-size: clamp(2.75rem, 1.6rem + 5vw, 5.25rem);
+  line-height: 0.94;
+  color: var(--color-heading);
+  text-wrap: balance;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.7);
+}
+
+.home__hero-inner > p {
+  max-width: 46ch;
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--color-ink);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.8);
 }
 
 .home__eyebrow {
+  display: block;
   font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -28,31 +74,36 @@
   color: var(--color-accent);
 }
 
-.home__hero h1 {
-  color: var(--color-heading);
-  margin-bottom: 0;
-  text-wrap: balance;
+/* Over the photograph the tobacco accent lands on whatever the image happens
+   to be — against the bright sky at the top of the storefront shot it all
+   but disappears. Champagne plus a shadow keeps it readable without giving
+   the eyebrow more weight than the headline it introduces. */
+.home__hero .home__eyebrow {
+  color: var(--color-champagne);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.95);
 }
 
-.home__hero-inner > p {
-  color: var(--color-ink-soft);
-  font-size: var(--text-md);
-  max-width: 48ch;
-  margin: 0;
+.home__hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
 }
 
 .home__cta {
-  display: inline-block;
-  margin-top: var(--space-2);
-  background: var(--color-accent-strong);
-  color: var(--color-on-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 14px 30px;
   border: 1px solid var(--color-accent-border);
-  box-shadow: var(--sheen);
-  text-decoration: none;
-  padding: 14px 32px;
   border-radius: var(--radius-sm);
-  font-weight: 800;
+  background: var(--color-accent-strong);
+  box-shadow: var(--sheen);
+  color: var(--color-on-accent);
+  text-decoration: none;
   font-size: var(--text-sm);
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   transition:
@@ -63,18 +114,72 @@
 .home__cta:hover {
   background: var(--color-accent-hover);
   color: var(--color-on-accent);
-  box-shadow:
-    var(--sheen-hover),
-    var(--glow-accent);
+  box-shadow: var(--sheen-hover), var(--glow-accent);
 }
+
+/* The secondary action is a way down the page, not a competing offer: one
+   primary button per screen, repeated, is the whole point of the hierarchy. */
+.home__cta--ghost {
+  background: rgba(10, 10, 10, 0.55);
+  border-color: var(--color-line-strong);
+  color: var(--color-ink);
+  box-shadow: none;
+  backdrop-filter: blur(4px);
+}
+
+.home__cta--ghost:hover {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-ink);
+  box-shadow: none;
+}
+
+/* ---------- Claims ---------- */
+
+.home__claims {
+  background: var(--band-alt);
+  border-bottom: 1px solid var(--color-line);
+  padding: var(--space-6) 0;
+}
+
+.home__claims-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+.home__claim strong {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-heading);
+}
+
+.home__claim p {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* ---------- Sections ---------- */
 
 .home__section {
   padding: var(--space-8) 0;
 }
 
-/* Alternate bands are separated by a gold hairline top and bottom rather
-   than by a colour step: on a near-black page a second dark fill reads as
-   nothing at all. */
+.home__section h2 {
+  margin: var(--space-2) 0 var(--space-2);
+}
+
+.home__section-note {
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-sm);
+}
+
+/* Bands are separated by a gold hairline rather than a colour step: on a
+   near-black page a second dark fill reads as nothing at all. */
 .home__section--alt {
   background:
     var(--rule-gold) top / 100% 1px no-repeat,
@@ -82,20 +187,63 @@
     var(--band-alt);
 }
 
-.home__section h2 {
-  text-align: center;
-  margin-bottom: var(--space-6);
+/* ---------- Services ---------- */
+
+.home__services {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
 }
+
+/* Name, duration and price are three separate things and read as three:
+   crammed into one string ("Corte clásico ($8.000)") nobody compares two
+   services at a glance. The price is the last thing on the line because
+   that is where the eye lands when scanning a list of them. */
+.home__service {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-card);
+  border: 1px solid var(--color-line);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-md);
+}
+
+.home__service-name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-heading);
+}
+
+.home__service-price {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  color: var(--color-heading);
+  white-space: nowrap;
+}
+
+.home__service-duration {
+  grid-column: 1;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+/* ---------- Steps ---------- */
 
 .home__steps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--space-5);
-  counter-reset: step;
-}
-
-.home__step {
-  text-align: center;
+  margin-top: var(--space-5);
 }
 
 .home__step-number {
@@ -117,6 +265,7 @@
   display: block;
   margin-bottom: var(--space-1);
   font-size: var(--text-md);
+  color: var(--color-heading);
 }
 
 .home__step p {
@@ -124,63 +273,155 @@
   font-size: var(--text-sm);
 }
 
-.home__grid {
+/* ---------- Team ---------- */
+
+.home__team {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-4);
+  margin-top: var(--space-5);
 }
 
-.home__card {
+.home__barber {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
   background: var(--surface-card);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-5);
-  box-shadow: var(--shadow-card);
-  text-align: center;
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
 }
 
-.home__card:hover {
-  transform: translateY(-4px);
-  border-color: var(--color-line-strong);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+.home__barber-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-paper-alt);
+  color: rgba(205, 187, 161, 0.5);
 }
 
-.home__card strong {
-  display: block;
-  font-size: var(--text-base);
+.home__barber-avatar svg {
+  width: 46px;
+  height: 46px;
 }
 
-.home__card--barber {
+.home__barber strong {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  text-transform: uppercase;
+  color: var(--color-heading);
+}
+
+/* ---------- Gallery ---------- */
+
+.home__gallery {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.home__gallery-item {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+}
+
+.home__gallery-item img {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+}
+
+.home__gallery-caption {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-3);
+  font-size: var(--text-xs);
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-heading);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
 }
+
+/* ---------- Hours ---------- */
 
 .home__hours-block {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--space-6);
 }
 
-.home__hours-block h2 {
-  text-align: left;
-  margin-bottom: var(--space-2);
+.home__hours {
+  margin: 0;
+  color: var(--color-ink-soft);
 }
 
-.home__hours {
-  color: var(--color-ink-soft);
+/* ---------- Closer ---------- */
+
+/* The same primary action as the hero, at the point where someone who read
+   the whole page has decided. */
+.home__closer {
+  padding: var(--space-8) 0 var(--space-9);
+  background-image: radial-gradient(70% 60% at 50% 0%, rgba(139, 94, 58, 0.22), transparent 65%);
+  border-top: 1px solid var(--color-line);
+}
+
+.home__closer-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.home__closer h2 {
   margin: 0;
 }
 
-@media (max-width: 600px) {
-  .home__hero-inner {
-    padding: var(--space-7) var(--space-4) var(--space-6);
+.home__closer p {
+  margin: 0;
+}
+
+/* ---------- Wider screens ---------- */
+
+@media (min-width: 700px) {
+  .home__claims-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .home__section {
-    padding: var(--space-6) 0;
+  .home__steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .home__gallery {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .home__hours-block {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .home__hero-inner {
+    padding: var(--space-9) var(--space-5) var(--space-8);
+  }
+}
+
+@media (min-width: 1000px) {
+  .home__claims-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .home__services {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
