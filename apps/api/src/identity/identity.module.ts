@@ -17,9 +17,11 @@ import {
   db,
   DrizzleAppointmentRepository,
   DrizzleAuthChallengeRepository,
+  DrizzleBarberRepository,
   DrizzleClientAccountRepository,
   DrizzleClientRepository,
   DrizzleNotificationOutboxRepository,
+  DrizzleServiceRepository,
   DrizzleSessionRepository,
   DrizzleUserCredentialsRepository,
   MercadoPagoPaymentAdapter,
@@ -28,12 +30,14 @@ import {
 import type {
   AppointmentRepository,
   AuthChallengeRepository,
+  BarberRepository,
   Clock,
   ClientAccountRepository,
   ClientRepository,
   NotificationOutboxRepository,
   PasswordHasher,
   PaymentPort,
+  ServiceRepository,
   SessionRepository,
   UserCredentialsRepository,
 } from '@jc-barberia/domain';
@@ -71,6 +75,11 @@ import {
  * dispatcher could not see it and `NOTIFICATION_CHANNEL=gmail` would still
  * never mail a client their code.
  */
+/** Own tokens rather than the ones `absence-reassignment` declares: two
+ *  modules sharing a provider symbol couples them for no reason. */
+const IDENTITY_BARBER_REPOSITORY = Symbol('IDENTITY_BARBER_REPOSITORY');
+const IDENTITY_SERVICE_REPOSITORY = Symbol('IDENTITY_SERVICE_REPOSITORY');
+
 @Module({
   imports: [AccessControlModule],
   controllers: [AuthController, AccountController],
@@ -157,9 +166,23 @@ import {
         new ClientLoginByEmailUseCase(accounts, challenges, clientLogin),
     },
     {
+      provide: IDENTITY_BARBER_REPOSITORY,
+      useFactory: () => new DrizzleBarberRepository(db),
+    },
+    {
+      provide: IDENTITY_SERVICE_REPOSITORY,
+      useFactory: () => new DrizzleServiceRepository(db),
+    },
+    {
+      // docs/HUECOS-BACKEND.md #7: the catalogues come in so the use case can
+      // turn `barberId`/`serviceId` into the names "Mi cuenta" shows.
       provide: ListOwnAppointmentsUseCase,
-      inject: [APPOINTMENT_REPOSITORY],
-      useFactory: (appointments: AppointmentRepository) => new ListOwnAppointmentsUseCase(appointments),
+      inject: [APPOINTMENT_REPOSITORY, IDENTITY_BARBER_REPOSITORY, IDENTITY_SERVICE_REPOSITORY],
+      useFactory: (
+        appointments: AppointmentRepository,
+        barbers: BarberRepository,
+        services: ServiceRepository,
+      ) => new ListOwnAppointmentsUseCase(appointments, barbers, services),
     },
     {
       provide: SelfCancelAppointmentUseCase,

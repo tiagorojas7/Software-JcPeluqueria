@@ -69,6 +69,10 @@ export function AccountAppointmentsList({ appointments, onCancel }: AccountAppoi
                 {utcIsoToShopLocalTime(appointment.startsAt)}
               </span>
             </span>
+            <span className="account-appointments__what">
+              <strong>{appointment.serviceName}</strong>
+              <span className="account-appointments__with">con {appointment.barberName}</span>
+            </span>
             <span
               className={`account-appointments__status account-appointments__status--${appointment.status}`}
               aria-label={`Estado: ${appointmentStatusLabel(appointment.status)}`}

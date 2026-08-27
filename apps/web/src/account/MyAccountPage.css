@@ -53,6 +53,27 @@
   color: var(--color-heading);
 }
 
+/* What was booked and with whom — the two things the row was missing. Takes
+   the free space between the hour and the status so the status stays pinned
+   right and the column of hours on the left keeps aligning. */
+.account-appointments__what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.account-appointments__what strong {
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+
+.account-appointments__with {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
 .account-appointments__status {
   font-size: var(--text-xs);
   font-weight: 700;

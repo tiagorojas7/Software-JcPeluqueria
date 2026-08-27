@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { AccountAppointmentResponse } from './account';
+import type { AccountAppointmentEchoResponse } from './account';
 
 /**
  * barber-absence-reassignment spec, "Detección de turnos afectados": the
@@ -47,5 +47,5 @@ export type AcceptOfferResponseBody =
   | { readonly outcome: 'slot-taken'; readonly alternatives: readonly OfferAlternativeWindow[] };
 
 export type RejectOfferResponseBody =
-  | { readonly outcome: 'cancelled'; readonly appointment: AccountAppointmentResponse }
+  | { readonly outcome: 'cancelled'; readonly appointment: AccountAppointmentEchoResponse }
   | { readonly outcome: 'not-cancellable' };

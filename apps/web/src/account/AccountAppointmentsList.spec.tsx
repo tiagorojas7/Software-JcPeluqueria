@@ -26,6 +26,8 @@ function buildAppointment(overrides: Partial<AccountAppointmentResponse> = {}): 
     id: 'appt-1',
     barberId: 'barber-1',
     serviceId: 'service-1',
+    serviceName: 'Corte + Barba',
+    barberName: 'Cristian Gómez',
     status: 'reservado',
     startsAt: '2026-09-01T17:00:00.000Z',
     endsAt: '2026-09-01T17:30:00.000Z',
@@ -154,5 +156,17 @@ describe('AccountAppointmentsList', () => {
 
     expect(onCancel).toHaveBeenCalledWith('appt-b');
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  // docs/HUECOS-BACKEND.md #7: sin esto el cliente veia fecha, hora y estado
+  // pero nunca QUE reservo ni CON QUIEN, en la pantalla donde decide si
+  // cancelar.
+  it('dice qué se reservó y con qué barbero', () => {
+    render(
+      <AccountAppointmentsList appointments={[buildAppointment()]} onCancel={() => {}} />,
+    );
+
+    expect(screen.getByText('Corte + Barba')).toBeInTheDocument();
+    expect(screen.getByText(/cristian g.mez/i)).toBeInTheDocument();
   });
 });

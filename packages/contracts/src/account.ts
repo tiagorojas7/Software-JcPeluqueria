@@ -7,7 +7,7 @@
  * param.
  */
 
-export interface AccountAppointmentResponse {
+export interface AccountAppointmentEchoResponse {
   readonly id: string;
   readonly barberId: string;
   readonly serviceId: string;
@@ -52,7 +52,7 @@ export type SelfCancelRefundOutcome = 'refunded' | 'forfeited' | 'none';
 export type SelfCancelAppointmentResponseBody =
   | {
       readonly outcome: 'cancelled';
-      readonly appointment: AccountAppointmentResponse;
+      readonly appointment: AccountAppointmentEchoResponse;
       readonly refund: SelfCancelRefundOutcome;
     }
   | { readonly outcome: 'not-yours' }
@@ -72,4 +72,19 @@ export interface AccountProfileResponse {
   readonly phone: string;
   readonly email: string | null;
   readonly age: number | null;
+}
+
+/**
+ * One turno in the client's own list.
+ *
+ * docs/HUECOS-BACKEND.md #7 — carries the names behind `barberId`/
+ * `serviceId`, resolved server-side exactly as `DayBoardSlot.serviceName`
+ * and `DayBoardColumn.barberName` already are. Without them "Mi cuenta"
+ * could show a date, an hour and a status but never WHAT was booked or WITH
+ * WHOM: a uuid is not something you can put in front of a person, and that
+ * is the screen where a client decides whether to cancel.
+ */
+export interface AccountAppointmentResponse extends AccountAppointmentEchoResponse {
+  readonly serviceName: string;
+  readonly barberName: string;
 }

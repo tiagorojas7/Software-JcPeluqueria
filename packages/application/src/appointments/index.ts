@@ -14,4 +14,4 @@ export type { CreateWalkInInput, WalkIn } from './create-walk-in';
 export { SELF_CANCEL_WINDOW_MINUTES, SelfCancelAppointmentUseCase } from './self-cancel-appointment';
 export type { SelfCancelInput, SelfCancelResult } from './self-cancel-appointment';
 export { ListOwnAppointmentsUseCase } from './list-own-appointments';
-export type { ListOwnAppointmentsInput } from './list-own-appointments';
+export type { ListOwnAppointmentsInput, OwnAppointment } from './list-own-appointments';

@@ -2,6 +2,7 @@
 // with the feature that needs it (starting Phase 3a/9); this package was
 // only scaffolded in Phase 0.
 export type {
+  AccountAppointmentEchoResponse,
   AccountAppointmentResponse,
   AccountProfileResponse,
   ListOwnAppointmentsResponse,

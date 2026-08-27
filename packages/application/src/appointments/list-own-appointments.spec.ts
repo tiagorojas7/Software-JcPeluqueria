@@ -1,4 +1,10 @@
-import { FakeAppointmentRepository, FakeClock, type Appointment } from '@jc-barberia/domain';
+import {
+  FakeAppointmentRepository,
+  FakeBarberRepository,
+  FakeClock,
+  FakeServiceRepository,
+  type Appointment,
+} from '@jc-barberia/domain';
 import { describe, expect, it } from 'vitest';
 
 import { ListOwnAppointmentsUseCase } from './list-own-appointments';
@@ -36,7 +42,7 @@ describe('ListOwnAppointmentsUseCase (C.3)', () => {
     appointments.seed(buildAppointment({ id: 'mine-1', clientId: 'client-1' }));
     appointments.seed(buildAppointment({ id: 'mine-2', clientId: 'client-1', status: 'cancelado' }));
     appointments.seed(buildAppointment({ id: 'other-1', clientId: 'otro-cliente' }));
-    const useCase = new ListOwnAppointmentsUseCase(appointments);
+    const useCase = new ListOwnAppointmentsUseCase(appointments, new FakeBarberRepository(), new FakeServiceRepository());
 
     const result = await useCase.execute({ clientId: 'client-1' });
 
@@ -45,10 +51,55 @@ describe('ListOwnAppointmentsUseCase (C.3)', () => {
 
   it('devuelve una lista vacia para un cliente sin turnos, nunca un error', async () => {
     const appointments = new FakeAppointmentRepository();
-    const useCase = new ListOwnAppointmentsUseCase(appointments);
+    const useCase = new ListOwnAppointmentsUseCase(appointments, new FakeBarberRepository(), new FakeServiceRepository());
 
     const result = await useCase.execute({ clientId: 'client-sin-turnos' });
 
     expect(result).toEqual([]);
+  });
+
+  // docs/HUECOS-BACKEND.md #7: "Mi cuenta" recibia `barberId` y `serviceId`
+  // en crudo. Un uuid no se puede mostrar, asi que el cliente veia una
+  // fecha, una hora y un estado — nunca QUE reservo ni CON QUIEN. Es la
+  // pantalla donde decide si cancelar, y cancelar el turno equivocado cuesta
+  // la senia.
+  describe('nombres del servicio y del barbero (HUECOS #7)', () => {
+    async function useCaseWithCatalogues() {
+      const appointments = new FakeAppointmentRepository();
+      const barbers = new FakeBarberRepository();
+      const services = new FakeServiceRepository();
+      await barbers.create({ id: 'barber-1', name: 'Cristian Gómez', active: true });
+      await services.create({
+        id: 'service-1',
+        name: 'Corte + Barba',
+        durationMinutes: 45,
+        priceCents: 1_200_000,
+      });
+      return { appointments, barbers, services };
+    }
+
+    it('resuelve el nombre del servicio y del barbero de cada turno', async () => {
+      const { appointments, barbers, services } = await useCaseWithCatalogues();
+      appointments.seed(buildAppointment({ id: 'mine-1', clientId: 'client-1' }));
+      const useCase = new ListOwnAppointmentsUseCase(appointments, barbers, services);
+
+      const [turno] = await useCase.execute({ clientId: 'client-1' });
+
+      expect(turno?.serviceName).toBe('Corte + Barba');
+      expect(turno?.barberName).toBe('Cristian Gómez');
+    });
+
+    // Un barbero dado de baja sigue teniendo turnos pasados a su nombre: la
+    // lista es historial, y un hueco donde iba un nombre se lee como un bug.
+    it('no deja el turno sin nombre cuando el barbero ya no esta en el catalogo', async () => {
+      const { appointments, barbers, services } = await useCaseWithCatalogues();
+      appointments.seed(buildAppointment({ id: 'viejo-1', clientId: 'client-1', barberId: 'se-fue' }));
+      const useCase = new ListOwnAppointmentsUseCase(appointments, barbers, services);
+
+      const [turno] = await useCase.execute({ clientId: 'client-1' });
+
+      expect(turno?.barberName).toBeTruthy();
+      expect(turno?.serviceName).toBe('Corte + Barba');
+    });
   });
 });

@@ -1,6 +1,12 @@
 import { Controller, Get, HttpCode, NotFoundException, Param, Post } from '@nestjs/common';
-import { GetOwnProfileUseCase, ListOwnAppointmentsUseCase, SelfCancelAppointmentUseCase } from '@jc-barberia/application';
+import {
+  GetOwnProfileUseCase,
+  ListOwnAppointmentsUseCase,
+  SelfCancelAppointmentUseCase,
+  type OwnAppointment,
+} from '@jc-barberia/application';
 import type {
+  AccountAppointmentEchoResponse,
   AccountAppointmentResponse,
   AccountProfileResponse,
   ListOwnAppointmentsResponse,
@@ -12,11 +18,27 @@ import { rethrowAppointmentErrorAsHttp } from '../appointments/appointment-http-
 import { CurrentClient } from '../access-control/decorators/current-client.decorator';
 import { RequiresClientSession } from '../access-control/decorators/requires-client-session.decorator';
 
-function toAccountAppointmentResponse(appointment: Appointment): AccountAppointmentResponse {
+/** The turno a client just acted on, echoed back. Deliberately WITHOUT the
+ *  names: it replaces a row the client already has on screen, and the
+ *  frontend merges it onto that row rather than swapping the row out. */
+function toEcho(appointment: Appointment): AccountAppointmentEchoResponse {
   return {
     id: appointment.id,
     barberId: appointment.barberId,
     serviceId: appointment.serviceId,
+    status: appointment.status,
+    startsAt: appointment.timeRange.start.toISOString(),
+    endsAt: appointment.timeRange.end.toISOString(),
+  };
+}
+
+function toAccountAppointmentResponse(appointment: OwnAppointment): AccountAppointmentResponse {
+  return {
+    id: appointment.id,
+    barberId: appointment.barberId,
+    serviceId: appointment.serviceId,
+    serviceName: appointment.serviceName,
+    barberName: appointment.barberName,
     status: appointment.status,
     startsAt: appointment.timeRange.start.toISOString(),
     endsAt: appointment.timeRange.end.toISOString(),
@@ -91,7 +113,7 @@ export class AccountController {
       case 'cancelled':
         return {
           outcome: 'cancelled',
-          appointment: toAccountAppointmentResponse(result.appointment),
+          appointment: toEcho(result.appointment),
           refund: result.refund,
         };
       case 'not-yours':

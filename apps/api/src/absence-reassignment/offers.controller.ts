@@ -1,7 +1,7 @@
 import { Controller, HttpCode, Inject, Param, Post } from '@nestjs/common';
 import { AcceptOfferUseCase, RejectOfferUseCase } from '@jc-barberia/application';
 import type {
-  AccountAppointmentResponse,
+  AccountAppointmentEchoResponse,
   AcceptOfferResponseBody,
   RejectOfferResponseBody,
 } from '@jc-barberia/contracts';
@@ -14,8 +14,8 @@ import { CLOCK, HOLD_REPOSITORY } from './tokens';
 // Same mapping `AccountController` uses for "Mi cuenta" — duplicated rather
 // than imported across the identity/absence-reassignment feature boundary
 // for one three-line function; both copies are trivial to keep in sync if
-// `AccountAppointmentResponse` ever grows a field.
-function toAccountAppointmentResponse(appointment: Appointment): AccountAppointmentResponse {
+// `AccountAppointmentEchoResponse` ever grows a field.
+function toAccountAppointmentEchoResponse(appointment: Appointment): AccountAppointmentEchoResponse {
   return {
     id: appointment.id,
     barberId: appointment.barberId,
@@ -104,7 +104,7 @@ export class OffersController {
     const result = await this.rejectOfferUseCase.execute({ originalAppointmentId: offer.originOccupancyId });
 
     return result.outcome === 'cancelled'
-      ? { outcome: 'cancelled', appointment: toAccountAppointmentResponse(result.appointment) }
+      ? { outcome: 'cancelled', appointment: toAccountAppointmentEchoResponse(result.appointment) }
       : { outcome: 'not-cancellable' };
   }
 }

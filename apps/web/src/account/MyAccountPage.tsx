@@ -74,7 +74,13 @@ export function MyAccountPage() {
         `/account/appointments/${appointmentId}/cancel`,
       );
       if (result.outcome === 'cancelled') {
-        setAppointments((prev) => prev?.map((a) => (a.id === appointmentId ? result.appointment : a)) ?? prev);
+        // Merged onto the existing row, never swapped for it: the echo
+        // carries the new status but not `serviceName`/`barberName`, which
+        // the client already has on screen. Replacing the row outright would
+        // blank the very names that say which turno this was.
+        setAppointments(
+          (prev) => prev?.map((a) => (a.id === appointmentId ? { ...a, ...result.appointment } : a)) ?? prev,
+        );
         // `noUncheckedIndexedAccess` widens every lookup to `| undefined`,
         // even over a closed key union; the fallback is the neutral wording.
         setNotice(CANCEL_NOTICE[result.refund] ?? CANCEL_NOTICE.none);
