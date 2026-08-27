@@ -135,4 +135,36 @@ describe('actor context resolution (Testcontainers)', () => {
 
     expect(actor).toBeNull();
   });
+
+  // The `:own` permissions (`agenda:read:own`, `finance:read:own`) are
+  // enforced downstream by comparing `actor.barberId` against the barber id
+  // in the request — and `DrizzleAgendaRepository`/`DrizzleBarberPerformanceRepository`
+  // both read an ABSENT `barberId` as "this actor is not scoped to one
+  // barber", falling back to the id the caller supplied. For an owner or
+  // secretary (who hold the `:any` permissions) that is exactly right; for a
+  // barber row missing its `barber_id` it is a fail-OPEN: the guard grants
+  // `:own`, the repository scopes to nothing, and the barber reads any
+  // colleague's agenda and earnings by changing one query parameter. Today
+  // no seed produces such a row — this keeps a future one from becoming a
+  // silent authorization hole instead of a login that plainly fails.
+  it('returns null for a barber whose user row has no barber_id — never a fail-open :own actor', async () => {
+    const userId = await newUser({ role: 'barber' });
+    const sessionId = await newSession(userId);
+    const repo = new DrizzleActorContextRepository(db);
+
+    const actor = await repo.resolveBySessionId(sessionId);
+
+    expect(actor).toBeNull();
+  });
+
+  it('still resolves a barber that does have a barber_id', async () => {
+    const barberId = await newBarber();
+    const userId = await newUser({ role: 'barber', barberId });
+    const sessionId = await newSession(userId);
+    const repo = new DrizzleActorContextRepository(db);
+
+    const actor = await repo.resolveBySessionId(sessionId);
+
+    expect(actor).toEqual({ userId, role: 'barber', barberId });
+  });
 });

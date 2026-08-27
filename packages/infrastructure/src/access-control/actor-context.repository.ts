@@ -35,6 +35,18 @@ export class DrizzleActorContextRepository implements ActorContextRepository {
     if (!row) {
       return null;
     }
+    // A barber with no `barber_id` would be a fail-OPEN actor, not merely an
+    // odd one: the guard still grants the `:own` permissions its role
+    // carries, while `DrizzleAgendaRepository` and
+    // `DrizzleBarberPerformanceRepository` both read an absent `barberId` as
+    // "not scoped to any barber" and fall back to the id in the request —
+    // so the barber would read every colleague's agenda and earnings by
+    // editing one query parameter. No seed produces such a row today; this
+    // makes a future one fail as a login that does not work, which someone
+    // notices, instead of as an authorization hole, which nobody does.
+    if (row.role === 'barber' && !row.barberId) {
+      return null;
+    }
     return {
       userId: row.userId,
       role: row.role as Role,
