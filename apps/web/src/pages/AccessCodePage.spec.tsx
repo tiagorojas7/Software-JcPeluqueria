@@ -135,6 +135,22 @@ describe('AccessCodePage (fix/acceso-cliente-sin-id)', () => {
     expect(apiPost).toHaveBeenCalledWith('/auth/client-login', { challengeId: 'challenge-1', secret: 'tok-abc' });
   });
 
+  // El catch del enlace magico solo seteaba el error y dejaba la pantalla de
+  // email pelada: un fallo de red transitorio te sacaba del paso del codigo
+  // aunque el email siguiera persistido — la rama hermana (enlace invalido)
+  // si lo restauraba.
+  it('si el enlace magico falla por red, vuelve al paso del codigo con el email persistido', async () => {
+    window.localStorage.setItem('jc-barberia:access-email', 'sofia@example.com');
+    window.history.pushState({}, '', '/acceder?challengeId=challenge-1&token=tok-abc');
+    vi.mocked(apiPost).mockRejectedValueOnce(new Error('No se pudo conectar con el servidor'));
+
+    renderPage();
+
+    expect(await screen.findByLabelText(/codigo/i)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/no se pudo conectar/i);
+    expect(screen.queryByLabelText(/^email$/i)).toBeNull();
+  });
+
   it('con un enlace magico invalido, cae de nuevo al paso de email', async () => {
     window.history.pushState({}, '', '/acceder?challengeId=challenge-1&token=tok-abc');
     vi.mocked(apiPost).mockResolvedValueOnce({ outcome: 'rejected' } satisfies ClientLoginResponseBody);

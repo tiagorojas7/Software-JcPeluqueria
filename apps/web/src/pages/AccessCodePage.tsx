@@ -131,6 +131,14 @@ export function AccessCodePage() {
         setNotice('El enlace ya no es válido. Pedí un código nuevo si hace falta.');
       } catch (err) {
         window.history.replaceState({}, '', '/acceder');
+        // Same restore the invalid-link branch does: a transient network
+        // failure must not demote a client whose email is still persisted
+        // back to the empty email screen.
+        const persistedEmail = loadPersistedEmail();
+        if (persistedEmail) {
+          setEmail(persistedEmail);
+          setScreen('code');
+        }
         setError(describeError(err));
       } finally {
         setCheckingMagicLink(false);
