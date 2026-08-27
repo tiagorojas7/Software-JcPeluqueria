@@ -16,7 +16,7 @@ export function RevenuePage({ actor }: RevenuePageProps) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [revenue, setRevenue] = useState<BarberRevenueResponse | null>(null);
-  const [cutCount, setCutCount] = useState<number | undefined>(undefined);
+  const [stats, setStats] = useState<BarberStatsResponse | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   async function handleLoad(event: FormEvent) {
@@ -36,18 +36,19 @@ export function RevenuePage({ actor }: RevenuePageProps) {
       return;
     }
 
-    // The cut count is a separate endpoint behind a separate permission
-    // (`agenda:read:own`), so it is fetched — and allowed to fail —
-    // separately: a barber who can read their revenue but not their agenda
-    // still gets the number they came for. `undefined` means "not loaded",
-    // which `RevenueSummary` renders as simply absent, never as zero.
+    // The resolution counts come from a separate endpoint behind a separate
+    // permission (`agenda:read:own`), so they are fetched — and allowed to
+    // fail — separately: a barber who can read their revenue but not their
+    // agenda still gets the number they came for. `undefined` means "not
+    // loaded", which `RevenueSummary` renders as simply absent, never as
+    // zero — a zero would be a lie about a period nobody could query.
     try {
-      const stats = await apiGet<BarberStatsResponse>(
+      const response = await apiGet<BarberStatsResponse>(
         `/barbers/${actor.barberId}/stats?${params.toString()}`,
       );
-      setCutCount(stats.count);
+      setStats(response);
     } catch {
-      setCutCount(undefined);
+      setStats(undefined);
     }
   }
 
@@ -84,7 +85,7 @@ export function RevenuePage({ actor }: RevenuePageProps) {
       </form>
       {revenue ? (
         <div className="card revenue-page__summary">
-          <RevenueSummary revenue={revenue} cutCount={cutCount} />
+          <RevenueSummary revenue={revenue} stats={stats} />
         </div>
       ) : (
         <p className="empty-state">Elegí un período para ver tu facturación teórica.</p>
