@@ -509,3 +509,44 @@ describe('ManageClientsAndBarbersUseCase — la cuenta del barbero', () => {
     expect(outbox.enqueued).toHaveLength(1);
   });
 });
+
+// El panel podia ESCRIBIR el horario de un barbero pero nunca LEERLO: no
+// habia ningun camino para preguntar "que dias trabaja este barbero". Sin
+// eso, Horarios abria siempre con la semana en blanco (la secretaria tenia
+// que acordarse de memoria que dias atendia cada uno, y guardar borraba lo
+// que no recordara) y los formularios de turno telefonico/walk-in ofrecian
+// los siete dias como si todos fueran validos.
+describe('ManageClientsAndBarbersUseCase — leer el horario de un barbero', () => {
+  it('devuelve la semana configurada, ordenada por dia', async () => {
+    const { useCase } = buildUseCase();
+    await useCase.addBarber({ id: 'barber-read-1', name: 'Con Semana', email: anEmail(), schedule: [] });
+    await useCase.configureBarberWeek('barber-read-1', [
+      { dayOfWeek: 5, opensAt: '10:00', closesAt: '19:00' },
+      { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
+    ]);
+
+    const week = await useCase.getBarberWeek('barber-read-1');
+
+    expect(week).toEqual([
+      { dayOfWeek: 2, opensAt: '09:00', closesAt: '18:00' },
+      { dayOfWeek: 5, opensAt: '10:00', closesAt: '19:00' },
+    ]);
+  });
+
+  it('devuelve una semana vacia para un barbero sin horario cargado', async () => {
+    const { useCase } = buildUseCase();
+    await useCase.addBarber({ id: 'barber-read-2', name: 'Sin Semana', email: anEmail(), schedule: [] });
+
+    expect(await useCase.getBarberWeek('barber-read-2')).toEqual([]);
+  });
+
+  it('nunca filtra el barberId hacia afuera — el que pregunta ya lo sabe', async () => {
+    const { useCase } = buildUseCase();
+    await useCase.addBarber({ id: 'barber-read-3', name: 'Un Dia', email: anEmail(), schedule: [] });
+    await useCase.configureBarberWeek('barber-read-3', [{ dayOfWeek: 3, opensAt: '09:00', closesAt: '18:00' }]);
+
+    const [day] = await useCase.getBarberWeek('barber-read-3');
+
+    expect(day).not.toHaveProperty('barberId');
+  });
+});

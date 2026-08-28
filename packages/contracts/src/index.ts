@@ -89,6 +89,7 @@ export type {
   AddBarberRequest,
   BarberAccountResponse,
   BarberAccountsListResponse,
+  BarberWeekResponse,
   BarberResponse,
   ClientRecordResponse,
   ClientsListResponse,

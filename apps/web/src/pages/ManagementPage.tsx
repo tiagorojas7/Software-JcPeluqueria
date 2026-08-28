@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type {
   BarberAccountResponse,
   BarberAccountsListResponse,
+  BarberWeekResponse,
   ClientRecordResponse,
   ConfigureBarberWeekResponseBody,
   PublicBarberResponse,
@@ -347,6 +348,48 @@ function SchedulesSection({ barbers }: SchedulesSectionProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingConfirmCount, setPendingConfirmCount] = useState<number | null>(null);
+
+  // This section used to open on a BLANK week for every barber, which made
+  // it a trap rather than a form: saving sends the whole week, so any day
+  // the owner did not remember to re-tick was silently deleted. Reading the
+  // current week first turns the same screen into "here is what he works
+  // today, change what you need".
+  //
+  // A failure here is deliberately NOT surfaced as an error: the section
+  // stays usable on the default week, which is exactly the behaviour that
+  // existed before. Losing the prefill must never cost the ability to
+  // configure a schedule at all.
+  useEffect(() => {
+    if (!barberId) {
+      return;
+    }
+    let cancelled = false;
+    async function loadWeek() {
+      try {
+        const response = await apiGet<BarberWeekResponse>(`/panel/barbers/${barberId}/schedule`);
+        if (cancelled) {
+          return;
+        }
+        const byDay = new Map(response.days.map((day) => [day.dayOfWeek, day]));
+        setWeek(
+          buildDefaultWeek().map((day) => {
+            const configured = byDay.get(day.dayOfWeek);
+            return configured
+              ? { ...day, enabled: true, opensAt: configured.opensAt, closesAt: configured.closesAt }
+              : day;
+          }),
+        );
+      } catch {
+        if (!cancelled) {
+          setWeek(buildDefaultWeek());
+        }
+      }
+    }
+    void loadWeek();
+    return () => {
+      cancelled = true;
+    };
+  }, [barberId]);
 
   async function save(confirm: boolean) {
     const schedule = weekToScheduleDays(week);

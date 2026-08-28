@@ -64,3 +64,37 @@ export function isoSlotDurationMinutes(startsAt: string, endsAt: string): number
   const diffMinutes = toMinutes(endsAt) - toMinutes(startsAt);
   return ((diffMinutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
 }
+
+/**
+ * The day of the week of a `YYYY-MM-DD` calendar date, `0` = domingo — the
+ * same numbering `BarberScheduleDaySchema` and `DAY_OF_WEEK_OPTIONS`
+ * already use everywhere else.
+ *
+ * Sakamoto's algorithm rather than `new Date(...)`: the repo-wide
+ * `no-restricted-syntax` ESLint rule keeps `Date` construction inside the
+ * Clock port, and this is pure integer arithmetic on a date the user
+ * already typed — no instant, no timezone, nothing for an offset to shift.
+ * A calendar date has a weekday regardless of what time it is anywhere.
+ *
+ * `null` for anything that is not a well-formed date (an empty input, most
+ * of all): the caller then knows it has no answer, instead of receiving a
+ * plausible-looking day that means nothing.
+ */
+const SAKAMOTO_MONTH_OFFSETS = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4] as const;
+
+export function dayOfWeekOfCalendarDate(calendarDate: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(calendarDate)) {
+    return null;
+  }
+  const year = Number(calendarDate.slice(0, 4));
+  const month = Number(calendarDate.slice(5, 7));
+  const day = Number(calendarDate.slice(8, 10));
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+  // January and February are treated as months 13/14 of the previous year,
+  // which is what makes the leap-day correction fall in the right place.
+  const y = month < 3 ? year - 1 : year;
+  const leapCorrection = Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400);
+  return (y + leapCorrection + SAKAMOTO_MONTH_OFFSETS[month - 1]! + day) % 7;
+}

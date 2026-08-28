@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiGet, apiPost, apiPut } from '../shared/api-client';
@@ -11,12 +11,28 @@ vi.mock('../shared/api-client', () => ({
   describeError: (err: unknown) => (err instanceof Error ? err.message : 'error desconocido'),
 }));
 
+
+/** `checked` sin nombrar `HTMLInputElement`: ese global no existe en el
+ *  entorno de lint del repo, y el tipo no aporta nada al test. */
+function isChecked(container: { querySelector(s: string): unknown }, selector: string): boolean {
+  const input = container.querySelector(selector);
+  return Boolean(input && (input as { checked?: boolean }).checked);
+}
+
 const OWNER = { userId: 'u1', role: 'owner' as const, barberId: null };
 const SECRETARY = { userId: 'u2', role: 'secretary' as const, barberId: null };
 
 const BARBERS_RESPONSE = { barbers: [{ id: 'b1', name: 'Cristian Gómez' }] };
 const SERVICES_RESPONSE = {
   services: [{ id: 's1', name: 'Corte clásico', durationMinutes: 30, priceCents: 800000 }],
+};
+// Cristian trabaja lunes, miercoles y viernes — NO los siete dias.
+const BARBER_WEEK_RESPONSE = {
+  days: [
+    { dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' },
+    { dayOfWeek: 3, opensAt: '10:00', closesAt: '19:00' },
+    { dayOfWeek: 5, opensAt: '09:00', closesAt: '18:00' },
+  ],
 };
 const CLIENTS_RESPONSE = {
   clients: [{ id: 'c1', name: 'Juan Perez', phone: '3511234567', email: null, age: 30 }],
@@ -70,6 +86,9 @@ function mockReferenceData() {
     }
     if (path === '/panel/barber-accounts') {
       return Promise.resolve(BARBER_ACCOUNTS_RESPONSE);
+    }
+    if (path === '/panel/barbers/b1/schedule') {
+      return Promise.resolve(BARBER_WEEK_RESPONSE);
     }
     return Promise.reject(new Error(`unexpected apiGet path in test: ${path}`));
   });
@@ -240,10 +259,19 @@ describe('ManagementPage (D.3)', () => {
     );
   });
 
+  // La seccion ahora abre con la semana REAL del barbero marcada, asi que
+  // llegar a "ningun dia" es un acto deliberado: destildar los tres que
+  // trabaja. La regla que se prueba sigue siendo la misma.
   it('no guarda un horario sin al menos un dia de trabajo elegido', async () => {
-    render(<ManagementPage actor={OWNER} />);
+    const { container } = render(<ManagementPage actor={OWNER} />);
 
     await screen.findByRole('button', { name: /guardar horario/i });
+    await waitFor(() =>
+      expect(isChecked(container, '#mgmt-schedule-week-1-enabled')).toBe(true),
+    );
+    fireEvent.click(container.querySelector('#mgmt-schedule-week-1-enabled')!);
+    fireEvent.click(container.querySelector('#mgmt-schedule-week-3-enabled')!);
+    fireEvent.click(container.querySelector('#mgmt-schedule-week-5-enabled')!);
     fireEvent.click(screen.getByRole('button', { name: /guardar horario/i }));
 
     expect(await screen.findByText(/eleg.\s*al menos un d.a de trabajo/i)).toBeInTheDocument();
@@ -436,5 +464,58 @@ describe('ManagementPage — barberos que todavia no tienen cuenta', () => {
 
     expect(screen.getByText(/sin cuenta/i)).toHaveAttribute('data-state', 'sin-cuenta');
     expect(screen.getByText('Activa')).toHaveAttribute('data-state', 'activa');
+  });
+});
+
+// Horarios abria SIEMPRE con la semana en blanco: la secretaria tenia que
+// acordarse de memoria que dias atendia cada barbero, y como guardar manda
+// la semana entera, cualquier dia que no recordara se borraba en silencio.
+describe('ManagementPage — Horarios precarga la semana del barbero', () => {
+  beforeEach(() => {
+    vi.mocked(apiGet).mockReset();
+    vi.mocked(apiPut).mockReset();
+    mockReferenceData();
+  });
+
+  it('marca los dias que el barbero ya trabaja al abrir la seccion', async () => {
+    const { container } = render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByRole('heading', { name: /horarios/i });
+    await waitFor(() =>
+      expect(isChecked(container, '#mgmt-schedule-week-1-enabled')).toBe(true),
+    );
+
+    expect(isChecked(container, '#mgmt-schedule-week-3-enabled')).toBe(true);
+    expect(isChecked(container, '#mgmt-schedule-week-5-enabled')).toBe(true);
+    // Los que NO trabaja siguen apagados.
+    expect(isChecked(container, '#mgmt-schedule-week-2-enabled')).toBe(false);
+    expect(isChecked(container, '#mgmt-schedule-week-6-enabled')).toBe(false);
+    expect(apiGet).toHaveBeenCalledWith('/panel/barbers/b1/schedule');
+  });
+
+  it('trae tambien los horarios de apertura y cierre reales de cada dia', async () => {
+    const { container } = render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByRole('heading', { name: /horarios/i });
+    await waitFor(() =>
+      expect(isChecked(container, '#mgmt-schedule-week-3-enabled')).toBe(true),
+    );
+
+    expect((container.querySelector('#mgmt-schedule-week-3-opens') as { value?: string }).value).toBe('10:00');
+    expect((container.querySelector('#mgmt-schedule-week-3-closes') as { value?: string }).value).toBe('19:00');
+  });
+
+  it('si no puede leer la semana, deja la seccion usable en vez de romperla', async () => {
+    vi.mocked(apiGet).mockImplementation((path: string) => {
+      if (path === '/barbers') return Promise.resolve(BARBERS_RESPONSE);
+      if (path === '/services') return Promise.resolve(SERVICES_RESPONSE);
+      if (path === '/panel/barber-accounts') return Promise.resolve(BARBER_ACCOUNTS_RESPONSE);
+      return Promise.reject(new Error('no se pudo leer el horario'));
+    });
+
+    const { container } = render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByRole('heading', { name: /horarios/i });
+    expect(container.querySelector('#mgmt-schedule-week-1-enabled')).toBeInTheDocument();
   });
 });

@@ -17,6 +17,7 @@ import {
   ConfigureBarberWeekRequestSchema,
   ConfigureServicePriceRequestSchema,
   type BarberResponse,
+  type BarberWeekResponse,
   type ClientsListResponse,
   type ConfigureBarberWeekResponseBody,
 } from '@jc-barberia/contracts';
@@ -88,6 +89,24 @@ export class ManageClientsAndBarbersController {
       throw new NotFoundException({ message: `No existe el barbero "${barberId}"` });
     }
     return { deactivated: true };
+  }
+
+  /**
+   * The read half the panel never had. TWO permissions, not one, because two
+   * different screens need the same answer: "Horarios" (`schedule:configure`,
+   * owner) opens on the barber's CURRENT week instead of a blank one, and the
+   * phone/walk-in forms (`appointment:create`, owner AND secretary) offer only
+   * the days the barber actually works instead of all seven.
+   *
+   * A barber's working days are not sensitive — they are already observable
+   * from public availability — so the wider grant costs nothing and closes a
+   * real gap: without `appointment:create` here the secretary, who is exactly
+   * who books by phone, could not read the days she is booking into.
+   */
+  @RequiresPermission('schedule:configure', 'appointment:create')
+  @Get('barbers/:barberId/schedule')
+  async getBarberWeek(@Param('barberId') barberId: string): Promise<BarberWeekResponse> {
+    return { days: await this.manage.getBarberWeek(barberId) };
   }
 
   @RequiresPermission('schedule:configure')

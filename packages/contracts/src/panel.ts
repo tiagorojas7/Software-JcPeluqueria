@@ -97,6 +97,23 @@ export const SetBarberAccountActiveRequestSchema = z.object({
 
 export type SetBarberAccountActiveRequest = z.infer<typeof SetBarberAccountActiveRequestSchema>;
 
+/**
+ * The barber's configured week, as the panel reads it back. Same day shape
+ * `ConfigureBarberWeekRequestSchema` sends, minus the barber id the caller
+ * already supplied — so a screen can read a week, edit it and send it back
+ * without translating between two shapes.
+ *
+ * An empty `days` means the barber has no working day on file, which is a
+ * real answer ("does not work any day yet"), never an error.
+ */
+export interface BarberWeekResponse {
+  readonly days: readonly {
+    readonly dayOfWeek: number;
+    readonly opensAt: string;
+    readonly closesAt: string;
+  }[];
+}
+
 export interface BarberResponse {
   readonly id: string;
   readonly name: string;

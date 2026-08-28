@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { CreateWalkInRequest } from '@jc-barberia/contracts';
 
+import { BarberWorkingDays } from '../shared/BarberWorkingDays';
 import { StartTimeField } from '../shared/StartTimeField';
 
 export interface WalkInBarberOption {
@@ -112,6 +113,13 @@ export function WalkInForm({ barbers, services, onSubmit }: WalkInFormProps) {
           setStartTime('');
         }}
       />
+
+      {/* The native date input cannot grey out the days this barber does
+          not work, so the answer is stated in words instead — before a date
+          is picked, and again as a warning once one lands on a day he does
+          not attend. Without it, "no hay horarios" was the only feedback,
+          and it reads identically to "that day is full". */}
+      <BarberWorkingDays barberId={barberId} calendarDate={calendarDate} />
 
       <StartTimeField
         barberId={barberId}

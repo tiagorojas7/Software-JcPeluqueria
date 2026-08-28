@@ -198,6 +198,29 @@ export class ManageClientsAndBarbersUseCase {
     return { outcome: 'configured' };
   }
 
+  /**
+   * The read half `configureBarberWeek` never had. The panel could WRITE a
+   * barber's week but nothing could ask what it currently is, so "Horarios"
+   * always opened blank — the secretary had to remember each barber's days
+   * from memory, and saving wiped whatever she failed to recall. The
+   * phone/walk-in forms had the same hole from the other side: they offered
+   * all seven days as if every one of them were bookable.
+   *
+   * `barberId` is dropped from each row on purpose: whoever asks already
+   * supplied it, and the shape then matches `configureBarberWeek`'s own
+   * input exactly, so a screen can read the week, edit it, and send it back
+   * without translating between two shapes.
+   *
+   * Ordered by day of week — a week is read as a week, not in whatever
+   * order rows happen to come back.
+   */
+  async getBarberWeek(barberId: string): Promise<Omit<BarberSchedule, 'barberId'>[]> {
+    const schedule = await this.schedules.listBarberSchedule(barberId);
+    return schedule
+      .map(({ dayOfWeek, opensAt, closesAt }) => ({ dayOfWeek, opensAt, closesAt }))
+      .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+  }
+
   /** "precios de servicios" — `false` means no service with that id exists. */
   async configureServicePrice(serviceId: string, priceCents: number): Promise<boolean> {
     return this.services.updatePrice(serviceId, priceCents);

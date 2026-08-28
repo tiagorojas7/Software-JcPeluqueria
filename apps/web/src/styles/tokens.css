@@ -592,3 +592,18 @@ button.btn-primary:hover {
 .access-code-page__card button[type='submit'] {
   width: 100%;
 }
+
+/* Which days a barber actually works — shown on every panel form that books
+   into a date, because a native date input cannot grey those days out. */
+.barber-working-days {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.barber-working-days--warn {
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--color-accent);
+  background: rgba(139, 94, 58, 0.12);
+  color: var(--color-ink-soft);
+}
