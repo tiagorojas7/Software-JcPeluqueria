@@ -13,6 +13,12 @@ import type { BarberRepository, ScheduleRepository, ServiceRepository } from '..
  */
 export class FakeBarberRepository implements BarberRepository {
   private readonly byId = new Map<string, Barber>();
+  /** Test seam only — no real appointment data lives in this fake
+   *  (`FakeAppointmentRepository` owns that, and it has no shared storage
+   *  with this class). Application tests call `seedHasAppointments` directly
+   *  instead of seeding a parallel appointment through a repository this
+   *  class never talks to. */
+  private readonly barbersWithAppointments = new Set<string>();
 
   async create(barber: Barber): Promise<void> {
     this.byId.set(barber.id, barber);
@@ -33,6 +39,50 @@ export class FakeBarberRepository implements BarberRepository {
     }
     this.byId.set(id, { ...existing, active: false });
     return true;
+  }
+
+  async reactivate(id: string): Promise<boolean> {
+    const existing = this.byId.get(id);
+    if (!existing) {
+      return false;
+    }
+    this.byId.set(id, { ...existing, active: true, permanentLeave: false });
+    return true;
+  }
+
+  async setPermanentLeave(id: string, permanentLeave: boolean): Promise<boolean> {
+    const existing = this.byId.get(id);
+    if (!existing) {
+      return false;
+    }
+    this.byId.set(id, { ...existing, active: false, permanentLeave });
+    return true;
+  }
+
+  async hasAppointments(id: string): Promise<boolean> {
+    return this.barbersWithAppointments.has(id);
+  }
+
+  /** Marks `id` as having (or, with `value: false`, no longer having) at
+   *  least one row in `slot_occupancies` — the only thing that makes
+   *  `delete()` refuse. */
+  seedHasAppointments(id: string, value = true): void {
+    if (value) {
+      this.barbersWithAppointments.add(id);
+    } else {
+      this.barbersWithAppointments.delete(id);
+    }
+  }
+
+  async delete(id: string): Promise<'deleted' | 'not-found' | 'has-appointments'> {
+    if (!this.byId.has(id)) {
+      return 'not-found';
+    }
+    if (this.barbersWithAppointments.has(id)) {
+      return 'has-appointments';
+    }
+    this.byId.delete(id);
+    return 'deleted';
   }
 }
 

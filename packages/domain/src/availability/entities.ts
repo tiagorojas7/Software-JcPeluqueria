@@ -63,12 +63,40 @@ export interface Barber {
   readonly id: string;
   readonly name: string;
   readonly active: boolean;
+  /**
+   * "Baja definitiva" — the barber quit or was fired, for good. Distinct
+   * from `active`, which stays the single availability gate every existing
+   * reader (`AvailabilityService`, `ListPublicBarbersUseCase`, ...) already
+   * checks and keeps checking unmodified. A barber on "baja temporal" (sick,
+   * on holiday) is `active: false, permanentLeave: false` — one click away
+   * from `active: true` again, schedule untouched. "Baja definitiva" is
+   * `active: false, permanentLeave: true`, and additionally removes the
+   * barber's staff account (see `ManageClientsAndBarbersUseCase.terminateBarber`).
+   * The two can never be `true` together: migration 0013's
+   * `barbers_active_permanent_leave_check` CHECK constraint makes that
+   * combination unrepresentable in the database, and `createBarber` refuses
+   * it here too, so the invalid state cannot even be constructed in memory.
+   */
+  readonly permanentLeave: boolean;
 }
 
-export function createBarber(input: { id: string; name: string; active: boolean }): Barber {
+export function createBarber(input: {
+  id: string;
+  name: string;
+  active: boolean;
+  /** Defaults to `false`: every existing caller creates a barber who is
+   *  simply active, and none of them know this axis exists. */
+  permanentLeave?: boolean;
+}): Barber {
   assertNonEmpty(input.id, 'Barber.id');
   assertNonEmpty(input.name, 'Barber.name');
-  return { id: input.id, name: input.name.trim(), active: input.active };
+  const permanentLeave = input.permanentLeave ?? false;
+  if (input.active && permanentLeave) {
+    throw new AvailabilityValidationError(
+      'Barber: active and permanentLeave cannot both be true (see migration 0013)',
+    );
+  }
+  return { id: input.id, name: input.name.trim(), active: input.active, permanentLeave };
 }
 
 export interface Service {

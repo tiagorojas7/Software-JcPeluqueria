@@ -116,7 +116,7 @@ describe('ProcessPaymentUseCase', () => {
     const appointment = anAppointment({ id: 'hold-1' });
     appointments.seed(appointment);
     clients.seed({ id: 'client-1', name: 'Juana', phone: '+5493511112222', email: 'juana@example.com', age: null });
-    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true });
+    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true, permanentLeave: false });
     await services.create({ id: 'service-1', name: 'Corte clasico', durationMinutes: 30, priceCents: 500000 });
 
     await useCase.execute('payment-1');
@@ -147,7 +147,7 @@ describe('ProcessPaymentUseCase', () => {
     const { useCase, appointments, outbox, clients, barbers, services } = buildUseCase(paymentPort);
     appointments.seed(anAppointment({ id: 'hold-1' }));
     clients.seed({ id: 'client-1', name: 'Juana', phone: '+5493511112222', email: null, age: null });
-    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true });
+    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true, permanentLeave: false });
     await services.create({ id: 'service-1', name: 'Corte clasico', durationMinutes: 30, priceCents: 500000 });
 
     await useCase.execute('payment-1');
@@ -167,7 +167,7 @@ describe('ProcessPaymentUseCase', () => {
     const { useCase, appointments, outbox, clients, barbers, services } = buildUseCase(paymentPort);
     appointments.seed(anAppointment({ id: 'hold-1' }));
     clients.seed({ id: 'client-1', name: 'Juana', phone: '+5493511112222', email: 'juana@example.com', age: null });
-    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true });
+    await barbers.create({ id: 'barber-1', name: 'Cristian', active: true, permanentLeave: false });
     await services.create({ id: 'service-1', name: 'Corte clasico', durationMinutes: 30, priceCents: 500000 });
 
     await useCase.execute('payment-1');

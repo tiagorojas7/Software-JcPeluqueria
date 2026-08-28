@@ -11,6 +11,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { DrizzleStaffAccountRepository } from '../identity/staff-account.repository';
 import { DrizzleBarberRepository } from './barber.repository';
 import { DrizzleScheduleRepository } from './schedule.repository';
 import { DrizzleServiceRepository } from './service.repository';
@@ -263,5 +264,161 @@ describe('availability repositories (Testcontainers)', () => {
 
     expect(await scheduleRepo.listBarberSchedule(barberA.id)).toEqual([]);
     expect(await scheduleRepo.listBarberSchedule(barberB.id)).toHaveLength(1);
+  });
+
+  // The owner's report: a barber out sick for a day had to be deactivated
+  // so nobody could book them, and there was no way back — reconfiguring
+  // the whole week from scratch every time was the actual complaint.
+  // Migration 0013 adds `reactivate`/`setPermanentLeave`/`delete`; these
+  // prove them against real Postgres, including the CHECK constraint that
+  // makes `active AND permanent_leave` unrepresentable.
+  describe('baja temporal / baja definitiva (migration 0013)', () => {
+    it('reactivate() flips a deactivated barber back to active with permanentLeave false, and reports false for a missing id', async () => {
+      const repo = new DrizzleBarberRepository(db);
+      const barber = createBarber({ id: crypto.randomUUID(), name: 'Hernan', active: true });
+      await repo.create(barber);
+      await repo.deactivate(barber.id);
+
+      const reactivated = await repo.reactivate(barber.id);
+      const missing = await repo.reactivate(crypto.randomUUID());
+
+      expect(reactivated).toBe(true);
+      expect(missing).toBe(false);
+      expect(await repo.findById(barber.id)).toEqual({ ...barber, active: true, permanentLeave: false });
+    });
+
+    // The exact case the report named: a barber's whole week has to survive
+    // a baja/reactivate round trip with nothing reconfigured.
+    it('reactivating a barber restores their base schedule for free — it was never touched', async () => {
+      const barberRepo = new DrizzleBarberRepository(db);
+      const scheduleRepo = new DrizzleScheduleRepository(db);
+      const barber = createBarber({ id: crypto.randomUUID(), name: 'Ines', active: true });
+      await barberRepo.create(barber);
+      await scheduleRepo.createBarberSchedule(
+        createBarberSchedule({ barberId: barber.id, dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
+      );
+
+      await barberRepo.deactivate(barber.id);
+      await barberRepo.reactivate(barber.id);
+
+      const own = await scheduleRepo.listBarberSchedule(barber.id);
+      expect(own).toEqual([
+        createBarberSchedule({ barberId: barber.id, dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
+      ]);
+    });
+
+    it('setPermanentLeave() sets active=false and permanentLeave=true together, and reports false for a missing id', async () => {
+      const repo = new DrizzleBarberRepository(db);
+      const barber = createBarber({ id: crypto.randomUUID(), name: 'Ignacio', active: true });
+      await repo.create(barber);
+
+      const updated = await repo.setPermanentLeave(barber.id, true);
+      const missing = await repo.setPermanentLeave(crypto.randomUUID(), true);
+
+      expect(updated).toBe(true);
+      expect(missing).toBe(false);
+      expect(await repo.findById(barber.id)).toEqual({ ...barber, active: false, permanentLeave: true });
+    });
+
+    // The invariant the design leans on: this combination must be
+    // impossible to write, not merely avoided by application code.
+    it('the CHECK constraint refuses active=true together with permanent_leave=true at the SQL level', async () => {
+      const barber = createBarber({ id: crypto.randomUUID(), name: 'Julieta', active: true });
+      await new DrizzleBarberRepository(db).create(barber);
+
+      await expect(
+        sql`update barbers set active = true, permanent_leave = true where id = ${barber.id}`,
+      ).rejects.toThrow();
+    });
+
+    it('hasAppointments() is false with no history and true after a real slot_occupancies row', async () => {
+      const barberRepo = new DrizzleBarberRepository(db);
+      const serviceRepo = new DrizzleServiceRepository(db);
+      const barber = createBarber({ id: crypto.randomUUID(), name: 'Karina', active: true });
+      const service = createService({
+        id: crypto.randomUUID(),
+        name: 'Corte',
+        durationMinutes: 30,
+        priceCents: 500000,
+      });
+      await barberRepo.create(barber);
+      await serviceRepo.create(service);
+
+      expect(await barberRepo.hasAppointments(barber.id)).toBe(false);
+
+      await sql`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
+                values (${barber.id}, ${service.id}, 'telefonico', 'reservado', '["2026-09-01T12:00:00Z","2026-09-01T12:30:00Z")'::tstzrange)`;
+
+      expect(await barberRepo.hasAppointments(barber.id)).toBe(true);
+    });
+
+    it('delete() reports not-found for a missing id', async () => {
+      const repo = new DrizzleBarberRepository(db);
+
+      expect(await repo.delete(crypto.randomUUID())).toBe('not-found');
+    });
+
+    it('delete() removes the barber, their schedule and their time off in one shot', async () => {
+      const barberRepo = new DrizzleBarberRepository(db);
+      const scheduleRepo = new DrizzleScheduleRepository(db);
+      const barber = createBarber({ id: crypto.randomUUID(), name: 'Leo', active: false, permanentLeave: true });
+      await barberRepo.create(barber);
+      await scheduleRepo.createBarberSchedule(
+        createBarberSchedule({ barberId: barber.id, dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
+      );
+      await scheduleRepo.createBarberTimeOff(
+        createBarberTimeOff({ barberId: barber.id, startDate: '2026-09-01', endDate: '2026-09-03' }),
+      );
+
+      const outcome = await barberRepo.delete(barber.id);
+
+      expect(outcome).toBe('deleted');
+      expect(await barberRepo.findById(barber.id)).toBeNull();
+      expect(await scheduleRepo.listBarberSchedule(barber.id)).toEqual([]);
+      expect(await scheduleRepo.listBarberTimeOff(barber.id)).toEqual([]);
+    });
+
+    // README 3.9: the account is the door into the panel. Deleting the
+    // barber for good must not leave an orphan `users` row behind.
+    it('delete() removes the staff account too, reusing the exact same deletion logic deleteAccount uses', async () => {
+      const barberRepo = new DrizzleBarberRepository(db);
+      const accountRepo = new DrizzleStaffAccountRepository(db);
+      const barber = createBarber({ id: crypto.randomUUID(), name: 'Marisa', active: true });
+      await barberRepo.create(barber);
+      const account = await accountRepo.create({ email: 'marisa@jc.test', role: 'barber', barberId: barber.id });
+
+      const outcome = await barberRepo.delete(barber.id);
+
+      expect(outcome).toBe('deleted');
+      expect(await accountRepo.findById(account.id)).toBeNull();
+    });
+
+    it('delete() refuses a barber with real appointment history, and writes NOTHING', async () => {
+      const barberRepo = new DrizzleBarberRepository(db);
+      const scheduleRepo = new DrizzleScheduleRepository(db);
+      const serviceRepo = new DrizzleServiceRepository(db);
+      const barber = createBarber({ id: crypto.randomUUID(), name: 'Nestor', active: true });
+      const service = createService({
+        id: crypto.randomUUID(),
+        name: 'Corte',
+        durationMinutes: 30,
+        priceCents: 500000,
+      });
+      await barberRepo.create(barber);
+      await serviceRepo.create(service);
+      await scheduleRepo.createBarberSchedule(
+        createBarberSchedule({ barberId: barber.id, dayOfWeek: 1, opensAt: '09:00', closesAt: '18:00' }),
+      );
+      await sql`insert into slot_occupancies (barber_id, service_id, channel, status, time_range)
+                values (${barber.id}, ${service.id}, 'telefonico', 'realizado', '["2026-09-01T12:00:00Z","2026-09-01T12:30:00Z")'::tstzrange)`;
+
+      const outcome = await barberRepo.delete(barber.id);
+
+      expect(outcome).toBe('has-appointments');
+      // Refused before touching anything — the barber and their schedule
+      // are exactly as they were.
+      expect(await barberRepo.findById(barber.id)).toEqual(barber);
+      expect(await scheduleRepo.listBarberSchedule(barber.id)).toHaveLength(1);
+    });
   });
 });

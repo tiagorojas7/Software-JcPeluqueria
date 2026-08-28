@@ -92,6 +92,13 @@
       "when": 1786660300000,
       "tag": "0012_absence_confirmer_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786660400000,
+      "tag": "0013_barber_permanent_leave",
+      "breakpoints": true
     }
   ]
 }

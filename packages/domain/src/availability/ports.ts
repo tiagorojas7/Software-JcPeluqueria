@@ -19,8 +19,69 @@ export interface BarberRepository {
    * same "zero rows means not found" idiom as `HoldRepository.confirm()`:
    * `false` means no barber with that id exists, never an exception for a
    * routine "already gone" case.
+   *
+   * "Baja temporal" — leaves `permanentLeave` exactly as it was (`false` for
+   * every barber that ever reaches this method today, since nothing else
+   * sets it `true`). The owner's report: a barber out sick for a day had to
+   * be deactivated so nobody could book them, and there was no way back —
+   * `reactivate()` below is that way back.
    */
   deactivate(id: string): Promise<boolean>;
+
+  /**
+   * Undoes EITHER `deactivate()` (baja temporal) or `setPermanentLeave()`
+   * (baja definitiva) in one write: `active=true, permanentLeave=false`,
+   * unconditionally — a barber can only ever come back into the single
+   * "activo" state, regardless of which baja they were in. `barber_schedules`
+   * rows are never touched by any of `deactivate`/`setPermanentLeave`/
+   * `reactivate` — they survive `active=false` on their own, since nothing
+   * in this schema cascades off it — so reactivating restores the barber's
+   * whole week for free, with nothing left to reconfigure.
+   *
+   * `false` means no barber with that id exists.
+   */
+  reactivate(id: string): Promise<boolean>;
+
+  /**
+   * "Baja definitiva" — the barber quit or was fired, for good. Sets
+   * `active=false` (the same effect on availability `deactivate()` already
+   * has) AND `permanentLeave` in the SAME write, because
+   * `barbers_active_permanent_leave_check` (migration 0013) makes
+   * `active=true, permanentLeave=true` unrepresentable — the two columns can
+   * never be written independently once `permanentLeave` turns `true`.
+   *
+   * `false` means no barber with that id exists.
+   */
+  setPermanentLeave(id: string, permanentLeave: boolean): Promise<boolean>;
+
+  /**
+   * Whether this barber has ANY row in `slot_occupancies` — the shop's OWN
+   * appointment history, not the barber's. This is the one thing that makes
+   * `delete()` unsafe: everything else a barber owns (`barber_schedules`,
+   * `barber_time_off`, the staff account) is configuration, and disappears
+   * with them by design. Exposed as its own read so the panel can decide
+   * whether to even OFFER "Eliminar" before the owner tries it, not only
+   * discover the refusal after clicking.
+   */
+  hasAppointments(id: string): Promise<boolean>;
+
+  /**
+   * Deletes the barber outright: the staff account (if any — reusing the
+   * exact deletion logic `StaffAccountRepository.deleteAccount` already
+   * uses), `barber_time_off`, `barber_schedules`, then the `barbers` row
+   * itself, all inside ONE transaction, in that order.
+   *
+   * `'has-appointments'` refuses the whole operation, before touching
+   * anything, whenever the barber has a single row in `slot_occupancies` —
+   * deleting them would delete the shop's own appointment history along
+   * with the login. `setPermanentLeave` (baja definitiva) is the correct
+   * action for that barber instead: it keeps the history and removes them
+   * from every future selector.
+   *
+   * `'not-found'` for an id with no matching row — the routine "already
+   * gone" case, never an exception.
+   */
+  delete(id: string): Promise<'deleted' | 'not-found' | 'has-appointments'>;
 }
 
 export interface ServiceRepository {

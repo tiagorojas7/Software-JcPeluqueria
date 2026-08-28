@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   date,
   integer,
   pgTable,
@@ -9,6 +10,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /**
  * Availability model (Phase 1, read-only). No FK to `users` yet — that
@@ -16,11 +18,23 @@ import {
  * convention: 0 (Sunday) … 6 (Saturday).
  */
 
-export const barbers = pgTable('barbers', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 120 }).notNull(),
-  active: boolean('active').notNull().default(true),
-});
+// `permanentLeave` (migration 0013) is the second axis `active` alone could
+// never express — "baja temporal" (sick, holiday: comes back with one
+// click) versus "baja definitiva" (quit/fired: also loses the staff
+// account). The CHECK makes the one combination that means nothing
+// (active AND permanentLeave) impossible to write, not just unlikely.
+export const barbers = pgTable(
+  'barbers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 120 }).notNull(),
+    active: boolean('active').notNull().default(true),
+    permanentLeave: boolean('permanent_leave').notNull().default(false),
+  },
+  (table) => [
+    check('barbers_active_permanent_leave_check', sql`NOT (${table.active} AND ${table.permanentLeave})`),
+  ],
+);
 
 export const services = pgTable('services', {
   id: uuid('id').primaryKey().defaultRandom(),

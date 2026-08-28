@@ -68,7 +68,7 @@ describe('ListOwnAppointmentsUseCase (C.3)', () => {
       const appointments = new FakeAppointmentRepository();
       const barbers = new FakeBarberRepository();
       const services = new FakeServiceRepository();
-      await barbers.create({ id: 'barber-1', name: 'Cristian Gómez', active: true });
+      await barbers.create({ id: 'barber-1', name: 'Cristian Gómez', active: true, permanentLeave: false });
       await services.create({
         id: 'service-1',
         name: 'Corte + Barba',

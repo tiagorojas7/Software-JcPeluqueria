@@ -103,47 +103,16 @@ export class DrizzleStaffAccountRepository implements StaffAccountRepository {
   }
 
   /**
-   * One transaction, and the ORDER of its statements is the whole point.
-   *
-   * Five tables reference `users`, and they fall into two groups. Sessions
-   * and auth challenges ARE the access — they die with the account. The
-   * other three (the turnos this person created, the turnos they marked,
-   * the ausencias they confirmed) are the SHOP's records: they must survive
-   * the account, so their reference is released rather than the row
-   * deleted. That is the trade the owner accepts when choosing to delete —
-   * the turno stays in the agenda, minus the "who did it".
-   *
-   * Without that release the `DELETE` dies on a foreign key in the single
-   * most common case there is: a barber who actually worked.
+   * One transaction, and the ORDER of its statements is the whole point —
+   * see `deleteStaffAccountRows` below, which does the actual work. Split
+   * out so `DrizzleBarberRepository.delete()` can run the exact same
+   * statements as ONE step of its OWN larger transaction (barber deletion
+   * needs the staff account gone before the barber row itself, atomically —
+   * see that method's own doc comment) instead of nesting a second,
+   * independent transaction inside the first.
    */
   async deleteAccount(userId: string): Promise<boolean> {
-    return this.db.transaction(async (tx) => {
-      // The shop's own history: keep the record, drop the attribution.
-      await tx
-        .update(slotOccupancies)
-        .set({ createdByUserId: null })
-        .where(eq(slotOccupancies.createdByUserId, userId));
-      await tx
-        .update(slotOccupancies)
-        .set({ markedByUserId: null })
-        .where(eq(slotOccupancies.markedByUserId, userId));
-      await tx
-        .update(clientAbsences)
-        .set({ confirmedByUserId: null })
-        .where(eq(clientAbsences.confirmedByUserId, userId));
-
-      // The access itself: goes with the account.
-      await tx.delete(sessions).where(eq(sessions.userId, userId));
-      await tx.delete(authChallenges).where(eq(authChallenges.userId, userId));
-
-      // `isNotNull(roleId)` keeps this from ever reaching a CLIENT account —
-      // same guard every other write in this staff-scoped repository uses.
-      const deleted = await tx
-        .delete(users)
-        .where(and(eq(users.id, userId), isNotNull(users.roleId)))
-        .returning({ id: users.id });
-      return deleted.length > 0;
-    });
+    return this.db.transaction((tx) => deleteStaffAccountRows(tx, userId));
   }
 
   private async selectOne(condition: SQL): Promise<StaffAccount | null> {
@@ -162,6 +131,57 @@ export class DrizzleStaffAccountRepository implements StaffAccountRepository {
     const row = rows[0];
     return row ? toStaffAccount(row) : null;
   }
+}
+
+/** Whatever `db.transaction`'s callback hands back, or `db` itself — this
+ *  function only ever `.update()`s/`.delete()`s, so it does not need the
+ *  full query-builder surface, just the two methods it actually calls. That
+ *  narrow a type is what lets `DrizzleBarberRepository.delete()` pass its
+ *  OWN transaction handle here without either file importing the other's
+ *  concrete transaction type. */
+type DeletableDb = Pick<PostgresJsDatabase, 'update' | 'delete'>;
+
+/**
+ * The actual work `deleteAccount` does, factored out so it can run as one
+ * step of a LARGER transaction instead of always opening its own.
+ *
+ * Five tables reference `users`, and they fall into two groups. Sessions
+ * and auth challenges ARE the access — they die with the account. The
+ * other three (the turnos this person created, the turnos they marked, the
+ * ausencias they confirmed) are the SHOP's records: they must survive the
+ * account, so their reference is released rather than the row deleted.
+ * That is the trade the owner accepts when choosing to delete — the turno
+ * stays in the agenda, minus the "who did it".
+ *
+ * Without that release the `DELETE` dies on a foreign key in the single
+ * most common case there is: a barber who actually worked.
+ */
+export async function deleteStaffAccountRows(tx: DeletableDb, userId: string): Promise<boolean> {
+  // The shop's own history: keep the record, drop the attribution.
+  await tx
+    .update(slotOccupancies)
+    .set({ createdByUserId: null })
+    .where(eq(slotOccupancies.createdByUserId, userId));
+  await tx
+    .update(slotOccupancies)
+    .set({ markedByUserId: null })
+    .where(eq(slotOccupancies.markedByUserId, userId));
+  await tx
+    .update(clientAbsences)
+    .set({ confirmedByUserId: null })
+    .where(eq(clientAbsences.confirmedByUserId, userId));
+
+  // The access itself: goes with the account.
+  await tx.delete(sessions).where(eq(sessions.userId, userId));
+  await tx.delete(authChallenges).where(eq(authChallenges.userId, userId));
+
+  // `isNotNull(roleId)` keeps this from ever reaching a CLIENT account —
+  // same guard every other write in this staff-scoped repository uses.
+  const deleted = await tx
+    .delete(users)
+    .where(and(eq(users.id, userId), isNotNull(users.roleId)))
+    .returning({ id: users.id });
+  return deleted.length > 0;
 }
 
 interface StaffRow {

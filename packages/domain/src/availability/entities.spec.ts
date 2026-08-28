@@ -13,11 +13,36 @@ describe('createBarber', () => {
   it('creates a barber with a trimmed name', () => {
     const barber = createBarber({ id: 'b1', name: '  Juan  ', active: true });
 
-    expect(barber).toEqual({ id: 'b1', name: 'Juan', active: true });
+    expect(barber).toEqual({ id: 'b1', name: 'Juan', active: true, permanentLeave: false });
   });
 
   it('rejects an empty name', () => {
     expect(() => createBarber({ id: 'b1', name: '   ', active: true })).toThrow(
+      AvailabilityValidationError,
+    );
+  });
+
+  // "Baja definitiva" — the state a barber who quit or got fired ends up in.
+  // Distinct from `active`, which stays the single availability gate every
+  // existing reader already checks (see ports.ts, BarberRepository).
+  it('defaults permanentLeave to false when not given', () => {
+    const barber = createBarber({ id: 'b1', name: 'Juan', active: true });
+
+    expect(barber.permanentLeave).toBe(false);
+  });
+
+  it('creates an inactive barber on baja definitiva', () => {
+    const barber = createBarber({ id: 'b1', name: 'Juan', active: false, permanentLeave: true });
+
+    expect(barber).toEqual({ id: 'b1', name: 'Juan', active: false, permanentLeave: true });
+  });
+
+  // Migration 0013's CHECK constraint (`barbers_active_permanent_leave_check`)
+  // makes this combination unrepresentable in the database; `createBarber`
+  // enforces the same rule here so the invalid combination is refused the
+  // moment it is CONSTRUCTED, not only when it is eventually written.
+  it('rejects a barber that is both active and on baja definitiva at once', () => {
+    expect(() => createBarber({ id: 'b1', name: 'Juan', active: true, permanentLeave: true })).toThrow(
       AvailabilityValidationError,
     );
   });
