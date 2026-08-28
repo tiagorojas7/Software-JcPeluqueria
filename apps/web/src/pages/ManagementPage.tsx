@@ -320,12 +320,33 @@ function BarbersSection() {
     }
   }
 
+  /**
+   * The two bajas come back differently, and only one of them comes back
+   * whole. A baja temporal never lost anything: the schedule and the staff
+   * account both survived, so reactivating really is the single click the
+   * deactivation notice promised. A baja definitiva DID lose the account —
+   * `terminate` deletes it, by design — so the barber returns to the agenda
+   * bookable but unable to log in, and the owner has to invite them again
+   * from "Cuentas de barberos" right below.
+   *
+   * Saying "vuelve a estar activo, con el mismo horario de antes" for both
+   * would be true about the horario and quietly false about the account,
+   * which is the exact shape of bug this panel keeps producing: a screen
+   * that reports the write it made instead of the state the shop is now in.
+   */
   async function handleReactivate(barber: BarberManagementResponse) {
     setError(null);
     setNotice(null);
+    // Read BEFORE the write: `load()` below replaces this row with its new
+    // state, where `permanentLeave` is already false for both cases.
+    const wasTerminated = barber.permanentLeave;
     try {
       await apiPost(`/panel/barbers/${barber.id}/reactivate`);
-      setNotice(`${barber.name} vuelve a estar activo, con el mismo horario de antes.`);
+      setNotice(
+        wasTerminated
+          ? `${barber.name} vuelve a estar activo, con el mismo horario de antes. Su cuenta del panel se había eliminado con la baja definitiva: para que pueda volver a entrar, invitalo de nuevo desde "Cuentas de barberos".`
+          : `${barber.name} vuelve a estar activo, con el mismo horario y la misma cuenta de antes.`,
+      );
       await load();
     } catch (err) {
       setError(describeError(err));

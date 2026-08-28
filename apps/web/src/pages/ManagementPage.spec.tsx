@@ -691,7 +691,28 @@ describe('ManagementPage — tabla de barberos: baja temporal, baja definitiva, 
     fireEvent.click(rowFor('Lucia Fernandez').getByRole('button', { name: 'Reactivar' }));
 
     await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/panel/barbers/b2/reactivate'));
-    expect(await screen.findByText(/vuelve a estar activo/i)).toBeInTheDocument();
+    const notice = await screen.findByText(/vuelve a estar activo/i);
+    expect(notice).toHaveTextContent(/la misma cuenta de antes/i);
+    // Lucia only ever went on baja TEMPORAL, so nothing was lost and the
+    // owner must not be sent to re-invite an account that still exists.
+    expect(notice).not.toHaveTextContent(/invitalo de nuevo/i);
+  });
+
+  // La baja definitiva borra la cuenta, asi que reactivar devuelve al
+  // barbero a la agenda pero NO al panel. Decirle al dueño "vuelve con el
+  // mismo horario" y callar eso lo deja creyendo que el barbero puede
+  // entrar.
+  it('al reactivar desde baja definitiva avisa que hay que invitar la cuenta de nuevo', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ reactivated: true });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Pedro Diaz');
+
+    fireEvent.click(rowFor('Pedro Diaz').getByRole('button', { name: 'Reactivar' }));
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/panel/barbers/b3/reactivate'));
+    const notice = await screen.findByText(/vuelve a estar activo/i);
+    expect(notice).toHaveTextContent(/invitalo de nuevo/i);
+    expect(notice).toHaveTextContent(/Cuentas de barberos/i);
   });
 
   it('pide confirmacion antes de la baja definitiva y explica que sobrevive', async () => {
