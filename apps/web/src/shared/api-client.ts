@@ -16,6 +16,25 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Every `ApiError` this module throws is also announced here, so ONE place
+ * can react to a whole class of failure without each of the ~20 call sites
+ * growing its own copy of the same check. The listener decides what the
+ * error means — this module only reports that one happened, which is what
+ * keeps it from having to know anything about sessions or routing.
+ */
+type ApiErrorListener = (error: ApiError) => void;
+
+const apiErrorListeners = new Set<ApiErrorListener>();
+
+/** Returns the unsubscribe function, so an effect can clean up after itself. */
+export function onApiError(listener: ApiErrorListener): () => void {
+  apiErrorListeners.add(listener);
+  return () => {
+    apiErrorListeners.delete(listener);
+  };
+}
+
 async function parseBody(res: Response): Promise<unknown> {
   const text = await res.text();
   if (!text) {
@@ -42,7 +61,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = await parseBody(res);
   if (!res.ok) {
-    throw new ApiError(res.status, body);
+    const error = new ApiError(res.status, body);
+    // Announced BEFORE throwing so a listener sees every failure, including
+    // the ones a caller catches and turns into its own on-screen message.
+    for (const listener of apiErrorListeners) {
+      listener(error);
+    }
+    throw error;
   }
   return body as T;
 }
@@ -57,6 +82,12 @@ export function apiPost<T>(path: string, payload?: unknown): Promise<T> {
 
 export function apiPut<T>(path: string, payload: unknown): Promise<T> {
   return request<T>(path, { method: 'PUT', body: JSON.stringify(payload) });
+}
+
+/** No body by design: the only DELETE this app makes identifies its target
+ *  entirely by path. */
+export function apiDelete<T>(path: string): Promise<T> {
+  return request<T>(path, { method: 'DELETE' });
 }
 
 /** Best-effort human-readable message out of whatever an `ApiError` (or any

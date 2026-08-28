@@ -18,6 +18,11 @@ const AVAILABLE_SLOTS_AT_11 = {
   slots: [{ startsAt: '2026-09-01T14:00:00.000Z', endsAt: '2026-09-01T14:30:00.000Z' }],
 };
 
+/** Trabaja los siete dias: ninguna fecha del test dispara la advertencia. */
+const BARBER_WEEK = {
+  days: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, opensAt: '09:00', closesAt: '18:00' })),
+};
+
 async function fillRequiredFieldsAndPickStartTime() {
   fireEvent.change(screen.getByLabelText('Barbero'), { target: { value: 'barber-1' } });
   fireEvent.change(screen.getByLabelText('Servicio'), { target: { value: 'service-1' } });
@@ -37,7 +42,14 @@ async function fillRequiredFieldsAndPickStartTime() {
 describe('WalkInForm', () => {
   beforeEach(() => {
     vi.mocked(apiGet).mockReset();
-    vi.mocked(apiGet).mockResolvedValue(AVAILABLE_SLOTS_AT_11);
+    // Por path: este formulario hace DOS lecturas distintas — los horarios
+    // libres y los dias que el barbero trabaja (`BarberWorkingDays`).
+    vi.mocked(apiGet).mockImplementation((path: string) => {
+      if (path.startsWith('/panel/barbers/')) {
+        return Promise.resolve(BARBER_WEEK);
+      }
+      return Promise.resolve(AVAILABLE_SLOTS_AT_11);
+    });
   });
 
   it('submits with clientPhone null when no phone was loaded — cliente no identificado', async () => {

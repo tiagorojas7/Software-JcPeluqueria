@@ -48,6 +48,16 @@
   margin-bottom: var(--space-5);
 }
 
+/* "Tu sesión venció": informa, no acusa — por eso no usa el rojo de error. */
+.staff-login__notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  border-left: 2px solid var(--color-accent);
+  background: var(--color-accent-soft);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+
 .staff-login__card button[type='submit'] {
   width: 100%;
   margin-top: var(--space-2);

@@ -1,13 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { apiGet, apiPost, apiPut } from '../shared/api-client';
+import { apiDelete, apiGet, apiPost, apiPut } from '../shared/api-client';
 import { ManagementPage } from './ManagementPage';
 
 vi.mock('../shared/api-client', () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
   apiPut: vi.fn(),
+  apiDelete: vi.fn(),
   describeError: (err: unknown) => (err instanceof Error ? err.message : 'error desconocido'),
 }));
 
@@ -517,5 +518,61 @@ describe('ManagementPage — Horarios precarga la semana del barbero', () => {
 
     await screen.findByRole('heading', { name: /horarios/i });
     expect(container.querySelector('#mgmt-schedule-week-1-enabled')).toBeInTheDocument();
+  });
+});
+
+// Un barbero que ya no esta seguia apareciendo para siempre en "Cuentas de
+// barberos": desactivar le quita el acceso pero la fila queda. El duenio
+// pidio poder eliminarla — y que sea una decision suya, no automatica.
+describe('ManagementPage — eliminar la cuenta de un barbero', () => {
+  beforeEach(() => {
+    vi.mocked(apiGet).mockReset();
+    vi.mocked(apiPost).mockReset();
+    vi.mocked(apiPut).mockReset();
+    vi.mocked(apiDelete).mockReset();
+    mockReferenceData();
+  });
+
+  it('ofrece eliminar solo en las filas que tienen cuenta', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByText('cristian@jc.test');
+    // Dos cuentas reales + una fila sin cuenta (De Antes), que no puede
+    // eliminar lo que no existe.
+    expect(screen.getAllByRole('button', { name: /^eliminar cuenta$/i })).toHaveLength(2);
+  });
+
+  it('pide confirmacion antes de borrar y explica que pasa con el historial', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByText('cristian@jc.test');
+    fireEvent.click(screen.getAllByRole('button', { name: /^eliminar cuenta$/i })[0]!);
+
+    expect(await screen.findByText(/no vas a poder deshacerlo|sus turnos quedan/i)).toBeInTheDocument();
+    // Nada se borro con solo apretar el boton.
+    expect(apiDelete).not.toHaveBeenCalled();
+  });
+
+  it('elimina la cuenta al confirmar y recarga la lista', async () => {
+    vi.mocked(apiDelete).mockResolvedValueOnce({ deleted: true });
+    render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByText('cristian@jc.test');
+    fireEvent.click(screen.getAllByRole('button', { name: /^eliminar cuenta$/i })[0]!);
+    fireEvent.click(await screen.findByRole('button', { name: /s., eliminar/i }));
+
+    await waitFor(() => expect(apiDelete).toHaveBeenCalledWith('/panel/barber-accounts/u-cristian'));
+    expect(await screen.findByText(/cuenta.*eliminada/i)).toBeInTheDocument();
+  });
+
+  it('cancelar no borra nada', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    await screen.findByText('cristian@jc.test');
+    fireEvent.click(screen.getAllByRole('button', { name: /^eliminar cuenta$/i })[0]!);
+    fireEvent.click(await screen.findByRole('button', { name: /^cancelar$/i }));
+
+    expect(apiDelete).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /s., eliminar/i })).toBeNull();
   });
 });

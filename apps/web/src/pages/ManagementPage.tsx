@@ -9,7 +9,7 @@ import type {
   PublicServiceResponse,
 } from '@jc-barberia/contracts';
 
-import { apiGet, apiPost, apiPut, describeError } from '../shared/api-client';
+import { apiDelete, apiGet, apiPost, apiPut, describeError } from '../shared/api-client';
 import { formatPriceArs, parsePriceArsInput } from '../shared/money';
 import { hasPermission } from '../shared/permissions';
 import { useReferenceData } from '../shared/use-reference-data';
@@ -636,6 +636,10 @@ function BarberAccountsSection() {
   const [error, setError] = useState<string | null>(null);
   /** Email being typed for a barber who has no account yet, keyed by barber. */
   const [pendingEmails, setPendingEmails] = useState<Record<string, string>>({});
+  /** The account whose deletion is awaiting confirmation, if any. Deleting
+   *  is the one action here that destroys something, so it never happens on
+   *  a single click. */
+  const [confirmingDelete, setConfirmingDelete] = useState<BarberAccountResponse | null>(null);
 
   async function load() {
     try {
@@ -692,6 +696,21 @@ function BarberAccountsSection() {
         account.active
           ? `${account.barberName} ya no puede entrar al panel. Sus turnos no cambian.`
           : `${account.barberName} puede volver a entrar al panel.`,
+      );
+      await load();
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  async function handleDelete(account: BarberAccountResponse) {
+    setError(null);
+    setNotice(null);
+    try {
+      await apiDelete(`/panel/barber-accounts/${account.userId}`);
+      setConfirmingDelete(null);
+      setNotice(
+        `Cuenta de ${account.barberName} eliminada. Sigue en la agenda como barbero sin cuenta: podés volver a invitarlo cuando quieras.`,
       );
       await load();
     } catch (err) {
@@ -763,6 +782,25 @@ function BarberAccountsSection() {
                       <button type="button" onClick={() => void handleToggleActive(account)}>
                         {account.active ? 'Quitar acceso' : 'Devolver acceso'}
                       </button>
+                      <button
+                        type="button"
+                        className="management__danger"
+                        onClick={() => setConfirmingDelete(account)}
+                      >
+                        Eliminar cuenta
+                      </button>
+                      {confirmingDelete?.userId === account.userId && (
+                        <p className="management__confirm" role="status">
+                          ¿Eliminar la cuenta de {account.barberName}? Pierde el acceso al panel y no vas a poder
+                          deshacerlo. Sus turnos quedan en la agenda, sin el dato de quién los cargó.{' '}
+                          <button type="button" className="management__danger" onClick={() => void handleDelete(account)}>
+                            Sí, eliminar
+                          </button>{' '}
+                          <button type="button" onClick={() => setConfirmingDelete(null)}>
+                            Cancelar
+                          </button>
+                        </p>
+                      )}
                     </>
                   )}
                 </td>

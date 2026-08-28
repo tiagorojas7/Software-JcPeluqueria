@@ -7,6 +7,11 @@ import './StaffLoginPage.css';
 
 export interface StaffLoginPageProps {
   readonly onLoggedIn: (actor: Actor) => void;
+  /** `true` when the staff member did not choose to leave: their session
+   *  expired underneath them and the panel sent them back here. Saying so
+   *  is the difference between "andá a saber qué pasó" and one sentence
+   *  that explains it. */
+  readonly sessionExpired?: boolean;
 }
 
 /**
@@ -16,7 +21,7 @@ export interface StaffLoginPageProps {
  * de alcance, explícito"): el mensaje de recuperación dirige a hablar con el
  * dueño en vez de prometer un flujo que no existe.
  */
-export function StaffLoginPage({ onLoggedIn }: StaffLoginPageProps) {
+export function StaffLoginPage({ onLoggedIn, sessionExpired = false }: StaffLoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +47,11 @@ export function StaffLoginPage({ onLoggedIn }: StaffLoginPageProps) {
         <span className="staff-login__brand">JC Barbería</span>
         <h2 className="staff-login__title">Ingreso de personal</h2>
         <p className="staff-login__hint">Acceso exclusivo para dueño, secretaria y barberos.</p>
+        {sessionExpired && !error && (
+          <p className="staff-login__notice" role="status">
+            Tu sesión venció. Volvé a entrar para seguir.
+          </p>
+        )}
         {error && <p role="alert">{error}</p>}
         <form onSubmit={handleSubmit}>
           <label htmlFor="staff-login-email">Email</label>

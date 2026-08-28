@@ -17,8 +17,9 @@ import { RevenuePage } from './pages/RevenuePage';
 import { ShopRevenuePage } from './pages/ShopRevenuePage';
 import { StaffLoginPage } from './pages/StaffLoginPage';
 import { ErrorBoundary } from './shared/ErrorBoundary';
-import { apiPost } from './shared/api-client';
+import { apiPost, onApiError } from './shared/api-client';
 import { documentTitleFor } from './shared/document-title';
+import { isSessionExpired } from './shared/session-expiry';
 import type { Actor } from './shared/actor';
 import { RouterProvider, useRouter } from './shared/router';
 import { clearPersistedActor, loadPersistedActor, savePersistedActor } from './shared/session';
@@ -89,6 +90,26 @@ function renderPanelRoute(pathname: string, actor: Actor) {
 function AppShell() {
   const { pathname, navigate } = useRouter();
   const [actor, setActor] = useState<Actor | null>(() => loadPersistedActor());
+  /** Set when the session turned out to be gone, so the login screen can say
+   *  why instead of looking like a random logout. */
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  // The persisted actor survives a refresh, but the httpOnly cookie that
+  // actually authorises anything expires on its own — and nothing noticed.
+  // The panel kept rendering as if logged in while every section answered
+  // "No authenticated actor for this request.", which is the API saying
+  // exactly this, to someone who should never have to read it. One listener
+  // here, rather than the same check copied into every screen.
+  useEffect(() => {
+    return onApiError((error) => {
+      if (!isSessionExpired(error)) {
+        return;
+      }
+      clearPersistedActor();
+      setActor(null);
+      setSessionExpired(true);
+    });
+  }, []);
 
   useEffect(() => {
     const redirect = resolvePanelRedirect(pathname, actor);
@@ -115,6 +136,7 @@ function AppShell() {
   function handleLoggedIn(loggedInActor: Actor) {
     savePersistedActor(loggedInActor);
     setActor(loggedInActor);
+    setSessionExpired(false);
     navigate(PANEL_HOME_PATH);
   }
 
@@ -127,7 +149,7 @@ function AppShell() {
         // home; render nothing meanwhile instead of a dead login form.
         return null;
       }
-      return <StaffLoginPage onLoggedIn={handleLoggedIn} />;
+      return <StaffLoginPage onLoggedIn={handleLoggedIn} sessionExpired={sessionExpired} />;
     }
     if (!actor) {
       // The effect above is redirecting to `/panel/login`; render nothing

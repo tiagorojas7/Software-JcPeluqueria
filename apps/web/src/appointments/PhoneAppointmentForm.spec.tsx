@@ -26,6 +26,12 @@ const AVAILABLE_SLOTS = {
   slots: [{ startsAt: '2026-09-01T13:00:00.000Z', endsAt: '2026-09-01T13:30:00.000Z' }],
 };
 
+/** El barbero de estos tests trabaja toda la semana, asi que ninguna fecha
+ *  elegida dispara la advertencia de "no atiende ese dia". */
+const BARBER_WEEK = {
+  days: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, opensAt: '09:00', closesAt: '18:00' })),
+};
+
 async function fillRequiredFieldsAndPickStartTime() {
   fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Marcos' } });
   fireEvent.change(screen.getByLabelText('Teléfono'), { target: { value: '3511234567' } });
@@ -49,7 +55,16 @@ async function fillRequiredFieldsAndPickStartTime() {
 describe('PhoneAppointmentForm', () => {
   beforeEach(() => {
     vi.mocked(apiGet).mockReset();
-    vi.mocked(apiGet).mockResolvedValue(AVAILABLE_SLOTS);
+    // Por path, no una respuesta unica para todo: el formulario hace DOS
+    // lecturas distintas — los horarios libres y los dias que el barbero
+    // trabaja (`BarberWorkingDays`) — y darle los slots a las dos hacia que
+    // la segunda recibiera una forma que no es la suya.
+    vi.mocked(apiGet).mockImplementation((path: string) => {
+      if (path.startsWith('/panel/barbers/')) {
+        return Promise.resolve(BARBER_WEEK);
+      }
+      return Promise.resolve(AVAILABLE_SLOTS);
+    });
   });
 
   it('submits with only the required fields, leaving email and age out, and no endTime at all', async () => {
