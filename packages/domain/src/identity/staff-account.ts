@@ -72,4 +72,24 @@ export interface StaffAccountRepository {
 
   /** `false` when no account has this id. */
   setActive(userId: string, active: boolean): Promise<boolean>;
+
+  /**
+   * Removes the account outright — the barber stops existing as a login.
+   *
+   * Deliberately NOT the same act as `setActive(false)`: revoking access
+   * keeps the account (and the option to restore it), while this is for the
+   * accounts that should never have existed or belong to someone who is
+   * gone for good, and which otherwise clutter the only screen the owner
+   * uses to see who can get in.
+   *
+   * The implementation must first release every audit reference that points
+   * at this user (the turnos they created or marked, the ausencias they
+   * confirmed): those records belong to the SHOP, not to the account, and
+   * must survive it — minus the "who did it" attribution, which is
+   * precisely what the owner is choosing to give up. Sessions and pending
+   * challenges are deleted with the account: they are the access itself.
+   *
+   * `false` when no account has this id.
+   */
+  deleteAccount(userId: string): Promise<boolean>;
 }

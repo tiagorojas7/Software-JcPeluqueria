@@ -21,9 +21,12 @@ export const clientAbsences = pgTable('client_absences', {
   clientId: uuid('client_id')
     .notNull()
     .references(() => clients.id),
-  confirmedByUserId: uuid('confirmed_by_user_id')
-    .notNull()
-    .references(() => users.id),
+  /** Nullable since the owner can delete a staff account: the ausencia is
+   *  the SHOP's record (it decides whether the seña was forfeited) and must
+   *  outlive whoever confirmed it. Deleting an account releases this
+   *  reference instead of deleting the record — see
+   *  `DrizzleStaffAccountRepository.deleteAccount`. */
+  confirmedByUserId: uuid('confirmed_by_user_id').references(() => users.id),
   confirmedAt: timestamp('confirmed_at', { withTimezone: true }).notNull(),
   depositForfeited: boolean('deposit_forfeited').notNull(),
 });

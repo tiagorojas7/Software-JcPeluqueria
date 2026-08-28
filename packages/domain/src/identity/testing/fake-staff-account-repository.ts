@@ -63,6 +63,10 @@ export class FakeStaffAccountRepository implements StaffAccountRepository {
     return true;
   }
 
+  async deleteAccount(userId: string): Promise<boolean> {
+    return this.byId.delete(userId);
+  }
+
   /** Test-only: stands in for the staff member having completed activation,
    *  which in production is `PasswordService.setPassword` writing the hash
    *  through the OTHER port — never this one. */

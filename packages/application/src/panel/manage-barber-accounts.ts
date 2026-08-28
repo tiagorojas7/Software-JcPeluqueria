@@ -133,6 +133,24 @@ export class ManageBarberAccountsUseCase {
   }
 
   /**
+   * Removes the account for good — a different act from `setActive(false)`,
+   * which only revokes the login and keeps the row.
+   *
+   * The barber themselves is untouched: they stay on the agenda, their past
+   * turnos stay in the shop's history, and the row simply goes back to
+   * being "un barbero sin cuenta" — exactly the state a barber from before
+   * accounts existed is in, and which `list()` already renders with an
+   * "invitar" action. So this is reversible in the only sense that matters
+   * operationally: the owner can hand out a new account whenever they want,
+   * to the same email if they like.
+   *
+   * `false` means no account has this id.
+   */
+  async deleteAccount(userId: string): Promise<boolean> {
+    return this.accounts.deleteAccount(userId);
+  }
+
+  /**
    * Whether `users.email` is still free. Exists so the alta of a barber can
    * reject a colliding email BEFORE writing the `barbers` row — `invite()`
    * requires the barber to already exist, so without this the alta would

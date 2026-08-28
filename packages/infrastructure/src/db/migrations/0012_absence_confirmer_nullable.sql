@@ -1,0 +1,12 @@
+-- El dueño puede eliminar la cuenta de un barbero (README 3.9: "el dueño
+-- tiene todo el control de las cuentas"). Cinco tablas referencian `users`,
+-- y las de auditoría guardan historial DEL LOCAL, no de la cuenta: una
+-- ausencia de cliente decide si se retuvo la seña, así que tiene que
+-- sobrevivir a quien la confirmó.
+--
+-- `slot_occupancies.created_by_user_id`/`marked_by_user_id` ya eran
+-- nullables y podían soltarse; ésta no, y era la única que hacía fallar el
+-- DELETE contra la foreign key — justo en el caso más común, un barbero que
+-- efectivamente trabajó. Soltar la atribución es la única pérdida, y es
+-- exactamente lo que el dueño elige al borrar.
+ALTER TABLE "client_absences" ALTER COLUMN "confirmed_by_user_id" DROP NOT NULL;

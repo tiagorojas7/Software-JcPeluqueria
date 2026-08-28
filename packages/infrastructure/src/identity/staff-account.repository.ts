@@ -3,7 +3,9 @@ import { and, eq, isNotNull, type SQL } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import { roles } from '../db/schema/access-control';
-import { users } from '../db/schema/identity';
+import { clientAbsences } from '../db/schema/client-absences';
+import { authChallenges, sessions, users } from '../db/schema/identity';
+import { slotOccupancies } from '../db/schema/slot-occupancy';
 
 /**
  * A staff account IS a `users` row with `role_id` set — the mirror image of
@@ -98,6 +100,50 @@ export class DrizzleStaffAccountRepository implements StaffAccountRepository {
       .where(and(eq(users.id, userId), isNotNull(users.roleId)))
       .returning({ id: users.id });
     return rows.length > 0;
+  }
+
+  /**
+   * One transaction, and the ORDER of its statements is the whole point.
+   *
+   * Five tables reference `users`, and they fall into two groups. Sessions
+   * and auth challenges ARE the access — they die with the account. The
+   * other three (the turnos this person created, the turnos they marked,
+   * the ausencias they confirmed) are the SHOP's records: they must survive
+   * the account, so their reference is released rather than the row
+   * deleted. That is the trade the owner accepts when choosing to delete —
+   * the turno stays in the agenda, minus the "who did it".
+   *
+   * Without that release the `DELETE` dies on a foreign key in the single
+   * most common case there is: a barber who actually worked.
+   */
+  async deleteAccount(userId: string): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      // The shop's own history: keep the record, drop the attribution.
+      await tx
+        .update(slotOccupancies)
+        .set({ createdByUserId: null })
+        .where(eq(slotOccupancies.createdByUserId, userId));
+      await tx
+        .update(slotOccupancies)
+        .set({ markedByUserId: null })
+        .where(eq(slotOccupancies.markedByUserId, userId));
+      await tx
+        .update(clientAbsences)
+        .set({ confirmedByUserId: null })
+        .where(eq(clientAbsences.confirmedByUserId, userId));
+
+      // The access itself: goes with the account.
+      await tx.delete(sessions).where(eq(sessions.userId, userId));
+      await tx.delete(authChallenges).where(eq(authChallenges.userId, userId));
+
+      // `isNotNull(roleId)` keeps this from ever reaching a CLIENT account —
+      // same guard every other write in this staff-scoped repository uses.
+      const deleted = await tx
+        .delete(users)
+        .where(and(eq(users.id, userId), isNotNull(users.roleId)))
+        .returning({ id: users.id });
+      return deleted.length > 0;
+    });
   }
 
   private async selectOne(condition: SQL): Promise<StaffAccount | null> {

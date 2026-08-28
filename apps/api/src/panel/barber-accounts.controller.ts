@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Delete,
   Get,
   HttpCode,
   NotFoundException,
@@ -100,5 +101,26 @@ export class BarberAccountsController {
       throw new NotFoundException({ message: `No existe la cuenta "${userId}"` });
     }
     return { active: parsed.data.active };
+  }
+
+  /**
+   * Removes the account for good. `DELETE`, not another `POST`, because it
+   * is the one operation here that destroys something rather than flipping
+   * a flag — and the difference deserves to be visible in the method.
+   *
+   * The BARBER survives: they stay on the agenda and their turnos stay in
+   * the shop's history (minus the attribution — see the repository). What
+   * disappears is the login, so the row goes back to being "un barbero sin
+   * cuenta", which the same screen already knows how to invite again.
+   */
+  @RequiresPermission('barber:manage')
+  @Delete(':userId')
+  @HttpCode(200)
+  async deleteAccount(@Param('userId') userId: string): Promise<{ deleted: true }> {
+    const deleted = await this.accounts.deleteAccount(userId);
+    if (!deleted) {
+      throw new NotFoundException({ message: `No existe la cuenta "${userId}"` });
+    }
+    return { deleted: true };
   }
 }

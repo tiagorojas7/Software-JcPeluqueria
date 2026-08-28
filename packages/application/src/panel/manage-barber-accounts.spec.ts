@@ -235,3 +235,38 @@ describe('ManageBarberAccountsUseCase', () => {
     ]);
   });
 });
+
+// Un barbero que ya no esta seguia apareciendo en "Cuentas de barberos" para
+// siempre: desactivar le quita el acceso pero la fila queda ahi. El duenio
+// pidio poder eliminarla — no siempre, pero que la opcion exista.
+describe('ManageBarberAccountsUseCase — eliminar la cuenta', () => {
+  it('elimina la cuenta y deja de listarla', async () => {
+    const { useCase } = await withBarber();
+    const invited = await useCase.invite({ barberId: 'barber-1', email: 'sefue@jc.test' });
+    if (invited.outcome !== 'invited') throw new Error('setup: la invitacion tenia que salir');
+
+    expect(await useCase.deleteAccount(invited.userId)).toBe(true);
+
+    const rows = await useCase.list();
+    const row = rows.find((entry) => entry.barberId === 'barber-1');
+    // El BARBERO sigue existiendo (su agenda es del local), pero sin cuenta.
+    expect(row).toBeDefined();
+    expect(row!.userId).toBeNull();
+    expect(row!.email).toBeNull();
+  });
+
+  it('devuelve false para una cuenta que no existe, en vez de romper', async () => {
+    const { useCase } = build();
+
+    expect(await useCase.deleteAccount('no-existe')).toBe(false);
+  });
+
+  it('libera el email para que se pueda volver a invitar a esa direccion', async () => {
+    const { useCase } = await withBarber();
+    const invited = await useCase.invite({ barberId: 'barber-1', email: 'vuelve@jc.test' });
+    if (invited.outcome !== 'invited') throw new Error('setup: la invitacion tenia que salir');
+    await useCase.deleteAccount(invited.userId);
+
+    expect(await useCase.emailAvailable('vuelve@jc.test')).toBe(true);
+  });
+});
