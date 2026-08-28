@@ -270,3 +270,54 @@ describe('ManageBarberAccountsUseCase — eliminar la cuenta', () => {
     expect(await useCase.emailAvailable('vuelve@jc.test')).toBe(true);
   });
 });
+
+// "Baja definitiva" (ManageClientsAndBarbersUseCase.terminateBarber) deletes
+// the account too, but only has the BARBER id — deleteAccount needs the
+// ACCOUNT's own id. deleteAccountForBarber is that translation.
+describe('ManageBarberAccountsUseCase — deleteAccountForBarber (baja definitiva)', () => {
+  it('borra la cuenta del barbero cuando existe', async () => {
+    const { useCase, accounts } = await withBarber();
+    await useCase.invite({ barberId: 'barber-1', email: 'sefue@jc.test' });
+
+    await useCase.deleteAccountForBarber('barber-1');
+
+    expect(await accounts.findByBarberId('barber-1')).toBeNull();
+  });
+
+  it('no hace nada, y no tira, cuando el barbero nunca tuvo cuenta', async () => {
+    const { useCase } = await withBarber();
+
+    await expect(useCase.deleteAccountForBarber('barber-1')).resolves.toBeUndefined();
+  });
+
+  it('no hace nada cuando el barbero ni siquiera existe', async () => {
+    const { useCase } = build();
+
+    await expect(useCase.deleteAccountForBarber('no-existe')).resolves.toBeUndefined();
+  });
+});
+
+// Un barbero en baja definitiva no tiene cuenta POR CONSTRUCCION
+// (terminateBarber la borra) — sin este filtro aparecería en esta pantalla
+// exactamente igual que alguien recién dado de alta que todavía no fue
+// invitado, para siempre. La tabla "Barberos" es donde vive ahora.
+describe('ManageBarberAccountsUseCase — list() oculta a los de baja definitiva', () => {
+  it('no lista un barbero con permanentLeave true', async () => {
+    const { useCase, barbers } = await withBarber();
+    await barbers.create(createBarber({ id: 'barber-baja', name: 'Se Fue', active: false, permanentLeave: true }));
+
+    const list = await useCase.list();
+
+    expect(list.map((row) => row.barberId)).not.toContain('barber-baja');
+    expect(list.map((row) => row.barberId)).toContain('barber-1');
+  });
+
+  it('sigue listando a un barbero en baja TEMPORAL — sin cuenta o con ella', async () => {
+    const { useCase, barbers } = await withBarber();
+    await barbers.create(createBarber({ id: 'barber-temporal', name: 'De Licencia', active: false }));
+
+    const list = await useCase.list();
+
+    expect(list.map((row) => row.barberId)).toContain('barber-temporal');
+  });
+});

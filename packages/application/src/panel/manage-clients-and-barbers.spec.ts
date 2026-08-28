@@ -1,4 +1,5 @@
 import {
+  createBarber,
   createBarberSchedule,
   createService,
   createShopHours,
@@ -548,5 +549,111 @@ describe('ManageClientsAndBarbersUseCase — leer el horario de un barbero', () 
     const [day] = await useCase.getBarberWeek('barber-read-3');
 
     expect(day).not.toHaveProperty('barberId');
+  });
+});
+
+// El dueño pidió poder reactivar a un barbero (baja temporal: gripe de un
+// día, vacaciones) sin reconfigurar el horario entero, y poder eliminar a un
+// barbero que nunca llegó a trabajar (email mal tipeado, nunca activó la
+// cuenta). Migración 0013 agrega `permanentLeave`; estos casos prueban las
+// tres operaciones nuevas del caso de uso.
+describe('ManageClientsAndBarbersUseCase — baja temporal, baja definitiva y eliminar', () => {
+  describe('listBarbers', () => {
+    it('lista todos los barberos, activos e inactivos, con su estado y si se pueden eliminar', async () => {
+      const { useCase, barbers } = buildUseCase();
+      await useCase.addBarber({ id: 'barber-list-1', name: 'Activo', email: anEmail(), schedule: [] });
+      await useCase.addBarber({ id: 'barber-list-2', name: 'Inactivo', email: anEmail(), schedule: [] });
+      await useCase.deactivateBarber('barber-list-2');
+      barbers.seedHasAppointments('barber-list-2');
+
+      const list = await useCase.listBarbers();
+
+      expect(list).toEqual(
+        expect.arrayContaining([
+          { id: 'barber-list-1', name: 'Activo', active: true, permanentLeave: false, canDelete: true },
+          { id: 'barber-list-2', name: 'Inactivo', active: false, permanentLeave: false, canDelete: false },
+        ]),
+      );
+    });
+  });
+
+  describe('reactivateBarber', () => {
+    it('reactiva un barbero dado de baja — vuelve a active:true, permanentLeave:false', async () => {
+      const { useCase, barbers } = buildUseCase();
+      await useCase.addBarber({ id: 'barber-react-1', name: 'Reactivable', email: anEmail(), schedule: [] });
+      await useCase.deactivateBarber('barber-react-1');
+
+      const reactivated = await useCase.reactivateBarber('barber-react-1');
+
+      expect(reactivated).toBe(true);
+      expect(await barbers.findById('barber-react-1')).toMatchObject({ active: true, permanentLeave: false });
+    });
+
+    it('reporta false para un barbero que no existe', async () => {
+      const { useCase } = buildUseCase();
+
+      expect(await useCase.reactivateBarber('no-existe')).toBe(false);
+    });
+  });
+
+  describe('terminateBarber (baja definitiva)', () => {
+    it('pone active:false, permanentLeave:true y borra la cuenta del barbero', async () => {
+      const { useCase, barbers, accountsRepository } = buildUseCase();
+      await useCase.addBarber({ id: 'barber-term-1', name: 'Se Va', email: 'seva@jc.test', schedule: [] });
+
+      const terminated = await useCase.terminateBarber('barber-term-1');
+
+      expect(terminated).toBe(true);
+      expect(await barbers.findById('barber-term-1')).toMatchObject({ active: false, permanentLeave: true });
+      expect(await accountsRepository.findByBarberId('barber-term-1')).toBeNull();
+    });
+
+    it('no rompe cuando el barbero nunca tuvo cuenta', async () => {
+      const { useCase, barbers } = buildUseCase();
+      // Barbero creado directamente en el repo, sin pasar por addBarber —
+      // exactamente el caso de un barbero que ya estaba en el sistema desde
+      // antes de que existieran las cuentas.
+      await barbers.create(createBarber({ id: 'barber-term-2', name: 'Sin Cuenta Nunca', active: true }));
+
+      const terminated = await useCase.terminateBarber('barber-term-2');
+
+      expect(terminated).toBe(true);
+      expect(await barbers.findById('barber-term-2')).toMatchObject({ active: false, permanentLeave: true });
+    });
+
+    it('reporta false para un barbero que no existe', async () => {
+      const { useCase } = buildUseCase();
+
+      expect(await useCase.terminateBarber('no-existe')).toBe(false);
+    });
+  });
+
+  describe('deleteBarber', () => {
+    it('elimina a un barbero sin turnos', async () => {
+      const { useCase, barbers } = buildUseCase();
+      await useCase.addBarber({ id: 'barber-del-1', name: 'Sin Turnos', email: anEmail(), schedule: [] });
+
+      const outcome = await useCase.deleteBarber('barber-del-1');
+
+      expect(outcome).toBe('deleted');
+      expect(await barbers.findById('barber-del-1')).toBeNull();
+    });
+
+    it('rechaza eliminar a un barbero con turnos en el historial', async () => {
+      const { useCase, barbers } = buildUseCase();
+      await useCase.addBarber({ id: 'barber-del-2', name: 'Con Turnos', email: anEmail(), schedule: [] });
+      barbers.seedHasAppointments('barber-del-2');
+
+      const outcome = await useCase.deleteBarber('barber-del-2');
+
+      expect(outcome).toBe('has-appointments');
+      expect(await barbers.findById('barber-del-2')).not.toBeNull();
+    });
+
+    it('reporta not-found para un barbero que no existe', async () => {
+      const { useCase } = buildUseCase();
+
+      expect(await useCase.deleteBarber('no-existe')).toBe('not-found');
+    });
   });
 });

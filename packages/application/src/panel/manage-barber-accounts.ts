@@ -151,6 +151,23 @@ export class ManageBarberAccountsUseCase {
   }
 
   /**
+   * "Baja definitiva" (`ManageClientsAndBarbersUseCase.terminateBarber`)
+   * deletes the account too — README 3.9: someone gone for good keeps no
+   * door into the panel. That caller only has the BARBER id, and
+   * `deleteAccount` needs the ACCOUNT's own id; this is the translation.
+   *
+   * A no-op, never an error, when the barber has no account: "never
+   * activated" and "quit before ever getting one" are both legitimate
+   * states to terminate from, and neither should block the baja.
+   */
+  async deleteAccountForBarber(barberId: string): Promise<void> {
+    const account = await this.accounts.findByBarberId(barberId);
+    if (account) {
+      await this.accounts.deleteAccount(account.id);
+    }
+  }
+
+  /**
    * Whether `users.email` is still free. Exists so the alta of a barber can
    * reject a colliding email BEFORE writing the `barbers` row — `invite()`
    * requires the barber to already exist, so without this the alta would
@@ -177,17 +194,24 @@ export class ManageBarberAccountsUseCase {
     const accountByBarberId = new Map(
       accounts.filter((account) => account.barberId !== null).map((account) => [account.barberId!, account]),
     );
-    return barbers.map((barber) => {
-      const account = accountByBarberId.get(barber.id);
-      return {
-        userId: account?.id ?? null,
-        barberId: barber.id,
-        barberName: barber.name,
-        email: account?.email ?? null,
-        active: account?.active ?? false,
-        activated: account?.activated ?? false,
-      };
-    });
+    // A barber on "baja definitiva" has no account BY CONSTRUCTION
+    // (`terminateBarber` deletes it) — without this filter they show up
+    // here identical to a barber who simply never got invited, forever.
+    // The panel's "Barberos" table is where they live now; this screen has
+    // nothing left to offer them until they are reactivated.
+    return barbers
+      .filter((barber) => !barber.permanentLeave)
+      .map((barber) => {
+        const account = accountByBarberId.get(barber.id);
+        return {
+          userId: account?.id ?? null,
+          barberId: barber.id,
+          barberName: barber.name,
+          email: account?.email ?? null,
+          active: account?.active ?? false,
+          activated: account?.activated ?? false,
+        };
+      });
   }
 
   /**

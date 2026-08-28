@@ -147,9 +147,9 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
     });
 
     expect(response.status).toBe(201);
-    expect(response.body).toMatchObject({ name: 'Nuevo Barbero', active: true });
+    expect(response.body).toMatchObject({ name: 'Nuevo Barbero', active: true, permanentLeave: false });
     const stored = await barbers.list();
-    expect(stored).toEqual([{ id: response.body.id, name: 'Nuevo Barbero', active: true }]);
+    expect(stored).toEqual([{ id: response.body.id, name: 'Nuevo Barbero', active: true, permanentLeave: false }]);
   });
 
   it('MUST reject the secretary adding a barber with 403 — barber:manage is owner-only, unlike client:manage', async () => {
@@ -338,5 +338,162 @@ describe('Panel: gestión de clientes y barberos (App Nest levantada en memoria)
     expect(response.body).toEqual({ configured: true });
     const stored = await schedules.listBarberSchedule('day-barber');
     expect(stored).toHaveLength(1);
+  });
+});
+
+// Migración 0013 — el dueño pidió poder reactivar a un barbero de baja
+// temporal sin reconfigurar el horario, y poder eliminar a un barbero que
+// nunca llegó a trabajar. Estas cuatro rutas nuevas viven bajo el mismo
+// permiso `barber:manage` que el resto de este controller.
+describe('Panel: baja temporal, baja definitiva y eliminar (App Nest levantada en memoria)', () => {
+  let app: INestApplication;
+  let barbers: FakeBarberRepository;
+  let staffAccounts: FakeStaffAccountRepository;
+
+  beforeAll(async () => {
+    barbers = new FakeBarberRepository();
+    staffAccounts = new FakeStaffAccountRepository();
+
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(ROLE_PERMISSION_REPOSITORY)
+      .useValue(rolePermissions)
+      .overrideProvider(ACTOR_CONTEXT_REPOSITORY)
+      .useValue(actorContexts)
+      .overrideProvider(CLIENT_REPOSITORY)
+      .useValue(new FakeClientRepository())
+      .overrideProvider(BARBER_REPOSITORY)
+      .useValue(barbers)
+      .overrideProvider(SCHEDULE_REPOSITORY)
+      .useValue(new FakeScheduleRepository())
+      .overrideProvider(SERVICE_REPOSITORY)
+      .useValue(new FakeServiceRepository())
+      .overrideProvider(STAFF_ACCOUNT_REPOSITORY)
+      .useValue(staffAccounts)
+      .overrideProvider(AUTH_CHALLENGE_REPOSITORY)
+      .useValue(new FakeAuthChallengeRepository())
+      .overrideProvider(NOTIFICATION_OUTBOX_REPOSITORY)
+      .useValue(new FakeNotificationOutboxRepository())
+      .overrideProvider(CLOCK)
+      .useValue(new FakeClock(-180, new FakeClock().parseInstant('2026-09-01T12:00:00.000Z')))
+      .overrideProvider(APPOINTMENT_REPOSITORY)
+      .useValue(new FakeAppointmentRepository())
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    await app.init();
+  }, 120_000);
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('GET /panel/barbers lists every barber, active or not, with canDelete', async () => {
+    await barbers.create(createBarber({ id: 'gb-1', name: 'Activo', active: true }));
+    await barbers.create(createBarber({ id: 'gb-2', name: 'Con Historial', active: false }));
+    barbers.seedHasAppointments('gb-2');
+
+    const response = await withSession(request(app.getHttpServer()).get('/panel/barbers'), OWNER_SESSION);
+
+    expect(response.status).toBe(200);
+    expect(response.body.barbers).toEqual(
+      expect.arrayContaining([
+        { id: 'gb-1', name: 'Activo', active: true, permanentLeave: false, canDelete: true },
+        { id: 'gb-2', name: 'Con Historial', active: false, permanentLeave: false, canDelete: false },
+      ]),
+    );
+  });
+
+  it('MUST reject the secretary listing barbers for management — barber:manage is owner-only', async () => {
+    const response = await withSession(request(app.getHttpServer()).get('/panel/barbers'), SECRETARY_SESSION);
+
+    expect(response.status).toBe(403);
+  });
+
+  it('reactiva a un barbero dado de baja', async () => {
+    await barbers.create(createBarber({ id: 'react-1', name: 'De Baja', active: true }));
+    await barbers.deactivate('react-1');
+
+    const response = await withSession(
+      request(app.getHttpServer()).post('/panel/barbers/react-1/reactivate'),
+      OWNER_SESSION,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ reactivated: true });
+    expect(await barbers.findById('react-1')).toMatchObject({ active: true, permanentLeave: false });
+  });
+
+  it('404 al reactivar un barbero que no existe, nunca un 500', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).post('/panel/barbers/no-existe/reactivate'),
+      OWNER_SESSION,
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it('da de baja definitiva a un barbero y le borra la cuenta', async () => {
+    await barbers.create(createBarber({ id: 'term-1', name: 'Se Fue', active: true }));
+    const account = await staffAccounts.create({ email: 'sefue@jc.test', role: 'barber', barberId: 'term-1' });
+
+    const response = await withSession(
+      request(app.getHttpServer()).post('/panel/barbers/term-1/terminate'),
+      OWNER_SESSION,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ terminated: true });
+    expect(await barbers.findById('term-1')).toMatchObject({ active: false, permanentLeave: true });
+    expect(await staffAccounts.findById(account.id)).toBeNull();
+  });
+
+  it('404 al dar de baja definitiva a un barbero que no existe', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).post('/panel/barbers/no-existe/terminate'),
+      OWNER_SESSION,
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it('elimina a un barbero sin turnos', async () => {
+    await barbers.create(createBarber({ id: 'del-1', name: 'Nunca Trabajo', active: true }));
+
+    const response = await withSession(request(app.getHttpServer()).delete('/panel/barbers/del-1'), OWNER_SESSION);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ deleted: true });
+    expect(await barbers.findById('del-1')).toBeNull();
+  });
+
+  it('404 al eliminar un barbero que no existe', async () => {
+    const response = await withSession(
+      request(app.getHttpServer()).delete('/panel/barbers/no-existe'),
+      OWNER_SESSION,
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  // El mensaje explica QUE hacer en su lugar — un 409 explicable, no un
+  // callejon sin salida.
+  it('409, y NO un 500, al intentar eliminar un barbero con turnos en el historial', async () => {
+    await barbers.create(createBarber({ id: 'del-2', name: 'Con Turnos', active: true }));
+    barbers.seedHasAppointments('del-2');
+
+    const response = await withSession(request(app.getHttpServer()).delete('/panel/barbers/del-2'), OWNER_SESSION);
+
+    expect(response.status).toBe(409);
+    expect(response.body.message).toMatch(/baja definitiva/i);
+    expect(await barbers.findById('del-2')).not.toBeNull();
+  });
+
+  it('MUST reject the secretary deleting a barber — barber:manage is owner-only', async () => {
+    await barbers.create(createBarber({ id: 'del-3', name: 'Protegido', active: true }));
+
+    const response = await withSession(request(app.getHttpServer()).delete('/panel/barbers/del-3'), SECRETARY_SESSION);
+
+    expect(response.status).toBe(403);
+    expect(await barbers.findById('del-3')).not.toBeNull();
   });
 });

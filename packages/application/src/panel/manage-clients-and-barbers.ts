@@ -39,6 +39,16 @@ export type ConfigureBarberWeekResult =
   | { readonly outcome: 'configured' }
   | { readonly outcome: 'needs-confirmation'; readonly affectedAppointmentIds: readonly string[] };
 
+/** One row of the panel's "Barberos" table — see `listBarbers`. */
+export interface BarberManagementView {
+  readonly id: string;
+  readonly name: string;
+  readonly active: boolean;
+  readonly permanentLeave: boolean;
+  /** `hasAppointments`, inverted — whether "Eliminar" is even safe to offer. */
+  readonly canDelete: boolean;
+}
+
 /**
  * admin-operations spec, "Gestión de clientes y de barberos":
  *
@@ -123,9 +133,90 @@ export class ManageClientsAndBarbersUseCase {
     return { outcome: 'added', barber, userId: invited.userId };
   }
 
-  /** "baja de barberos" — `false` means no barber with that id exists. */
+  /** "baja de barberos" (baja temporal) — `false` means no barber with that
+   *  id exists. */
   async deactivateBarber(barberId: string): Promise<boolean> {
     return this.barbers.deactivate(barberId);
+  }
+
+  /**
+   * Every barber, active or not — the panel's "Barberos" table, which
+   * doubles as the one place the owner deletes a barber who never worked a
+   * single day. `canDelete` mirrors `barbers.delete()`'s own refusal rule
+   * (`hasAppointments`, inverted) so the panel can decide whether to even
+   * OFFER "Eliminar" before the owner clicks it, instead of showing the
+   * button everywhere and failing loudly after the fact.
+   */
+  async listBarbers(): Promise<BarberManagementView[]> {
+    const all = await this.barbers.list();
+    return Promise.all(
+      all.map(async (barber) => ({
+        id: barber.id,
+        name: barber.name,
+        active: barber.active,
+        permanentLeave: barber.permanentLeave,
+        canDelete: !(await this.barbers.hasAppointments(barber.id)),
+      })),
+    );
+  }
+
+  /**
+   * Undoes EITHER `deactivateBarber` (baja temporal) or `terminateBarber`
+   * (baja definitiva) in one write: `active=true, permanentLeave=false`.
+   * The barber's base schedule was never touched by going inactive
+   * (`barber_schedules` rows survive `active=false` on their own — see
+   * `packages/infrastructure/.../barber.repository.ts`), so this is the
+   * whole "un click y vuelve a estar como antes" the owner asked for: no
+   * horario que reconfigurar.
+   *
+   * `false` means no barber with that id exists.
+   */
+  async reactivateBarber(barberId: string): Promise<boolean> {
+    return this.barbers.reactivate(barberId);
+  }
+
+  /**
+   * "Baja definitiva" — the barber quit or was fired, for good. Distinct
+   * from `deactivateBarber` (baja temporal) in exactly one respect that
+   * matters operationally: this ALSO removes the staff account, reusing
+   * the exact deletion path `BarberAccountsSection`'s "Eliminar cuenta"
+   * already uses (`ManageBarberAccountsUseCase.deleteAccountForBarber` →
+   * `StaffAccountRepository.deleteAccount`), so the shop's history keeps
+   * the same "who did it" guarantees either way. A no-op, never an error,
+   * when the barber has no account to begin with.
+   *
+   * `barber_schedules`/`barber_time_off` are left exactly as they are —
+   * they are configuration, not history. `deleteBarber` is the SEPARATE,
+   * further action that removes them, and only when the barber has zero
+   * turnos.
+   *
+   * `false` means no barber with that id exists.
+   */
+  async terminateBarber(barberId: string): Promise<boolean> {
+    const updated = await this.barbers.setPermanentLeave(barberId, true);
+    if (!updated) {
+      return false;
+    }
+    await this.accounts.deleteAccountForBarber(barberId);
+    return true;
+  }
+
+  /**
+   * Removes the barber outright. `barbers.delete()` handles the staff
+   * account, `barber_time_off`, `barber_schedules` and the `barbers` row
+   * itself, all in ONE transaction (see that method's own doc comment for
+   * the exact order) — this is a direct pass-through, the same shape
+   * `deactivateBarber` already has for its own repository call.
+   *
+   * `'has-appointments'` refuses the whole operation whenever the barber
+   * has a single row in `slot_occupancies` — the shop's OWN appointment
+   * history, which must survive every barber who ever actually worked.
+   * `terminateBarber` (baja definitiva) is the correct action for that
+   * barber instead: same disappearance from every future selector, none of
+   * the history lost.
+   */
+  async deleteBarber(barberId: string): Promise<'deleted' | 'not-found' | 'has-appointments'> {
+    return this.barbers.delete(barberId);
   }
 
   /**

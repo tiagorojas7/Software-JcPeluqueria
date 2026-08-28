@@ -118,6 +118,31 @@ export interface BarberResponse {
   readonly id: string;
   readonly name: string;
   readonly active: boolean;
+  readonly permanentLeave: boolean;
+}
+
+/**
+ * One row of the panel's "Barberos" management table — EVERY barber, active
+ * or not, unlike the public `GET /barbers` (`PublicBarberResponse`), which
+ * only ever shows the ones bookable right now. `permanentLeave` is the
+ * second axis `active` alone cannot express: a barber can be inactive for a
+ * day (baja temporal — reactivable with one click) or inactive for good
+ * (baja definitiva — also loses their staff account). `canDelete` is
+ * `hasAppointments` already inverted and computed server-side: whether
+ * "Eliminar" is even safe to offer is a business decision (does the shop's
+ * own history depend on this row?), not something the panel should infer
+ * from a second endpoint.
+ */
+export interface BarberManagementResponse {
+  readonly id: string;
+  readonly name: string;
+  readonly active: boolean;
+  readonly permanentLeave: boolean;
+  readonly canDelete: boolean;
+}
+
+export interface BarbersManagementListResponse {
+  readonly barbers: readonly BarberManagementResponse[];
 }
 
 export interface ClientRecordResponse {

@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Delete,
   Get,
   HttpCode,
   NotFoundException,
@@ -17,6 +18,7 @@ import {
   ConfigureBarberWeekRequestSchema,
   ConfigureServicePriceRequestSchema,
   type BarberResponse,
+  type BarbersManagementListResponse,
   type BarberWeekResponse,
   type ClientsListResponse,
   type ConfigureBarberWeekResponseBody,
@@ -89,6 +91,76 @@ export class ManageClientsAndBarbersController {
       throw new NotFoundException({ message: `No existe el barbero "${barberId}"` });
     }
     return { deactivated: true };
+  }
+
+  /**
+   * The panel's own "Barberos" table — EVERY barber, active or not, unlike
+   * the public `GET /barbers` (`ListPublicBarbersUseCase`), which stays
+   * active-only by design and is untouched by this slice. `canDelete` is
+   * computed here, server-side, so the panel can decide whether to even
+   * OFFER "Eliminar" per row before the owner clicks it.
+   */
+  @RequiresPermission('barber:manage')
+  @Get('barbers')
+  async listBarbers(): Promise<BarbersManagementListResponse> {
+    return { barbers: await this.manage.listBarbers() };
+  }
+
+  /**
+   * "Baja temporal"/"baja definitiva"'s way back — undoes either one in the
+   * same write: `active=true, permanentLeave=false`. The barber's base
+   * schedule needs no reconfiguration; it was never touched by going
+   * inactive.
+   */
+  @RequiresPermission('barber:manage')
+  @Post('barbers/:barberId/reactivate')
+  @HttpCode(200)
+  async reactivateBarber(@Param('barberId') barberId: string): Promise<{ reactivated: true }> {
+    const reactivated = await this.manage.reactivateBarber(barberId);
+    if (!reactivated) {
+      throw new NotFoundException({ message: `No existe el barbero "${barberId}"` });
+    }
+    return { reactivated: true };
+  }
+
+  /**
+   * "Baja definitiva" — the barber quit or was fired, for good. Also
+   * removes the staff account (see `ManageClientsAndBarbersUseCase.terminateBarber`),
+   * which is why this is its own route rather than a flag on `deactivate`.
+   */
+  @RequiresPermission('barber:manage')
+  @Post('barbers/:barberId/terminate')
+  @HttpCode(200)
+  async terminateBarber(@Param('barberId') barberId: string): Promise<{ terminated: true }> {
+    const terminated = await this.manage.terminateBarber(barberId);
+    if (!terminated) {
+      throw new NotFoundException({ message: `No existe el barbero "${barberId}"` });
+    }
+    return { terminated: true };
+  }
+
+  /**
+   * Removes the barber outright — possible ONLY when they have zero rows in
+   * `slot_occupancies`, the shop's own appointment history. `409`, not an
+   * unhandled 500: the request is well formed, it just collides with
+   * history that has to survive, the same "well-formed but refused" shape
+   * `addBarber`'s `email-taken` already uses. "Baja definitiva" is the
+   * message's own suggested next step for a barber who cannot be deleted.
+   */
+  @RequiresPermission('barber:manage')
+  @Delete('barbers/:barberId')
+  @HttpCode(200)
+  async deleteBarber(@Param('barberId') barberId: string): Promise<{ deleted: true }> {
+    const outcome = await this.manage.deleteBarber(barberId);
+    if (outcome === 'not-found') {
+      throw new NotFoundException({ message: `No existe el barbero "${barberId}"` });
+    }
+    if (outcome === 'has-appointments') {
+      throw new ConflictException({
+        message: 'No se puede eliminar: tiene turnos en el historial del local. Usá "Baja definitiva" en su lugar.',
+      });
+    }
+    return { deleted: true };
   }
 
   /**
