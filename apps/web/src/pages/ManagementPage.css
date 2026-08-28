@@ -124,6 +124,28 @@
   box-shadow: var(--status-ausente-ring);
 }
 
+/* Same `.management__state` component, reused by the "Barberos" table
+ * (migration 0013): "activo" tracks "activa" above, "baja temporal" tracks
+ * "sin-activar" (reversible, needs a look), "baja definitiva" tracks
+ * "sin-cuenta"/"acceso-quitado" (the terminal, nothing-left-to-do tone). */
+.management__state[data-state='activo'] {
+  background: var(--status-realizado-bg);
+  color: var(--status-realizado);
+  box-shadow: var(--status-realizado-ring);
+}
+
+.management__state[data-state='baja-temporal'] {
+  background: var(--status-sin-registrado-bg);
+  color: var(--status-sin-registrado);
+  box-shadow: var(--status-sin-registrado-ring);
+}
+
+.management__state[data-state='baja-definitiva'] {
+  background: var(--status-ausente-bg);
+  color: var(--status-ausente);
+  box-shadow: var(--status-ausente-ring);
+}
+
 /* ---------- Week grid ----------
  * One row per day with its own switch and hours. A day that is off shows no
  * times at all rather than greyed-out ones: an input that looks editable and

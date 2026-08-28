@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiDelete, apiGet, apiPost, apiPut } from '../shared/api-client';
@@ -24,6 +24,20 @@ const OWNER = { userId: 'u1', role: 'owner' as const, barberId: null };
 const SECRETARY = { userId: 'u2', role: 'secretary' as const, barberId: null };
 
 const BARBERS_RESPONSE = { barbers: [{ id: 'b1', name: 'Cristian Gómez' }] };
+// La tabla de gestión de barberos (GET /panel/barbers) es un fetch propio,
+// independiente de useReferenceData — trae TODOS los barberos, activos e
+// inactivos, a diferencia de GET /barbers (solo activos, para los pickers).
+// Nombres deliberadamente DISTINTOS de los de BARBER_ACCOUNTS_RESPONSE y
+// BARBERS_RESPONSE: "Cristian Gómez" aparece también como <option> del
+// selector de Horarios y como fila de Cuentas de barberos, así que
+// reutilizar ese nombre acá volvería ambiguo cualquier `getByText`.
+const BARBERS_MANAGEMENT_RESPONSE = {
+  barbers: [
+    { id: 'b1', name: 'Marcos Aguirre', active: true, permanentLeave: false, canDelete: true },
+    { id: 'b2', name: 'Lucia Fernandez', active: false, permanentLeave: false, canDelete: true },
+    { id: 'b3', name: 'Pedro Diaz', active: false, permanentLeave: true, canDelete: false },
+  ],
+};
 const SERVICES_RESPONSE = {
   services: [{ id: 's1', name: 'Corte clásico', durationMinutes: 30, priceCents: 800000 }],
 };
@@ -88,6 +102,9 @@ function mockReferenceData() {
     if (path === '/panel/barber-accounts') {
       return Promise.resolve(BARBER_ACCOUNTS_RESPONSE);
     }
+    if (path === '/panel/barbers') {
+      return Promise.resolve(BARBERS_MANAGEMENT_RESPONSE);
+    }
     if (path === '/panel/barbers/b1/schedule') {
       return Promise.resolve(BARBER_WEEK_RESPONSE);
     }
@@ -114,7 +131,10 @@ describe('ManagementPage (D.3)', () => {
     render(<ManagementPage actor={OWNER} />);
 
     expect(screen.getByRole('heading', { name: /clientes/i })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: /barberos/i })).toBeInTheDocument();
+    // Exact string, not /barberos/i: "Cuentas de barberos" is now mounted
+    // just as eagerly (its own independent fetch, same as this section),
+    // and the loose regex would match both headings at once.
+    expect(await screen.findByRole('heading', { name: 'Barberos' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /horarios/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /precios/i })).toBeInTheDocument();
   });
@@ -184,16 +204,6 @@ describe('ManagementPage (D.3)', () => {
 
     expect(await screen.findByText(/eleg.\s*al menos un d.a de trabajo/i)).toBeInTheDocument();
     expect(apiPost).not.toHaveBeenCalled();
-  });
-
-  it('da de baja un barbero existente', async () => {
-    vi.mocked(apiPost).mockResolvedValueOnce({ deactivated: true });
-    render(<ManagementPage actor={OWNER} />);
-
-    fireEvent.click(await screen.findByRole('button', { name: /dar de baja/i }));
-
-    expect(await screen.findByText(/barbero dado de baja/i)).toBeInTheDocument();
-    expect(apiPost).toHaveBeenCalledWith('/panel/barbers/b1/deactivate');
   });
 
   it('configura la semana completa de un barbero existente en un solo pedido — el bug que reporto el dueno', async () => {
@@ -329,12 +339,19 @@ describe('ManagementPage (D.3)', () => {
         // reference-data failure alone.
         return Promise.resolve({ accounts: [] });
       }
+      if (path === '/panel/barbers') {
+        // Also its own independent fetch (BarbersSection), same reason.
+        return Promise.resolve({ barbers: [] });
+      }
       return Promise.reject(new Error('No se pudo conectar con el servidor'));
     });
     render(<ManagementPage actor={OWNER} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo conectar/i);
-    expect(screen.queryByLabelText(/nombre del barbero/i)).toBeNull();
+    // "Barberos" (its own independent fetch, like "Cuentas de barberos")
+    // stays usable regardless — only the sections that genuinely depend on
+    // this reference data (Horarios, Precios) must stay empty.
+    expect(screen.queryByLabelText(/precio \(ars\)/i)).toBeNull();
   });
 });
 
@@ -511,6 +528,7 @@ describe('ManagementPage — Horarios precarga la semana del barbero', () => {
       if (path === '/barbers') return Promise.resolve(BARBERS_RESPONSE);
       if (path === '/services') return Promise.resolve(SERVICES_RESPONSE);
       if (path === '/panel/barber-accounts') return Promise.resolve(BARBER_ACCOUNTS_RESPONSE);
+      if (path === '/panel/barbers') return Promise.resolve(BARBERS_MANAGEMENT_RESPONSE);
       return Promise.reject(new Error('no se pudo leer el horario'));
     });
 
@@ -574,5 +592,190 @@ describe('ManagementPage — eliminar la cuenta de un barbero', () => {
 
     expect(apiDelete).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /s., eliminar/i })).toBeNull();
+  });
+});
+
+// Migración 0013: "active=false" ya no alcanza para distinguir una baja
+// temporal (vuelve con un click, mismo horario) de una definitiva (se fue
+// para siempre, se le borra la cuenta). La sección de Barberos pasa de un
+// <select> de baja a una tabla con TODOS los barberos y las acciones que
+// cada estado permite.
+describe('ManagementPage — tabla de barberos: baja temporal, baja definitiva, eliminar', () => {
+  beforeEach(() => {
+    vi.mocked(apiGet).mockReset();
+    vi.mocked(apiPost).mockReset();
+    vi.mocked(apiPut).mockReset();
+    vi.mocked(apiDelete).mockReset();
+    mockReferenceData();
+  });
+
+  /** Scopes a query to the `<tr>` that contains this barber's name — the
+   *  same name repeats as a `data-state` badge AND as button labels across
+   *  different rows ("Baja definitiva" is both a state and a button), so
+   *  most assertions here need to be per-row, not page-wide. */
+  function rowFor(barberName: string) {
+    const cell = screen.getByText(barberName);
+    return within(cell.closest('tr')!);
+  }
+
+  it('lista todos los barberos, activos e inactivos, no solo los activos', async () => {
+    render(<ManagementPage actor={OWNER} />);
+
+    expect(await screen.findByText('Marcos Aguirre')).toBeInTheDocument();
+    expect(screen.getByText('Lucia Fernandez')).toBeInTheDocument();
+    expect(screen.getByText('Pedro Diaz')).toBeInTheDocument();
+  });
+
+  it('marca el estado de cada barbero como dato, no solo como texto', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Marcos Aguirre');
+
+    expect(rowFor('Marcos Aguirre').getByText('Activo')).toHaveAttribute('data-state', 'activo');
+    expect(rowFor('Lucia Fernandez').getByText('De baja temporal')).toHaveAttribute('data-state', 'baja-temporal');
+    expect(rowFor('Pedro Diaz').getByText('Baja definitiva')).toHaveAttribute(
+      'data-state',
+      'baja-definitiva',
+    );
+  });
+
+  it('un barbero activo solo puede pasar a baja temporal o baja definitiva', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Marcos Aguirre');
+
+    const row = rowFor('Marcos Aguirre');
+    expect(row.getByRole('button', { name: 'Dar de baja temporal' })).toBeInTheDocument();
+    expect(row.getByRole('button', { name: 'Baja definitiva' })).toBeInTheDocument();
+    expect(row.queryByRole('button', { name: 'Reactivar' })).toBeNull();
+    expect(row.queryByRole('button', { name: 'Eliminar' })).toBeNull();
+  });
+
+  it('un barbero de baja temporal puede reactivarse, pasar a baja definitiva o eliminarse', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Lucia Fernandez');
+
+    const row = rowFor('Lucia Fernandez');
+    expect(row.getByRole('button', { name: 'Reactivar' })).toBeInTheDocument();
+    expect(row.getByRole('button', { name: 'Baja definitiva' })).toBeInTheDocument();
+    expect(row.getByRole('button', { name: 'Eliminar' })).toBeInTheDocument();
+    expect(row.queryByRole('button', { name: 'Dar de baja temporal' })).toBeNull();
+  });
+
+  it('un barbero de baja definitiva solo puede reactivarse — y eliminarse solo si no tiene turnos', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Pedro Diaz');
+
+    const row = rowFor('Pedro Diaz');
+    expect(row.getByRole('button', { name: 'Reactivar' })).toBeInTheDocument();
+    // canDelete: false en la fixture — tiene turnos en el historial.
+    expect(row.queryByRole('button', { name: 'Eliminar' })).toBeNull();
+    expect(row.queryByRole('button', { name: 'Dar de baja temporal' })).toBeNull();
+    expect(row.queryByRole('button', { name: 'Baja definitiva' })).toBeNull();
+  });
+
+  it('da de baja temporal a un barbero activo sin pedir confirmacion', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ deactivated: true });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Marcos Aguirre');
+
+    fireEvent.click(rowFor('Marcos Aguirre').getByRole('button', { name: 'Dar de baja temporal' }));
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/panel/barbers/b1/deactivate'));
+    expect(await screen.findByText(/queda de baja temporal/i)).toBeInTheDocument();
+  });
+
+  it('reactiva a un barbero sin pedir confirmacion — es reversible con un click', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ reactivated: true });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Lucia Fernandez');
+
+    fireEvent.click(rowFor('Lucia Fernandez').getByRole('button', { name: 'Reactivar' }));
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/panel/barbers/b2/reactivate'));
+    expect(await screen.findByText(/vuelve a estar activo/i)).toBeInTheDocument();
+  });
+
+  it('pide confirmacion antes de la baja definitiva y explica que sobrevive', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Marcos Aguirre');
+
+    fireEvent.click(rowFor('Marcos Aguirre').getByRole('button', { name: 'Baja definitiva' }));
+
+    const confirmation = await screen.findByText(/dar de baja definitiva a marcos aguirre/i);
+    expect(confirmation).toHaveTextContent(/historial/i);
+    expect(confirmation).toHaveTextContent(/cuenta del panel se elimina/i);
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it('confirma la baja definitiva y avisa que la cuenta se elimino', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ terminated: true });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Marcos Aguirre');
+
+    fireEvent.click(rowFor('Marcos Aguirre').getByRole('button', { name: 'Baja definitiva' }));
+    fireEvent.click(await screen.findByRole('button', { name: /s., baja definitiva/i }));
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/panel/barbers/b1/terminate'));
+    expect(await screen.findByText(/queda de baja definitiva/i)).toBeInTheDocument();
+  });
+
+  it('cancelar la baja definitiva no manda nada', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Marcos Aguirre');
+
+    fireEvent.click(rowFor('Marcos Aguirre').getByRole('button', { name: 'Baja definitiva' }));
+    fireEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    expect(apiPost).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /s., baja definitiva/i })).toBeNull();
+  });
+
+  it('pide confirmacion antes de eliminar y avisa que desaparece por completo', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Lucia Fernandez');
+
+    fireEvent.click(rowFor('Lucia Fernandez').getByRole('button', { name: 'Eliminar' }));
+
+    expect(await screen.findByText(/desaparece|nunca tuvo un turno/i)).toBeInTheDocument();
+    expect(apiDelete).not.toHaveBeenCalled();
+  });
+
+  it('confirma eliminar y recarga la tabla', async () => {
+    vi.mocked(apiDelete).mockResolvedValueOnce({ deleted: true });
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Lucia Fernandez');
+
+    fireEvent.click(rowFor('Lucia Fernandez').getByRole('button', { name: 'Eliminar' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^s., eliminar$/i }));
+
+    await waitFor(() => expect(apiDelete).toHaveBeenCalledWith('/panel/barbers/b2'));
+    expect(await screen.findByText(/eliminad/i)).toBeInTheDocument();
+  });
+
+  it('cancelar eliminar no manda nada', async () => {
+    render(<ManagementPage actor={OWNER} />);
+    await screen.findByText('Lucia Fernandez');
+
+    fireEvent.click(rowFor('Lucia Fernandez').getByRole('button', { name: 'Eliminar' }));
+    fireEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    expect(apiDelete).not.toHaveBeenCalled();
+  });
+
+  it('un error al pedir la tabla se muestra sin romper el resto del panel', async () => {
+    vi.mocked(apiGet).mockImplementation((path: string) => {
+      if (path === '/panel/barbers') {
+        return Promise.reject(new Error('no se pudo cargar la tabla de barberos'));
+      }
+      if (path === '/barbers') return Promise.resolve(BARBERS_RESPONSE);
+      if (path === '/services') return Promise.resolve(SERVICES_RESPONSE);
+      if (path === '/panel/barber-accounts') return Promise.resolve(BARBER_ACCOUNTS_RESPONSE);
+      if (path === '/panel/clients') return Promise.resolve(CLIENTS_RESPONSE);
+      return Promise.reject(new Error(`unexpected apiGet path in test: ${path}`));
+    });
+    render(<ManagementPage actor={OWNER} />);
+
+    expect(await screen.findByText(/no se pudo cargar la tabla de barberos/i)).toBeInTheDocument();
+    // El resto del panel sigue de pie — cuentas de barberos, por ejemplo.
+    expect(await screen.findByText('cristian@jc.test')).toBeInTheDocument();
   });
 });

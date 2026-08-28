@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type {
   BarberAccountResponse,
   BarberAccountsListResponse,
+  BarberManagementResponse,
+  BarbersManagementListResponse,
   BarberWeekResponse,
   ClientRecordResponse,
   ConfigureBarberWeekResponseBody,
@@ -29,13 +31,15 @@ export interface ManagementPageProps {
  * `hasPermission` — the same source of truth `PanelLayout`'s nav already
  * uses, never a second hardcoded role check.
  *
- * datos-reales-en-ui: used to feed the barber/service pickers below from
+ * datos-reales-en-ui: used to feed the schedule/service pickers below from
  * `shared/demo-data.ts`. Now fetches `GET /barbers` (active-only — exactly
- * the set a barber CAN still be deactivated/rescheduled from;
- * `ManageClientsAndBarbersUseCase` has no "reactivate" operation, so an
- * already-deactivated barber has nothing to be picked for here) and
- * `GET /services` once, up front, only when the actor's role actually needs
- * one of the sections that uses them.
+ * the set "Horarios" can configure; a barber on baja, temporal or
+ * definitiva, has nothing to schedule until reactivated) and `GET /services`
+ * once, up front, only when the actor's role actually needs one of the
+ * sections that uses them. `BarbersSection` (migration 0013) needs BOTH
+ * active and inactive barbers — active-only would hide the very rows the
+ * owner needs to reactivate — so it fetches `GET /panel/barbers` on its own
+ * instead of sharing this hook.
  */
 export function ManagementPage({ actor }: ManagementPageProps) {
   const canClients = hasPermission(actor.role, 'client:manage');
@@ -43,7 +47,7 @@ export function ManagementPage({ actor }: ManagementPageProps) {
   const canSchedules = hasPermission(actor.role, 'schedule:configure');
   const canPricing = hasPermission(actor.role, 'pricing:configure');
   const hasAnySection = canClients || canBarbers || canSchedules || canPricing;
-  const needsReferenceData = canBarbers || canSchedules || canPricing;
+  const needsReferenceData = canSchedules || canPricing;
 
   const {
     barbers,
@@ -61,14 +65,17 @@ export function ManagementPage({ actor }: ManagementPageProps) {
       {needsReferenceData && !referenceDataReady && !referenceError && (
         <p className="empty-state">Cargando barberos y servicios...</p>
       )}
+      {/* Its own fetch, independent of the reference data above — needs
+          INACTIVE barbers too, which `useReferenceData`'s `GET /barbers`
+          deliberately never returns. */}
+      {canBarbers && <BarbersSection />}
+      {/* Also its own fetch, independent of the barber/service reference
+          data — an account exists whether or not the barber is still
+          active, so this section must not disappear behind that gate. */}
+      {canBarbers && <BarberAccountsSection />}
       {/* `barbers &&`/`services &&` rather than `referenceDataReady`: the
           flag says the same thing, but only the direct checks narrow the
           nullable lists for the props below. */}
-      {canBarbers && barbers && <BarbersSection barbers={barbers} />}
-      {/* Its own fetch, independent of the barber/service reference data —
-          an account exists whether or not the barber is still active, so this
-          section must not disappear behind that gate. */}
-      {canBarbers && <BarberAccountsSection />}
       {canSchedules && barbers && <SchedulesSection barbers={barbers} />}
       {canPricing && services && <PricingSection services={services} />}
     </section>
@@ -208,18 +215,71 @@ function WeekScheduleFields({ idPrefix, week, onChange }: WeekScheduleFieldsProp
   );
 }
 
-interface BarbersSectionProps {
-  readonly barbers: readonly PublicBarberResponse[];
+/**
+ * Migration 0013's three states, derived from `active`/`permanentLeave`
+ * rather than sent as an enum — same shape as `accountState` below, and for
+ * the same reason: the id travels to the DOM as `data-state` so the state is
+ * assertable and scannable, never carried by colour alone.
+ */
+function barberState(barber: {
+  readonly active: boolean;
+  readonly permanentLeave: boolean;
+}): { readonly id: string; readonly label: string } {
+  if (barber.active) {
+    return { id: 'activo', label: 'Activo' };
+  }
+  if (barber.permanentLeave) {
+    return { id: 'baja-definitiva', label: 'Baja definitiva' };
+  }
+  return { id: 'baja-temporal', label: 'De baja temporal' };
 }
 
-function BarbersSection({ barbers }: BarbersSectionProps) {
-  const [firstBarber] = barbers;
+/**
+ * Migration 0013 — the owner's own two reports: no way back from a baja
+ * (a barber out sick for a day had to be deactivated, then the whole week
+ * reconfigured to bring them back), and no way to remove a barber who never
+ * worked (typo'd email, never activated, six of them cluttering the shop's
+ * real database). Replaces the old "Barbero a dar de baja" `<select>` — fed
+ * by the ACTIVE-only public barbers, so an already-deactivated barber had
+ * literally no control that could reach them again — with a table of EVERY
+ * barber and the actions their own state allows:
+ *
+ *   Activo          → Dar de baja temporal · Baja definitiva
+ *   De baja temporal → Reactivar · Baja definitiva · Eliminar (sin turnos)
+ *   Baja definitiva  → Reactivar · Eliminar (sin turnos)
+ *
+ * "Dar de baja temporal"/"Reactivar" need no confirmation — both are one
+ * click away from each other, nothing is lost either way. "Baja definitiva"
+ * and "Eliminar" DO, following the exact two-step pattern
+ * `BarberAccountsSection`'s "Eliminar cuenta" already established: a click
+ * shows what happens in plain words, a second click is the only thing that
+ * actually writes.
+ */
+function BarbersSection() {
+  const [barbers, setBarbers] = useState<readonly BarberManagementResponse[] | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [week, setWeek] = useState<readonly WeekDayEntry[]>(buildDefaultWeek);
-  const [barberToDeactivate, setBarberToDeactivate] = useState<string>(firstBarber?.id ?? '');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The barber, and WHICH destructive action, awaiting confirmation — a
+   *  barber can only ever have one confirmation open at a time, but the two
+   *  destructive actions ("terminate" = baja definitiva, "delete" = eliminar)
+   *  say different things, so the action is part of the key. */
+  const [confirming, setConfirming] = useState<{ barberId: string; action: 'terminate' | 'delete' } | null>(null);
+
+  async function load() {
+    try {
+      const response = await apiGet<BarbersManagementListResponse>('/panel/barbers');
+      setBarbers(response.barbers);
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
 
   async function handleAddBarber(event: FormEvent) {
     event.preventDefault();
@@ -237,25 +297,62 @@ function BarbersSection({ barbers }: BarbersSectionProps) {
         schedule,
       });
       setNotice(
-        `${created.name} dado de alta correctamente. Le enviamos a ${email} un enlace para que active su cuenta y elija su contraseña. Recargá la página para verlo en los selectores.`,
+        `${created.name} dado de alta correctamente. Le enviamos a ${email} un enlace para que active su cuenta y elija su contraseña.`,
       );
       setName('');
       setEmail('');
       setWeek(buildDefaultWeek());
+      await load();
     } catch (err) {
       setError(describeError(err));
     }
   }
 
-  async function handleDeactivate() {
-    if (!barberToDeactivate) {
-      return;
-    }
+  async function handleDeactivate(barber: BarberManagementResponse) {
     setError(null);
     setNotice(null);
     try {
-      await apiPost(`/panel/barbers/${barberToDeactivate}/deactivate`);
-      setNotice('Barbero dado de baja correctamente.');
+      await apiPost(`/panel/barbers/${barber.id}/deactivate`);
+      setNotice(`${barber.name} queda de baja temporal. Su horario se conserva — un click y vuelve a estar activo.`);
+      await load();
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  async function handleReactivate(barber: BarberManagementResponse) {
+    setError(null);
+    setNotice(null);
+    try {
+      await apiPost(`/panel/barbers/${barber.id}/reactivate`);
+      setNotice(`${barber.name} vuelve a estar activo, con el mismo horario de antes.`);
+      await load();
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  async function handleTerminate(barber: BarberManagementResponse) {
+    setError(null);
+    setNotice(null);
+    try {
+      await apiPost(`/panel/barbers/${barber.id}/terminate`);
+      setConfirming(null);
+      setNotice(`${barber.name} queda de baja definitiva. Sus turnos siguen en el historial del local; su cuenta del panel fue eliminada.`);
+      await load();
+    } catch (err) {
+      setError(describeError(err));
+    }
+  }
+
+  async function handleDelete(barber: BarberManagementResponse) {
+    setError(null);
+    setNotice(null);
+    try {
+      await apiDelete(`/panel/barbers/${barber.id}`);
+      setConfirming(null);
+      setNotice(`${barber.name} fue eliminado del sistema.`);
+      await load();
     } catch (err) {
       setError(describeError(err));
     }
@@ -287,32 +384,91 @@ function BarbersSection({ barbers }: BarbersSectionProps) {
         <button type="submit">Dar de alta</button>
       </form>
 
-      {barbers.length === 0 ? (
-        <p className="empty-state">Todavía no hay barberos activos para dar de baja.</p>
-      ) : (
-        <form
-          className="management__form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleDeactivate();
-          }}
-        >
-          <span className="management__field">
-            <label htmlFor="mgmt-barber-deactivate">Barbero a dar de baja</label>
-            <select
-              id="mgmt-barber-deactivate"
-              value={barberToDeactivate}
-              onChange={(e) => setBarberToDeactivate(e.target.value)}
-            >
-              {barbers.map((barber) => (
-                <option key={barber.id} value={barber.id}>
-                  {barber.name}
-                </option>
-              ))}
-            </select>
-          </span>
-          <button type="submit">Dar de baja</button>
-        </form>
+      {barbers === null && !error && <p className="empty-state">Cargando barberos...</p>}
+      {barbers !== null && barbers.length === 0 && <p className="empty-state">Todavía no hay barberos.</p>}
+      {barbers !== null && barbers.length > 0 && (
+        <table className="management__table">
+          <thead>
+            <tr>
+              <th scope="col">Barbero</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {barbers.map((barber) => {
+              const state = barberState(barber);
+              return (
+                <tr key={barber.id}>
+                  <td>{barber.name}</td>
+                  <td>
+                    <span className="management__state" data-state={state.id}>
+                      {state.label}
+                    </span>
+                  </td>
+                  <td>
+                    {barber.active && (
+                      <button type="button" onClick={() => void handleDeactivate(barber)}>
+                        Dar de baja temporal
+                      </button>
+                    )}
+                    {!barber.active && (
+                      <button type="button" onClick={() => void handleReactivate(barber)}>
+                        Reactivar
+                      </button>
+                    )}
+                    {!barber.permanentLeave && (
+                      <button
+                        type="button"
+                        className="management__danger"
+                        onClick={() => setConfirming({ barberId: barber.id, action: 'terminate' })}
+                      >
+                        Baja definitiva
+                      </button>
+                    )}
+                    {/* Only ever offered once a barber is OFF the agenda —
+                        "Activo" never shows it, matching the action table:
+                        deleting someone still active would be a baja
+                        wearing the wrong name. */}
+                    {!barber.active && barber.canDelete && (
+                      <button
+                        type="button"
+                        className="management__danger"
+                        onClick={() => setConfirming({ barberId: barber.id, action: 'delete' })}
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                    {confirming?.barberId === barber.id && confirming.action === 'terminate' && (
+                      <p className="management__confirm" role="status">
+                        ¿Dar de baja definitiva a {barber.name}? Sus turnos quedan en el historial del local, pero su
+                        cuenta del panel se elimina — no vas a poder deshacerlo.{' '}
+                        <button type="button" className="management__danger" onClick={() => void handleTerminate(barber)}>
+                          Sí, baja definitiva
+                        </button>{' '}
+                        <button type="button" onClick={() => setConfirming(null)}>
+                          Cancelar
+                        </button>
+                      </p>
+                    )}
+                    {confirming?.barberId === barber.id && confirming.action === 'delete' && (
+                      <p className="management__confirm" role="status">
+                        ¿Eliminar a {barber.name}? Desaparece por completo del sistema — esto solo es posible porque
+                        nunca tuvo un turno. No vas a poder deshacerlo.{' '}
+                        <button type="button" className="management__danger" onClick={() => void handleDelete(barber)}>
+                          Sí, eliminar
+                        </button>{' '}
+                        <button type="button" onClick={() => setConfirming(null)}>
+                          Cancelar
+                        </button>
+                      </p>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   );
