@@ -92,4 +92,59 @@ describe('DrizzleClientRepository (Testcontainers)', () => {
 
     expect(found).toBeNull();
   });
+
+  // El bug que rompía el flujo público: una persona que ya reservó vuelve y
+  // escribe su teléfono distinto. Antes se creaba un cliente nuevo, y como
+  // la cuenta va con el email (UNIQUE), el insert moría con un 500.
+  describe('reconocer a quien ya vino', () => {
+    it('encuentra a la misma persona aunque el telefono venga escrito de otra forma', async () => {
+      const repo = new DrizzleClientRepository(db);
+      const creado = await repo.create({
+        name: 'Vuelve Siempre',
+        phone: '3515069498',
+        email: 'vuelve@example.com',
+        age: null,
+      });
+
+      for (const variante of ['351 506-9498', '+54 351 5069498', '0351 5069498', '351 15 5069498']) {
+        const encontrado = await repo.findByPhone(variante);
+        expect(encontrado?.id, `no reconoció "${variante}"`).toBe(creado.id);
+      }
+    });
+
+    it('no confunde dos numeros que son realmente distintos', async () => {
+      const repo = new DrizzleClientRepository(db);
+      await repo.create({ name: 'Uno', phone: '3517770001', email: 'uno-tel@example.com', age: null });
+      const dos = await repo.create({ name: 'Dos', phone: '3517770002', email: 'dos-tel@example.com', age: null });
+
+      expect((await repo.findByPhone('3517770002'))?.id).toBe(dos.id);
+      expect((await repo.findByPhone('3517770003'))).toBeNull();
+    });
+
+    it('encuentra por email, sin importar mayusculas ni espacios', async () => {
+      const repo = new DrizzleClientRepository(db);
+      const creado = await repo.create({
+        name: 'Por Email',
+        phone: '3516660001',
+        email: 'poremail@example.com',
+        age: null,
+      });
+
+      expect((await repo.findByEmail('poremail@example.com'))?.id).toBe(creado.id);
+      expect((await repo.findByEmail('  PorEmail@Example.COM  '))?.id).toBe(creado.id);
+    });
+
+    it('devuelve null para un email que nadie reclamo, y para uno vacio', async () => {
+      const repo = new DrizzleClientRepository(db);
+
+      expect(await repo.findByEmail('nadie-jamas@example.com')).toBeNull();
+      expect(await repo.findByEmail('')).toBeNull();
+    });
+
+    it('no explota con un telefono sin digitos', async () => {
+      const repo = new DrizzleClientRepository(db);
+
+      expect(await repo.findByPhone('sin numero')).toBeNull();
+    });
+  });
 });

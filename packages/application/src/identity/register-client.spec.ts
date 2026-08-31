@@ -133,3 +133,97 @@ describe('RegisterClientUseCase', () => {
     expect(expiredHolds.attachClientCalls).toEqual([{ holdId: 'hold-1', clientId: client?.id }]);
   });
 });
+
+// El bug que rompía el flujo público de punta a punta: el cliente se
+// deduplicaba por TELÉFONO pero la cuenta se crea con el EMAIL, que es
+// UNIQUE. Una persona que ya reservó y vuelve escribiendo su teléfono
+// distinto (con 0, con espacios, con +54) era tratada como cliente nuevo, y
+// el insert de la cuenta moría con un 500 en inglés en la cara del cliente.
+describe('RegisterClientUseCase — reconocer a quien ya vino', () => {
+  it('reconoce por email a la persona que vuelve, aunque escriba el telefono distinto', async () => {
+    const { useCase, clients, accounts } = buildUseCase();
+    await useCase.execute({
+      holdId: 'hold-1',
+      name: 'Tiago Rojas',
+      phone: '3515069498',
+      email: 'tiago@example.com',
+      age: null,
+    });
+    const primero = await clients.findByEmail('tiago@example.com');
+
+    // Vuelve: mismo email, el teléfono escrito de otra forma.
+    const segundo = await useCase.execute({
+      holdId: 'hold-1',
+      name: 'Tiago Rojas',
+      phone: '+54 351 506-9498',
+      email: 'tiago@example.com',
+      age: null,
+    });
+
+    expect(segundo.outcome).toBe('registered');
+    // Es la MISMA persona, no una segunda ficha.
+    expect(segundo.outcome === 'registered' && segundo.clientId).toBe(primero!.id);
+    expect(accounts.created).toHaveLength(1);
+  });
+
+  it('reconoce por telefono aunque venga escrito distinto, sin email de por medio', async () => {
+    const { useCase, clients } = buildUseCase();
+    await useCase.execute({
+      holdId: 'hold-1',
+      name: 'Marta',
+      phone: '3510001122',
+      email: 'marta@example.com',
+      age: null,
+    });
+
+    const otra = await clients.findByPhone('0351 15 0001122');
+
+    expect(otra).not.toBeNull();
+    expect(otra!.name).toBe('Marta');
+  });
+
+  it('el email manda sobre el telefono: no crea una ficha nueva ni intenta una cuenta duplicada', async () => {
+    const { useCase, accounts } = buildUseCase();
+    await useCase.execute({
+      holdId: 'hold-1',
+      name: 'Sofía',
+      phone: '3510002233',
+      email: 'sofia@example.com',
+      age: null,
+    });
+
+    // Mismo email, teléfono completamente distinto (cambió de número).
+    const result = await useCase.execute({
+      holdId: 'hold-1',
+      name: 'Sofía',
+      phone: '3519998877',
+      email: 'sofia@example.com',
+      age: null,
+    });
+
+    expect(result.outcome).toBe('registered');
+    expect(accounts.created).toHaveLength(1);
+  });
+
+  it('dos personas distintas siguen siendo dos personas distintas', async () => {
+    const { useCase, accounts } = buildUseCase();
+    await useCase.execute({
+      holdId: 'hold-1',
+      name: 'Uno',
+      phone: '3511110000',
+      email: 'uno@example.com',
+      age: null,
+    });
+
+    const segundo = await useCase.execute({
+      holdId: 'hold-1',
+      name: 'Dos',
+      phone: '3512220000',
+      email: 'dos@example.com',
+      age: null,
+    });
+
+    expect(segundo.outcome).toBe('registered');
+    expect(accounts.created).toHaveLength(2);
+  });
+});

@@ -34,7 +34,23 @@ export interface CreateClientInput {
  * dispatch the reassignment-offer notification.
  */
 export interface ClientRepository {
+  /** Matches on the phone's comparable form (`phoneKey`), so the same
+   *  number typed differently finds the same person instead of creating a
+   *  second one. */
   findByPhone(phone: string): Promise<Client | null>;
+
+  /**
+   * The client who already claimed this email, if any.
+   *
+   * Phone alone was never enough to recognise a returning client: the
+   * account created at the end of a web booking is keyed by EMAIL, which is
+   * UNIQUE across `users`, so a person who came back and typed their phone
+   * differently became a new client whose account insert then collided —
+   * the booking died with a raw 500. Email is the key the client themselves
+   * treats as their identity here (it is how they log in), so it decides
+   * first.
+   */
+  findByEmail(email: string): Promise<Client | null>;
   findById(id: string): Promise<Client | null>;
   create(input: CreateClientInput): Promise<Client>;
   /**

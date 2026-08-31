@@ -1,4 +1,5 @@
 import type { Client, ClientRepository, CreateClientInput } from '../client';
+import { phoneKey } from '../phone-key';
 
 /**
  * In-memory `ClientRepository` test double — same role `FakeHoldRepository`
@@ -13,7 +14,17 @@ export class FakeClientRepository implements ClientRepository {
   private nextId = 1;
 
   async findByPhone(phone: string): Promise<Client | null> {
-    return this.byPhone.get(phone) ?? null;
+    return this.byPhone.get(phoneKey(phone)) ?? null;
+  }
+
+  async findByEmail(email: string): Promise<Client | null> {
+    const wanted = email.trim().toLowerCase();
+    for (const client of this.byId.values()) {
+      if (client.email && client.email.toLowerCase() === wanted) {
+        return client;
+      }
+    }
+    return null;
   }
 
   async findById(id: string): Promise<Client | null> {
@@ -22,7 +33,7 @@ export class FakeClientRepository implements ClientRepository {
 
   async create(input: CreateClientInput): Promise<Client> {
     const client: Client = { id: `client-${this.nextId++}`, ...input };
-    this.byPhone.set(client.phone, client);
+    this.byPhone.set(phoneKey(client.phone), client);
     this.byId.set(client.id, client);
     return client;
   }
@@ -34,7 +45,7 @@ export class FakeClientRepository implements ClientRepository {
   /** Test-only seam so a spec can make `findById` resolve a client it never
    *  went through `create()` for (e.g. one already seeded on an appointment). */
   seed(client: Client): void {
-    this.byPhone.set(client.phone, client);
+    this.byPhone.set(phoneKey(client.phone), client);
     this.byId.set(client.id, client);
   }
 }

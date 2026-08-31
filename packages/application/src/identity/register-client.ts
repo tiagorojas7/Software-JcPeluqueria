@@ -35,7 +35,15 @@ export class RegisterClientUseCase {
   ) {}
 
   async execute(input: RegisterClientInput): Promise<RegisterClientResult> {
+    // El EMAIL decide primero, después el teléfono. No es un orden
+    // arbitrario: la cuenta que se crea abajo va con el email, y
+    // `users.email` es UNIQUE. Buscando solo por teléfono, una persona que
+    // ya había reservado y volvía escribiendo su número distinto se
+    // convertía en un cliente nuevo cuyo insert de cuenta chocaba contra el
+    // email ya tomado — y eso salía como un 500 en inglés justo al confirmar
+    // la reserva. Reconocerla por email cierra el flujo por donde se rompía.
     const client =
+      (await this.clients.findByEmail(input.email)) ??
       (await this.clients.findByPhone(input.phone)) ??
       (await this.clients.create({
         name: input.name,

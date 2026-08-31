@@ -19,7 +19,11 @@ describe('ListPublicBarbersUseCase', () => {
     const useCase = new ListPublicBarbersUseCase(barbers);
     const result = await useCase.execute();
 
-    expect(result.barbers).toEqual([{ id: 'barber-1', name: 'Cristian Gómez', active: true }]);
+    // `permanentLeave` se sumó a `Barber` con la baja definitiva; este
+    // esperado quedó sin actualizar y el test venía rojo desde entonces.
+    expect(result.barbers).toEqual([
+      { id: 'barber-1', name: 'Cristian Gómez', active: true, permanentLeave: false },
+    ]);
   });
 
   it('returns an empty list when there are no active barbers', async () => {
