@@ -86,6 +86,22 @@ describe('AdminMarkCompletedUseCase (10.9/10.11) — marcar realizado sin restri
     );
   });
 
+  // Bug real de producción (turno a38c86ae): un walk-in sin cliente
+  // identificado (`clientId: null`) es un `Appointment` válido — sólo
+  // `AppointmentRepository.findById` lo negaba (infra bug). Esto prueba que,
+  // una vez encontrado, el caso de uso lo marca realizado sin depender del
+  // cliente para nada.
+  it('marks realizado a turno con clientId null — el cliente no identificado no es motivo para negarlo', async () => {
+    const appointments = new FakeAppointmentRepository();
+    appointments.seed(buildAppointment({ clientId: null }));
+    const useCase = buildUseCase(appointments);
+
+    const result = await useCase.execute('appt-1');
+
+    expect(result.status).toBe('realizado');
+    expect(result.clientId).toBeNull();
+  });
+
   it('rejects marking an appointment id that does not exist', async () => {
     const appointments = new FakeAppointmentRepository();
     const useCase = buildUseCase(appointments);

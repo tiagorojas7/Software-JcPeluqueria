@@ -111,6 +111,31 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
     expect(appointment).toBeNull();
   });
 
+  // Bug real de producción (turno a38c86ae): un walk-in sin cliente
+  // identificado (`client_id NULL` — admin-operations spec, "Carga de
+  // walk-ins") es visible en la mesa del día pero `findById` lo trataba como
+  // "no existe", dejándolo sin forma de marcarlo realizado ni cancelarlo
+  // desde el panel. `client_id === null` es un walk-in sin identificar, no
+  // una fila ausente.
+  it('finds a walk-in appointment with NO identified client — clientId NULL must not read back as "not found"', async () => {
+    const id = crypto.randomUUID();
+    await client`insert into slot_occupancies (id, barber_id, service_id, client_id, channel, status, time_range)
+                 values (${id}, ${barberId}, ${serviceId}, ${null}, 'walk_in', 'realizado', ${range('21:00', '21:30')}::tstzrange)`;
+    const repo = new DrizzleAppointmentRepository(db);
+
+    const appointment = await repo.findById(id);
+
+    expect(appointment).toMatchObject({
+      id,
+      barberId,
+      serviceId,
+      clientId: null,
+      channel: 'walk_in',
+      status: 'realizado',
+      deposit: { kind: 'not_applicable' },
+    });
+  });
+
   // Discovered running cablear-el-mvp Slice C's own manual evidence (C.7)
   // against a real database: `SelfCancelAppointmentUseCase` answers a
   // missing appointment identically to someone else's ("no oracle" — see its

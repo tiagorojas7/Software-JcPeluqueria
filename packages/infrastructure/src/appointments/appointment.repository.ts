@@ -91,7 +91,7 @@ export class DrizzleAppointmentRepository implements AppointmentRepository {
       .where(eq(slotOccupancies.id, id))
       .limit(1);
     const row = rows[0];
-    if (!row || row.clientId === null) {
+    if (!row) {
       return null;
     }
     return {

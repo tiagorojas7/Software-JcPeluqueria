@@ -59,6 +59,24 @@ describe('AdminCancelAppointmentUseCase', () => {
     expect(paymentPort.refundCalls).toEqual([{ paymentId: 'pay-1', amountCents: 500000 }]);
   });
 
+  // Bug real de producción (turno a38c86ae): un walk-in sin cliente
+  // identificado (`clientId: null`) es un `Appointment` válido — sólo
+  // `AppointmentRepository.findById` lo negaba (infra bug). Esto prueba que,
+  // una vez encontrado, el caso de uso lo cancela sin depender del cliente
+  // para nada.
+  it('cancela un turno con clientId null — el cliente no identificado no es motivo para negarlo', async () => {
+    const appointments = new FakeAppointmentRepository();
+    appointments.seed(buildAppointment({ clientId: null }));
+    const paymentPort = new FakePaymentPort();
+    const useCase = new AdminCancelAppointmentUseCase(appointments, paymentPort, new FakeClock(-180, at('08:00')));
+
+    const cancelled = await useCase.execute('appt-1');
+
+    expect(cancelled.status).toBe('cancelado');
+    expect(cancelled.clientId).toBeNull();
+    expect(paymentPort.refundCalls).toEqual([]);
+  });
+
   it('rejects cancelling an appointment that does not exist', async () => {
     const appointments = new FakeAppointmentRepository();
     const paymentPort = new FakePaymentPort();
