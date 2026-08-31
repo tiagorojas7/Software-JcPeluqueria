@@ -125,7 +125,11 @@ export class ProcessPaymentUseCase {
    *  `GenerateAbsenceReassignmentOffers`'s own "never crash the confirmation
    *  path over a notification" posture. */
   private async notifyBookingConfirmed(appointment: Appointment): Promise<void> {
-    const client = await this.clients.findById(appointment.clientId);
+    // A walk-in never carries a settled deposit (it is never web-booked), so
+    // this path never actually meets one — but `clientId` is nullable on
+    // `Appointment` in general, and a missing client is the same no-op a
+    // missing email already is.
+    const client = appointment.clientId ? await this.clients.findById(appointment.clientId) : null;
     if (!client || !client.email) {
       return;
     }

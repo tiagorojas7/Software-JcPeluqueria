@@ -51,7 +51,13 @@ export class ConfirmAbsenceUseCase {
     const appointment: Appointment = { ...input.appointment, status, deposit };
     const absence: AbsenceRecord = {
       appointmentId: input.appointment.id,
-      clientId: input.appointment.clientId,
+      // `ausente` is reachable only from `sin_registrado`, itself reachable
+      // only from `reservado` (appointment-state-machine.ts's
+      // `VALID_TRANSITIONS`) — a walk-in never visits either state, it enters
+      // straight into `realizado` and stays there (appointment-lifecycle
+      // spec). An appointment that legitimately reaches this use case always
+      // carries a real client.
+      clientId: input.appointment.clientId!,
       confirmedByUserId: input.actor.userId,
       confirmedAt: this.clock.now(),
       depositForfeited: deposit.kind === 'forfeited',

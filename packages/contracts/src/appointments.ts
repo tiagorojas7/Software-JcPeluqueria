@@ -54,12 +54,16 @@ export interface PhoneAppointmentResponse {
  * that returns the appointment it just changed (mark-completed, edit,
  * cancel) — same field shape as `PhoneAppointmentResponse`, kept as its own
  * type because those actions are not tied to the phone-booking flow.
+ *
+ * `clientId` is nullable, matching `WalkInResponse.clientId`: these actions
+ * apply to "cualquier turno" (admin-operations spec) with no channel
+ * restriction, so a walk-in with no identified customer is one of them.
  */
 export interface AppointmentResponse {
   readonly id: string;
   readonly barberId: string;
   readonly serviceId: string;
-  readonly clientId: string;
+  readonly clientId: string | null;
   readonly status: string;
   readonly startsAt: string;
   readonly endsAt: string;

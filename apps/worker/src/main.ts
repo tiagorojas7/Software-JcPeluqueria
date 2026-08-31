@@ -268,7 +268,11 @@ async function main(): Promise<void> {
         console.log(`[worker] appointment.reminder ${job.data.appointmentId} -> skipped (appointment gone)`);
         continue;
       }
-      const client = await clientsForReminder.findById(appointment.clientId);
+      // A reminder is only ever scheduled from `CreatePhoneAppointmentUseCase`
+      // or `ProcessPaymentUseCase`, never from a walk-in — but `clientId` is
+      // nullable on `Appointment` in general, so guard the lookup the same
+      // way a missing client already degrades the email below to `null`.
+      const client = appointment.clientId ? await clientsForReminder.findById(appointment.clientId) : null;
       await appointmentReminder.execute({
         appointmentId: appointment.id,
         barberId: appointment.barberId,

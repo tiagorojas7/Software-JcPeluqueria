@@ -106,7 +106,12 @@ export class GenerateAbsenceReassignmentOffers {
    * it by phone even when email dispatch is skipped.
    */
   private async notifyClient(appointment: Appointment, hold: Hold): Promise<void> {
-    const client = await this.clients.findById(appointment.clientId);
+    // Every appointment reaching here came from
+    // `findReservedByBarberInRange`/`findReservedByBarberFrom`, both scoped to
+    // `status = 'reservado'` — a walk-in never reaches `reservado`
+    // (appointment-lifecycle spec), so a `reservado` turno always carries a
+    // real client.
+    const client = await this.clients.findById(appointment.clientId!);
     if (!client || !client.email) {
       return;
     }

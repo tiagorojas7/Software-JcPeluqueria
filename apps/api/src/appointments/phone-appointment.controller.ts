@@ -11,7 +11,9 @@ function toResponse(appointment: Appointment): PhoneAppointmentResponse {
     id: appointment.id,
     barberId: appointment.barberId,
     serviceId: appointment.serviceId,
-    clientId: appointment.clientId,
+    // `CreatePhoneAppointmentUseCase` always resolves or creates a real
+    // client before returning (never a walk-in's unidentified case).
+    clientId: appointment.clientId!,
     status: appointment.status,
     startsAt: appointment.timeRange.start.toISOString(),
     endsAt: appointment.timeRange.end.toISOString(),

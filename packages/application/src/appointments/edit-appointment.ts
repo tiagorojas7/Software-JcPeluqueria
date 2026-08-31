@@ -97,13 +97,18 @@ export class EditAppointmentUseCase {
    *  `ProcessPaymentUseCase.notifyBookingConfirmed`/
    *  `GenerateAbsenceReassignmentOffers.notifyClient` already establish: the
    *  edit itself already succeeded by the time this runs, so a missing
-   *  client/email/barber degrades this to a no-op, never a thrown error. */
+   *  client/email/barber degrades this to a no-op, never a thrown error.
+   *  `clientId` is null for an edited walk-in with no identified customer —
+   *  same no-op, one step earlier than the lookup. */
   private async notifyAppointmentUpdated(
-    clientId: string,
+    clientId: string | null,
     barberId: string,
     serviceName: string,
     startsAt: Date,
   ): Promise<void> {
+    if (!clientId) {
+      return;
+    }
     const client = await this.clients.findById(clientId);
     if (!client || !client.email) {
       return;
