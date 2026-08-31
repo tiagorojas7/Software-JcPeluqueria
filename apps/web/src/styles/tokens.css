@@ -103,8 +103,7 @@
      humanist sans for everything else. Both carry a full fallback stack —
      the Google Fonts link in `index.html` can fail. */
   --font-display: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
-  --font-body:
-    'Montserrat', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-body: 'Montserrat', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
@@ -181,7 +180,9 @@ body {
       transparent 26px
     ),
     radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: auto, 3px 3px;
+  background-size:
+    auto,
+    3px 3px;
   background-attachment: fixed;
 }
 
@@ -380,9 +381,7 @@ button {
 
 button:hover {
   background: var(--color-accent-hover);
-  box-shadow:
-    var(--sheen-hover),
-    var(--glow-accent);
+  box-shadow: var(--sheen-hover), var(--glow-accent);
 }
 
 button:active {

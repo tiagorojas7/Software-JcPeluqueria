@@ -73,8 +73,11 @@ describe('AccountAppointmentsList', () => {
       />,
     );
 
-    expect(screen.getByText('15/05')).toBeInTheDocument();
-    expect(screen.getByText('16/05')).toBeInTheDocument();
+    // La fecha ahora se escribe como la diría una persona ("viernes 15 de
+    // mayo"), no en DD/MM: el punto del test sigue siendo el mismo, que la
+    // fecha distinga dos turnos de la misma hora.
+    expect(screen.getByText(/viernes 15 de mayo/i)).toBeInTheDocument();
+    expect(screen.getByText(/s.bado 16 de mayo/i)).toBeInTheDocument();
     // Both turnos are at the same hour: the date is the only thing telling
     // them apart, which is the whole point.
     expect(screen.getAllByText('09:00')).toHaveLength(2);
@@ -168,5 +171,82 @@ describe('AccountAppointmentsList', () => {
 
     expect(screen.getByText('Corte + Barba')).toBeInTheDocument();
     expect(screen.getByText(/cristian g.mez/i)).toBeInTheDocument();
+  });
+});
+
+// El dueño abrió su cuenta y encontró 44 turnos apilados sin ningún orden:
+// "se puede perder fácilmente". Lo que una persona va a buscar a esta
+// pantalla es UNA cosa — cuándo es su próximo turno — y recién después, tal
+// vez, su historial.
+describe('AccountAppointmentsList — orden y foco', () => {
+  const AHORA = Date.parse('2026-09-01T15:00:00.000Z');
+
+  beforeEach(() => {
+    vi.mocked(nowMs).mockReturnValue(AHORA);
+  });
+
+  const futuro1 = buildAppointment({ id: 'f1', startsAt: '2026-09-02T13:00:00.000Z', endsAt: '2026-09-02T13:30:00.000Z' });
+  const futuro2 = buildAppointment({ id: 'f2', startsAt: '2026-09-10T13:00:00.000Z', endsAt: '2026-09-10T13:30:00.000Z' });
+  const pasado1 = buildAppointment({ id: 'p1', status: 'realizado', startsAt: '2026-08-20T13:00:00.000Z', endsAt: '2026-08-20T13:30:00.000Z' });
+  const pasado2 = buildAppointment({ id: 'p2', status: 'cancelado', startsAt: '2026-08-25T13:00:00.000Z', endsAt: '2026-08-25T13:30:00.000Z' });
+
+  it('destaca el proximo turno arriba de todo', () => {
+    render(<AccountAppointmentsList appointments={[pasado1, futuro2, futuro1, pasado2]} onCancel={vi.fn()} />);
+
+    const destacado = screen.getByRole('region', { name: /tu pr.ximo turno/i });
+    // El más cercano de los dos futuros, no el primero de la lista.
+    expect(destacado).toHaveTextContent(/mi.rcoles 2 de septiembre/i);
+  });
+
+  it('separa los proximos del historial, y no los mezcla', () => {
+    render(<AccountAppointmentsList appointments={[pasado1, futuro2, futuro1, pasado2]} onCancel={vi.fn()} />);
+
+    const proximos = screen.getByRole('region', { name: /^pr.ximos turnos$/i });
+    const historial = screen.getByRole('region', { name: /historial/i });
+
+    expect(proximos).toHaveTextContent(/10 de septiembre/i);
+    expect(proximos).not.toHaveTextContent(/agosto/i);
+    expect(historial).toHaveTextContent(/agosto/i);
+  });
+
+  it('los proximos van del mas cercano al mas lejano', () => {
+    render(<AccountAppointmentsList appointments={[futuro2, futuro1]} onCancel={vi.fn()} />);
+
+    const fechas = screen.getAllByTestId('appointment-date').map((el) => el.textContent);
+    expect(fechas[0]).toMatch(/2 de septiembre/i);
+    expect(fechas[1]).toMatch(/10 de septiembre/i);
+  });
+
+  it('el historial va del mas reciente al mas viejo: lo ultimo que pasó, primero', () => {
+    render(<AccountAppointmentsList appointments={[pasado1, pasado2]} onCancel={vi.fn()} />);
+
+    const fechas = screen.getAllByTestId('appointment-date').map((el) => el.textContent);
+    expect(fechas[0]).toMatch(/25 de agosto/i);
+    expect(fechas[1]).toMatch(/20 de agosto/i);
+  });
+
+  it('sin turnos futuros, no promete un proximo turno que no existe', () => {
+    render(<AccountAppointmentsList appointments={[pasado1]} onCancel={vi.fn()} />);
+
+    expect(screen.queryByRole('region', { name: /tu pr.ximo turno/i })).toBeNull();
+    expect(screen.getByText(/no ten.s ning.n turno agendado/i)).toBeInTheDocument();
+  });
+
+  it('permite filtrar el historial por estado', () => {
+    render(<AccountAppointmentsList appointments={[pasado1, pasado2]} onCancel={vi.fn()} />);
+
+    const historial = screen.getByRole('region', { name: /historial/i });
+    expect(historial).toHaveTextContent(/20 de agosto/i);
+
+    fireEvent.change(screen.getByLabelText(/mostrar/i), { target: { value: 'cancelado' } });
+
+    expect(screen.getByRole('region', { name: /historial/i })).not.toHaveTextContent(/20 de agosto/i);
+    expect(screen.getByRole('region', { name: /historial/i })).toHaveTextContent(/25 de agosto/i);
+  });
+
+  it('escribe la fecha como la diria una persona, no en DD/MM', () => {
+    render(<AccountAppointmentsList appointments={[futuro1]} onCancel={vi.fn()} />);
+
+    expect(screen.getByTestId('appointment-date')).toHaveTextContent(/mi.rcoles 2 de septiembre/i);
   });
 });

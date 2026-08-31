@@ -8,7 +8,7 @@ import {
   type OccupancyChannel,
   type TimeWindow,
 } from '@jc-barberia/domain';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import { freeRanges, isExclusionViolation, toRangeLiteral } from '../db/occupancy-sql';
@@ -226,7 +226,10 @@ export class DrizzleAppointmentRepository implements AppointmentRepository {
       })
       .from(slotOccupancies)
       .leftJoin(deposits, eq(slotOccupancies.depositId, deposits.id))
-      .where(eq(slotOccupancies.clientId, clientId))
+      // `ne(status, 'held')`: un hold sin confirmar no es un turno del
+      // cliente — no es siquiera un estado que `Appointment` admita. Traerlos
+      // llenaba "Mi cuenta" de reservas abandonadas rotuladas "HELD".
+      .where(and(eq(slotOccupancies.clientId, clientId), ne(slotOccupancies.status, 'held')))
       // Sin ORDER BY, Postgres devuelve las filas en el orden que le
       // conviene, y "Mi cuenta" las mostraba tal cual: 39 turnos sin ningún
       // criterio. El orden cronológico es el mínimo sobre el que la pantalla

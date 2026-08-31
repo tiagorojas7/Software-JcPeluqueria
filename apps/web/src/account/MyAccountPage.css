@@ -183,3 +183,71 @@
     width: 100%;
   }
 }
+
+/* ---------- Jerarquía de "Mi cuenta" ----------
+   La pantalla tenía 44 turnos apilados sin ningún orden. Ahora responde
+   primero la única pregunta con la que alguien entra acá — cuándo es mi
+   próximo turno — y subordina todo lo demás. El CSS acompaña ese orden:
+   el próximo turno pesa, el resto no compite con él. */
+
+.account-appointments > section {
+  margin-bottom: var(--space-6);
+}
+
+.account-appointments h3 {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-champagne);
+}
+
+.account-appointments ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* El próximo turno: acento a la izquierda y algo más de aire. Es la fila que
+   la persona vino a mirar, y tiene que ganarle al resto de un vistazo. */
+.account-appointments__item--next {
+  border-left-width: 3px;
+  border-left-color: var(--color-accent);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-5);
+}
+
+.account-appointments__item--next .account-appointments__time {
+  font-size: var(--text-xl);
+}
+
+.account-appointments__item--next .account-appointments__date {
+  color: var(--color-champagne);
+}
+
+/* El historial es material de consulta: entra más chico y más apagado, para
+   que no compita con lo que todavía se puede hacer. */
+.account-appointments__history-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.account-appointments__history-head h3 {
+  margin: 0;
+  margin-right: auto;
+}
+
+.account-appointments__history-head label {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.account-appointments__history-head select {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}

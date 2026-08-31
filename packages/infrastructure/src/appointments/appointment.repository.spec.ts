@@ -346,6 +346,22 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
       expect(found.map((a) => a.id)).toEqual([primero, segundo, tercero]);
     });
 
+    // En la base real 22 de los 44 turnos del cliente eran `held`: reservas
+    // empezadas y abandonadas antes de pagar. "Mi cuenta" las listaba todas
+    // con el estado crudo "HELD", en inglés. Un hold ni siquiera es uno de
+    // los estados que `Appointment` admite, así que devolverlos hacía que el
+    // tipo mintiera — la exclusión vive en la consulta.
+    it('no devuelve los holds sin confirmar: no son turnos del cliente', async () => {
+      const own = await newClientRecord();
+      const turno = await insertAppointmentFor(own, barberId, '02:00', '02:30', 'reservado');
+      await insertAppointmentFor(own, barberId, '02:30', '03:00', 'held');
+      const repo = new DrizzleAppointmentRepository(db);
+
+      const found = await repo.findByClientId(own);
+
+      expect(found.map((a) => a.id)).toEqual([turno]);
+    });
+
     it('returns an empty list for a client with no appointments, never an error', async () => {
       const lonely = await newClientRecord();
       const repo = new DrizzleAppointmentRepository(db);

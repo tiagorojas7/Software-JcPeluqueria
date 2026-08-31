@@ -61,6 +61,16 @@ export interface AppointmentRepository {
    * structural-narrowing shape `findReservedByBarberInRange` already uses for
    * a barber — never a filter applied after a wider read.
    */
+  /**
+   * Los turnos del cliente — nunca sus holds sin confirmar.
+   *
+   * `slot_occupancies` guarda holds y turnos en la misma tabla, pero un
+   * `held` NO es un `Appointment`: ni siquiera es uno de los estados que
+   * `Appointment['status']` admite. Devolverlos hacía que el tipo mintiera,
+   * y "Mi cuenta" terminaba mostrando 22 reservas abandonadas de 44 filas
+   * con el estado crudo "HELD" en inglés. La exclusión vive en la consulta,
+   * que es donde el contrato se puede sostener de verdad.
+   */
   findByClientId(clientId: string): Promise<Appointment[]>;
 
   /**
