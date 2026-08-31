@@ -98,3 +98,28 @@ export function dayOfWeekOfCalendarDate(calendarDate: string): number | null {
   const leapCorrection = Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400);
   return (y + leapCorrection + SAKAMOTO_MONTH_OFFSETS[month - 1]! + day) % 7;
 }
+
+const DAY_NAMES_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] as const;
+const MONTH_NAMES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+] as const;
+
+/**
+ * A `YYYY-MM-DD` written the way a person says it: "jueves 20 de agosto".
+ *
+ * No year: every date this app shows is within the next few weeks, and the
+ * year adds noise to the one line where the visitor is checking that the
+ * turno they are about to pay for is the one they meant. Anything it cannot
+ * parse comes back untouched, so a caller never renders the word
+ * "undefined" at someone.
+ */
+export function formatCalendarDateLong(calendarDate: string): string {
+  const dayOfWeek = dayOfWeekOfCalendarDate(calendarDate);
+  if (dayOfWeek === null) {
+    return calendarDate;
+  }
+  const month = Number(calendarDate.slice(5, 7));
+  const day = Number(calendarDate.slice(8, 10));
+  return `${DAY_NAMES_LONG[dayOfWeek]} ${day} de ${MONTH_NAMES[month - 1]}`;
+}

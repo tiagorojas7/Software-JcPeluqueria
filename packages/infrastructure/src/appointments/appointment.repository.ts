@@ -226,7 +226,12 @@ export class DrizzleAppointmentRepository implements AppointmentRepository {
       })
       .from(slotOccupancies)
       .leftJoin(deposits, eq(slotOccupancies.depositId, deposits.id))
-      .where(eq(slotOccupancies.clientId, clientId));
+      .where(eq(slotOccupancies.clientId, clientId))
+      // Sin ORDER BY, Postgres devuelve las filas en el orden que le
+      // conviene, y "Mi cuenta" las mostraba tal cual: 39 turnos sin ningún
+      // criterio. El orden cronológico es el mínimo sobre el que la pantalla
+      // puede después separar próximos de pasados.
+      .orderBy(sql`lower(${slotOccupancies.timeRange})`);
 
     return rows.map((row) => ({
       id: row.id,

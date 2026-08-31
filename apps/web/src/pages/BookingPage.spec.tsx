@@ -112,6 +112,60 @@ describe('BookingPage (D.5)', () => {
     expect(screen.queryByText(/no hay horarios disponibles/i)).toBeNull();
   });
 
+  // El resumen previo al pago decia servicio, barbero, duracion, seña y total
+  // — todo menos CUANDO. La persona esta por pagar una seña por un turno sin
+  // ver la hora que eligio, que es justamente el dato que fue a buscar.
+  it('el resumen muestra el dia y la hora elegidos antes de pagar la seña', async () => {
+    mockReferenceData({
+      slots: [{ startsAt: '2026-08-20T12:00:00.000Z', endsAt: '2026-08-20T12:30:00.000Z' }],
+    });
+    vi.mocked(apiPost).mockResolvedValueOnce({ holdId: 'hold-1', expiresAt: '2026-08-20T12:15:00.000Z' });
+    render(<BookingPage />);
+
+    fireEvent.change(await screen.findByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
+    fireEvent.click(screen.getByRole('button', { name: /ver horarios disponibles/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^09:00$/i }));
+
+    // 12:00Z = 09:00 local (UTC-3), el mismo horario que eligio.
+    const horario = await screen.findByText(/09:00/, { selector: 'dd' });
+    expect(horario).toBeInTheDocument();
+    // Y el dia, en formato legible — no la fecha ISO cruda.
+    expect(screen.getByText(/jueves 20 de agosto/i)).toBeInTheDocument();
+  });
+
+  it('no promete un horario antes de que la persona elija uno', async () => {
+    mockReferenceData({
+      slots: [{ startsAt: '2026-08-20T12:00:00.000Z', endsAt: '2026-08-20T12:30:00.000Z' }],
+    });
+    render(<BookingPage />);
+
+    fireEvent.change(await screen.findByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
+    fireEvent.click(screen.getByRole('button', { name: /ver horarios disponibles/i }));
+    await screen.findByRole('button', { name: /^09:00$/i });
+
+    // Todavia no eligio: el resumen no puede mostrar una hora inventada.
+    expect(screen.queryByText(/09:00/, { selector: 'dd' })).toBeNull();
+  });
+
+  it('al empezar de nuevo no arrastra el horario elegido antes', async () => {
+    mockReferenceData({
+      slots: [{ startsAt: '2026-08-20T12:00:00.000Z', endsAt: '2026-08-20T12:30:00.000Z' }],
+    });
+    vi.mocked(apiPost).mockResolvedValueOnce({ holdId: 'hold-1', expiresAt: '2026-08-20T12:15:00.000Z' });
+    render(<BookingPage />);
+
+    fireEvent.change(await screen.findByLabelText(/fecha/i), { target: { value: '2026-08-20' } });
+    fireEvent.click(screen.getByRole('button', { name: /ver horarios disponibles/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^09:00$/i }));
+    await screen.findByText(/09:00/, { selector: 'dd' });
+
+    fireEvent.click(screen.getByRole('button', { name: /empezar de nuevo/i }));
+
+    // Volvió al principio: no puede seguir mostrando la hora de la reserva
+    // que acaba de abandonar.
+    expect(screen.queryByText(/09:00/, { selector: 'dd' })).toBeNull();
+  });
+
   // cuenta-cliente-persistente: once the account exists the client is about
   // to be sent to MercadoPago (CheckoutStep's link navigates the browser
   // away) — this may be his only chance to see this exact page again, so the

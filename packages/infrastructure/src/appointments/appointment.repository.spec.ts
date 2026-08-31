@@ -325,6 +325,27 @@ describe('DrizzleAppointmentRepository (Testcontainers)', () => {
       expect(found.map((a) => a.id).sort()).toEqual([cancelado, reservado].sort());
     });
 
+    // El dueño abrió "Mi cuenta" con 39 turnos y los vio dispersos: sin
+    // ORDER BY, Postgres devuelve las filas en el orden que se le canta, así
+    // que la pantalla los listaba sin ningún criterio. Ordenar acá le da a
+    // cualquier consumidor una secuencia estable sobre la cual agrupar.
+    it('devuelve los turnos ordenados cronologicamente, del mas viejo al mas nuevo', async () => {
+      const own = await newClientRecord();
+      // Franja propia (03:00-04:30): el archivo comparte `barberId` y no
+      // limpia entre tests, así que reusar los horarios del test de arriba
+      // choca contra la restricción de no-solapamiento del barbero.
+      // Insertados salteados a propósito: si el orden viniera del insert,
+      // este test no probaría nada.
+      const segundo = await insertAppointmentFor(own, barberId, '03:30', '04:00');
+      const tercero = await insertAppointmentFor(own, barberId, '04:00', '04:30');
+      const primero = await insertAppointmentFor(own, barberId, '03:00', '03:30');
+      const repo = new DrizzleAppointmentRepository(db);
+
+      const found = await repo.findByClientId(own);
+
+      expect(found.map((a) => a.id)).toEqual([primero, segundo, tercero]);
+    });
+
     it('returns an empty list for a client with no appointments, never an error', async () => {
       const lonely = await newClientRecord();
       const repo = new DrizzleAppointmentRepository(db);

@@ -16,7 +16,7 @@ import { HoldCountdown } from '../booking/HoldCountdown';
 import { apiGet, apiPost, describeError } from '../shared/api-client';
 import { formatPriceArs } from '../shared/money';
 import { nowMs } from '../shared/now';
-import { utcIsoToShopLocalTime } from '../shared/shop-time';
+import { formatCalendarDateLong, utcIsoToShopLocalTime } from '../shared/shop-time';
 import { useReferenceData } from '../shared/use-reference-data';
 import './BookingPage.css';
 
@@ -54,6 +54,8 @@ export function BookingPage() {
   const [serviceId, setServiceId] = useState('');
   const [date, setDate] = useState('');
   const [slots, setSlots] = useState<readonly AvailabilitySlot[]>([]);
+  /** Shop-local `HH:mm` of the chosen slot, or `''` before one is chosen. */
+  const [selectedStartTime, setSelectedStartTime] = useState('');
   // D.5: distinguishes "todavía no buscaste" from "buscaste y no hay" —
   // `AvailabilityPicker` (apps/web/src/booking/, outside this slice) shows
   // "No hay horarios disponibles" for ANY empty `slots`, with no way to
@@ -132,14 +134,18 @@ export function BookingPage() {
   async function handleSelectSlot(slot: AvailabilitySlot) {
     setError(null);
     try {
+      const startTime = utcIsoToShopLocalTime(slot.startsAt);
       const created = await apiPost<HoldResponse>('/holds', {
         barberId,
         serviceId,
         calendarDate: date,
-        startTime: utcIsoToShopLocalTime(slot.startsAt),
+        startTime,
         endTime: utcIsoToShopLocalTime(slot.endsAt),
       });
       setHold(created);
+      // Guardado para el resumen: es el dato por el que la persona vino, y
+      // el único que el resumen no mostraba antes de pedirle una seña.
+      setSelectedStartTime(startTime);
     } catch (err) {
       setError(describeError(err));
     }
@@ -174,6 +180,7 @@ export function BookingPage() {
     setCheckout(null);
     setSlots([]);
     setHasSearched(false);
+    setSelectedStartTime('');
   }
 
   const referenceDataReady = barbers !== null && services !== null && !loadError;
@@ -241,6 +248,21 @@ export function BookingPage() {
               typed, instead of appearing for the first time at checkout. */}
           {(hold || hasSearched) && selectedBarber && selectedService && (
             <dl className="booking-page__selection">
+              {/* Día y hora al principio: es lo que la persona vino a
+                  reservar y lo primero que necesita reconocer para saber
+                  que está pagando por el turno correcto. */}
+              {date && (
+                <div>
+                  <dt>Día</dt>
+                  <dd>{formatCalendarDateLong(date)}</dd>
+                </div>
+              )}
+              {selectedStartTime && (
+                <div>
+                  <dt>Hora</dt>
+                  <dd>{selectedStartTime}</dd>
+                </div>
+              )}
               <div>
                 <dt>Servicio</dt>
                 <dd>{selectedService.name}</dd>

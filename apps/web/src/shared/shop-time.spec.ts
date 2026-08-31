@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { dayOfWeekOfCalendarDate, utcIsoToShopLocalDate } from './shop-time';
+import { dayOfWeekOfCalendarDate, formatCalendarDateLong, utcIsoToShopLocalDate } from './shop-time';
 
 // A client's "Mi cuenta" list showed only `HH:mm`, so two turnos on
 // different days were indistinguishable — the same "11:00" twice. The date
@@ -48,5 +48,24 @@ describe('dayOfWeekOfCalendarDate', () => {
   it('devuelve null para una fecha vacia o mal formada, nunca un dia inventado', () => {
     expect(dayOfWeekOfCalendarDate('')).toBeNull();
     expect(dayOfWeekOfCalendarDate('31/08/2026')).toBeNull();
+  });
+});
+
+// Una fecha 'YYYY-MM-DD' no se le muestra a una persona tal cual: el resumen
+// previo a pagar una seña tiene que decir el día como lo diría alguien.
+describe('formatCalendarDateLong', () => {
+  it('escribe el día completo, en minúsculas y sin año redundante', () => {
+    expect(formatCalendarDateLong('2026-08-20')).toBe('jueves 20 de agosto');
+    expect(formatCalendarDateLong('2026-08-31')).toBe('lunes 31 de agosto');
+    expect(formatCalendarDateLong('2026-12-25')).toBe('viernes 25 de diciembre');
+  });
+
+  it('no antepone cero al día', () => {
+    expect(formatCalendarDateLong('2026-09-05')).toBe('sábado 5 de septiembre');
+  });
+
+  it('devuelve la cadena original si no es una fecha que pueda leer', () => {
+    expect(formatCalendarDateLong('')).toBe('');
+    expect(formatCalendarDateLong('20/08/2026')).toBe('20/08/2026');
   });
 });
