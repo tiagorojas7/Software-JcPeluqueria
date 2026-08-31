@@ -3,6 +3,7 @@ import {
   MarkCompletedUseCase,
   type Appointment,
   type AppointmentRepository,
+  type Clock,
 } from '@jc-barberia/domain';
 
 /**
@@ -25,9 +26,14 @@ import {
  * about who performed this transition yet.
  */
 export class AdminMarkCompletedUseCase {
-  private readonly markCompleted = new MarkCompletedUseCase();
+  private readonly markCompleted: MarkCompletedUseCase;
 
-  constructor(private readonly appointments: AppointmentRepository) {}
+  constructor(
+    private readonly appointments: AppointmentRepository,
+    clock: Clock,
+  ) {
+    this.markCompleted = new MarkCompletedUseCase(clock);
+  }
 
   async execute(appointmentId: string): Promise<Appointment> {
     const existing = await this.appointments.findById(appointmentId);

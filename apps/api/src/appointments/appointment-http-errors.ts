@@ -1,6 +1,7 @@
 import { BadGatewayException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import {
   AppointmentNotFoundError,
+  AppointmentNotStartedError,
   InvalidAppointmentTransitionError,
   SlotUnavailableError,
   UnexpectedDepositStateError,
@@ -41,6 +42,17 @@ export function rethrowAppointmentErrorAsHttp(error: unknown): never {
       message: `El turno ya está ${error.from} y no admite esta acción.`,
       from: error.from,
       to: error.to,
+    });
+  }
+
+  // Marcar realizado un turno que todavía no empezó es un error de la
+  // persona, no del servidor: se equivocó de fila en la agenda, que es
+  // justo lo que pasa cuando dos turnos se parecen. Un 409 con la hora
+  // adentro le dice cuál agarró y por qué no corresponde todavía.
+  if (error instanceof AppointmentNotStartedError) {
+    throw new ConflictException({
+      message: 'Este turno todavía no empezó, así que no se puede marcar como realizado.',
+      startsAt: error.startsAt.toISOString(),
     });
   }
 

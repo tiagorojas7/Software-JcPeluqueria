@@ -4,6 +4,7 @@ import {
   type ActorContext,
   type Appointment,
   type AppointmentRepository,
+  type Clock,
 } from '@jc-barberia/domain';
 
 export type BarberMarkCompletedResult =
@@ -25,9 +26,14 @@ export type BarberMarkCompletedResult =
  * actor.barberId`".
  */
 export class BarberMarkCompletedUseCase {
-  private readonly markCompleted = new MarkCompletedUseCase();
+  private readonly markCompleted: MarkCompletedUseCase;
 
-  constructor(private readonly appointments: AppointmentRepository) {}
+  constructor(
+    private readonly appointments: AppointmentRepository,
+    clock: Clock,
+  ) {
+    this.markCompleted = new MarkCompletedUseCase(clock);
+  }
 
   async execute(appointmentId: string, actor: ActorContext): Promise<BarberMarkCompletedResult> {
     const existing = await this.appointments.findById(appointmentId);

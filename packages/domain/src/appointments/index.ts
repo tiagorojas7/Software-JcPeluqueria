@@ -23,7 +23,7 @@ export {
 export { FakePaymentPort } from './testing/fake-payment-port';
 export type { RecordedCreatePreferenceCall, RecordedRefundCall } from './testing/fake-payment-port';
 export type { Appointment } from './appointment';
-export { MarkCompletedUseCase } from './mark-completed';
+export { AppointmentNotStartedError, MarkCompletedUseCase } from './mark-completed';
 export type { MarkCompletedInput } from './mark-completed';
 export type { AbsenceRecord } from './absence-record';
 export type { AbsenceRecordRepository } from './absence-record-repository';

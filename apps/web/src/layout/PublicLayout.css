@@ -60,6 +60,30 @@
   background: var(--color-accent-soft);
 }
 
+/* "Cerrar sesión" (client-session-nav): reset button-only defaults, then
+   match the pill links exactly — it sits in the same nav list as an
+   equivalent action, not a lesser one. */
+.public-layout__nav button {
+  display: block;
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.public-layout__nav button:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
+}
+
 /* The booking CTA reads as a solid button inside the nav — the single
    highest-priority action on the public site — without duplicating the
    "Reservar" link the layout's own tests already lock in by role/name. */
@@ -127,7 +151,8 @@
     justify-content: center;
   }
 
-  .public-layout__nav a {
+  .public-layout__nav a,
+  .public-layout__nav button {
     padding: 8px 14px;
   }
 

@@ -40,7 +40,11 @@ import {
 } from '../src/appointments/tokens';
 
 const dateBuilder = new FakeClock();
-const clock = new FakeClock(-180, dateBuilder.localTimeToUtc('2026-09-01', '09:00'));
+// After the default fixture's timeRange (10:00-10:30, below) — mark-completed
+// now rejects a turno whose start has not arrived yet, so "now" here must be
+// at/after the turno's start for the existing "marks realizado" happy paths
+// to still describe a turno that has actually begun.
+const clock = new FakeClock(-180, dateBuilder.localTimeToUtc('2026-09-01', '10:35'));
 const at = (time: string) => clock.localTimeToUtc('2026-09-01', time);
 
 const OWNER_SESSION = 'session-owner-actions';
@@ -192,6 +196,30 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ id: 'owner-mc-1', status: 'realizado' });
+  });
+
+  // Un corte no puede estar "realizado" antes de suceder. La regla vive en el
+  // dominio; acá se prueba que el borde HTTP la traduce a un 409 con un
+  // mensaje que alguien parado en el mostrador puede entender, y no al 500
+  // genérico que aparecía antes.
+  it('rechaza con 409 marcar realizado un turno que todavia no empezo', async () => {
+    appointments.seed(
+      anAppointment({
+        id: 'futuro-mc-1',
+        timeRange: { start: at('18:00'), end: at('18:30') },
+      }),
+    );
+
+    const response = await withSession(
+      request(app.getHttpServer()).post('/appointments/futuro-mc-1/mark-completed'),
+      OWNER_SESSION,
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.body.message).toMatch(/todav.a no empez/i);
+    // Y nada se escribió para ESTE turno: sigue reservado. (El fake acumula
+    // llamadas de todo el archivo, así que se filtra por id.)
+    expect(appointments.updateStatusCalls.filter((call) => call.id === 'futuro-mc-1')).toEqual([]);
   });
 
   it('lets the secretary confirm an absence on a sin_registrado appointment', async () => {

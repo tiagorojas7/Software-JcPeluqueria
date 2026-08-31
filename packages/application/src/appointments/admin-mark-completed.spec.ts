@@ -1,5 +1,6 @@
 import {
   AppointmentNotFoundError,
+  AppointmentNotStartedError,
   FakeAppointmentRepository,
   FakeClock,
   InvalidAppointmentTransitionError,
@@ -11,6 +12,8 @@ import { AdminMarkCompletedUseCase } from './admin-mark-completed';
 
 const dateBuilder = new FakeClock();
 const at = (time: string) => dateBuilder.localTimeToUtc('2026-09-01', time);
+/** 10:15 shop time on the appointment's own day — after it started. */
+const NOW = at('10:15');
 
 function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
   return {
@@ -26,6 +29,10 @@ function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
   };
 }
 
+function buildUseCase(appointments: FakeAppointmentRepository, now: Date = NOW): AdminMarkCompletedUseCase {
+  return new AdminMarkCompletedUseCase(appointments, new FakeClock(-180, now));
+}
+
 describe('AdminMarkCompletedUseCase (10.9/10.11) — marcar realizado sin restricción de barbero', () => {
   it('marks a reservado phone appointment realizado with no money movement', async () => {
     // appointment-lifecycle spec, "Turno realizado sin seña previa": GIVEN
@@ -33,7 +40,7 @@ describe('AdminMarkCompletedUseCase (10.9/10.11) — marcar realizado sin restri
     // lo marca realizado, THEN pasa a realizado AND no cobro ni reembolso.
     const appointments = new FakeAppointmentRepository();
     appointments.seed(buildAppointment());
-    const useCase = new AdminMarkCompletedUseCase(appointments);
+    const useCase = buildUseCase(appointments);
 
     const result = await useCase.execute('appt-1');
 
@@ -47,7 +54,7 @@ describe('AdminMarkCompletedUseCase (10.9/10.11) — marcar realizado sin restri
     // pendientes": the panel resolves turnos en sin registrar to realizado.
     const appointments = new FakeAppointmentRepository();
     appointments.seed(buildAppointment({ status: 'sin_registrado' }));
-    const useCase = new AdminMarkCompletedUseCase(appointments);
+    const useCase = buildUseCase(appointments);
 
     const result = await useCase.execute('appt-1');
 
@@ -62,7 +69,7 @@ describe('AdminMarkCompletedUseCase (10.9/10.11) — marcar realizado sin restri
     // absence of any actor/barberId parameter here is the proof of intent.
     const appointments = new FakeAppointmentRepository();
     appointments.seed(buildAppointment({ barberId: 'some-other-barber' }));
-    const useCase = new AdminMarkCompletedUseCase(appointments);
+    const useCase = buildUseCase(appointments);
 
     const result = await useCase.execute('appt-1');
 
@@ -72,7 +79,7 @@ describe('AdminMarkCompletedUseCase (10.9/10.11) — marcar realizado sin restri
   it('rejects marking an appointment that is already terminal (realizado)', async () => {
     const appointments = new FakeAppointmentRepository();
     appointments.seed(buildAppointment({ status: 'realizado' }));
-    const useCase = new AdminMarkCompletedUseCase(appointments);
+    const useCase = buildUseCase(appointments);
 
     await expect(useCase.execute('appt-1')).rejects.toBeInstanceOf(
       InvalidAppointmentTransitionError,
@@ -81,8 +88,23 @@ describe('AdminMarkCompletedUseCase (10.9/10.11) — marcar realizado sin restri
 
   it('rejects marking an appointment id that does not exist', async () => {
     const appointments = new FakeAppointmentRepository();
-    const useCase = new AdminMarkCompletedUseCase(appointments);
+    const useCase = buildUseCase(appointments);
 
     await expect(useCase.execute('missing')).rejects.toBeInstanceOf(AppointmentNotFoundError);
+  });
+
+  it('rejects marking realizado a turno cuya hora de inicio todavía no llegó — bug real de producción', async () => {
+    // Real production data: a reservado turno dated 2026-09-03 13:30 was
+    // found marked realizado while now was still 2026-08-31.
+    const appointments = new FakeAppointmentRepository();
+    appointments.seed(
+      buildAppointment({
+        timeRange: { start: dateBuilder.localTimeToUtc('2026-09-03', '13:30'), end: dateBuilder.localTimeToUtc('2026-09-03', '14:00') },
+      }),
+    );
+    const useCase = buildUseCase(appointments);
+
+    await expect(useCase.execute('appt-1')).rejects.toBeInstanceOf(AppointmentNotStartedError);
+    expect(appointments.updateStatusCalls).toEqual([]);
   });
 });

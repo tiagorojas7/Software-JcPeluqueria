@@ -164,8 +164,9 @@ import {
     },
     {
       provide: AdminMarkCompletedUseCase,
-      inject: [APPOINTMENT_REPOSITORY],
-      useFactory: (appointments: AppointmentRepository) => new AdminMarkCompletedUseCase(appointments),
+      inject: [APPOINTMENT_REPOSITORY, CLOCK],
+      useFactory: (appointments: AppointmentRepository, clock: Clock) =>
+        new AdminMarkCompletedUseCase(appointments, clock),
     },
     {
       provide: AdminConfirmAbsenceUseCase,
@@ -175,8 +176,9 @@ import {
     },
     {
       provide: BarberMarkCompletedUseCase,
-      inject: [APPOINTMENT_REPOSITORY],
-      useFactory: (appointments: AppointmentRepository) => new BarberMarkCompletedUseCase(appointments),
+      inject: [APPOINTMENT_REPOSITORY, CLOCK],
+      useFactory: (appointments: AppointmentRepository, clock: Clock) =>
+        new BarberMarkCompletedUseCase(appointments, clock),
     },
     {
       provide: BarberConfirmAbsenceUseCase,

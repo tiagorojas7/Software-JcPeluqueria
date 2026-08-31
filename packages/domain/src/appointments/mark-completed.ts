@@ -1,9 +1,22 @@
+import type { Clock } from '../shared/ports/clock.port';
 import type { Appointment } from './appointment';
 import { AppointmentStateMachine } from './appointment-state-machine';
 import { resolveDepositForCompletion } from './deposit-transitions';
 
 export interface MarkCompletedInput {
   readonly appointment: Appointment;
+}
+
+export class AppointmentNotStartedError extends Error {
+  constructor(
+    readonly appointmentId: string,
+    readonly startsAt: Date,
+  ) {
+    super(
+      `Cannot mark appointment "${appointmentId}" realizado before it starts (starts at ${startsAt.toISOString()})`,
+    );
+    this.name = 'AppointmentNotStartedError';
+  }
 }
 
 /**
@@ -13,9 +26,21 @@ export interface MarkCompletedInput {
  * constructor — see `resolveDepositForCompletion` — so no deposit money can
  * move through this use case, for any deposit kind, by construction rather
  * than by convention.
+ *
+ * Takes a `Clock` (mirroring `ConfirmAbsenceUseCase`) so it can refuse a
+ * turno whose `timeRange.start` has not arrived yet — a corte cannot be
+ * "realizado" before it happens. This closed a real production bug: a
+ * future-dated `reservado` turno reached `realizado` with nothing between
+ * the panel/API and the state machine ever checking the clock.
  */
 export class MarkCompletedUseCase {
+  constructor(private readonly clock: Clock) {}
+
   execute(input: MarkCompletedInput): Appointment {
+    if (this.clock.now() < input.appointment.timeRange.start) {
+      throw new AppointmentNotStartedError(input.appointment.id, input.appointment.timeRange.start);
+    }
+
     const status = AppointmentStateMachine.transition(input.appointment.status, 'realizado');
     const deposit = resolveDepositForCompletion(input.appointment.deposit);
     return { ...input.appointment, status, deposit };

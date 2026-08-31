@@ -1,5 +1,6 @@
 import {
   AppointmentNotFoundError,
+  AppointmentNotStartedError,
   FakeAppointmentRepository,
   FakeClock,
   type ActorContext,
@@ -11,6 +12,8 @@ import { BarberMarkCompletedUseCase } from './barber-mark-completed';
 
 const dateBuilder = new FakeClock();
 const at = (time: string) => dateBuilder.localTimeToUtc('2026-09-01', time);
+/** 10:15 shop time on the appointment's own day — after it started. */
+const NOW = at('10:15');
 
 const OWN_BARBER_ID = 'barber-own';
 const OWN_ACTOR: ActorContext = { userId: 'user-own', role: 'barber', barberId: OWN_BARBER_ID };
@@ -27,6 +30,10 @@ function buildAppointment(overrides: Partial<Appointment> = {}): Appointment {
     deposit: { kind: 'not_applicable' },
     ...overrides,
   };
+}
+
+function buildUseCase(appointments: FakeAppointmentRepository, now: Date = NOW): BarberMarkCompletedUseCase {
+  return new BarberMarkCompletedUseCase(appointments, new FakeClock(-180, now));
 }
 
 // barber-profile spec, "Resolución de los turnos propios":
@@ -48,7 +55,7 @@ describe('BarberMarkCompletedUseCase (11.11/11.12/11.13)', () => {
   it('marks the barber\'s own reservado appointment realizado', async () => {
     const appointments = new FakeAppointmentRepository();
     appointments.seed(buildAppointment());
-    const useCase = new BarberMarkCompletedUseCase(appointments);
+    const useCase = buildUseCase(appointments);
 
     const result = await useCase.execute('appt-1', OWN_ACTOR);
 
@@ -59,7 +66,7 @@ describe('BarberMarkCompletedUseCase (11.11/11.12/11.13)', () => {
   it("rejects marking a colleague's appointment — MUST rechazar la operación", async () => {
     const appointments = new FakeAppointmentRepository();
     appointments.seed(buildAppointment({ barberId: 'barber-colleague' }));
-    const useCase = new BarberMarkCompletedUseCase(appointments);
+    const useCase = buildUseCase(appointments);
 
     const result = await useCase.execute('appt-1', OWN_ACTOR);
 
@@ -71,8 +78,21 @@ describe('BarberMarkCompletedUseCase (11.11/11.12/11.13)', () => {
 
   it('rejects marking an appointment id that does not exist', async () => {
     const appointments = new FakeAppointmentRepository();
-    const useCase = new BarberMarkCompletedUseCase(appointments);
+    const useCase = buildUseCase(appointments);
 
     await expect(useCase.execute('missing', OWN_ACTOR)).rejects.toBeInstanceOf(AppointmentNotFoundError);
+  });
+
+  it('rejects marking realizado su propio turno cuando la hora de inicio todavía no llegó', async () => {
+    const appointments = new FakeAppointmentRepository();
+    appointments.seed(
+      buildAppointment({
+        timeRange: { start: dateBuilder.localTimeToUtc('2026-09-03', '13:30'), end: dateBuilder.localTimeToUtc('2026-09-03', '14:00') },
+      }),
+    );
+    const useCase = buildUseCase(appointments);
+
+    await expect(useCase.execute('appt-1', OWN_ACTOR)).rejects.toBeInstanceOf(AppointmentNotStartedError);
+    expect(appointments.updateStatusCalls).toEqual([]);
   });
 });
