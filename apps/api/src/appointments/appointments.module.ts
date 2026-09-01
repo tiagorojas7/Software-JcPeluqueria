@@ -3,6 +3,7 @@ import {
   AdminCancelAppointmentUseCase,
   AdminConfirmAbsenceUseCase,
   AdminMarkCompletedUseCase,
+  AdminUndoWalkInUseCase,
   BarberConfirmAbsenceUseCase,
   BarberMarkCompletedUseCase,
   CreateHold,
@@ -209,6 +210,11 @@ import {
       inject: [WALK_IN_REPOSITORY, CLIENT_REPOSITORY, SERVICE_REPOSITORY, CLOCK],
       useFactory: (walkIns: WalkInRepository, clients: ClientRepository, services: ServiceRepository, clock: Clock) =>
         new CreateWalkInUseCase(walkIns, clients, services, clock),
+    },
+    {
+      provide: AdminUndoWalkInUseCase,
+      inject: [APPOINTMENT_REPOSITORY],
+      useFactory: (appointments: AppointmentRepository) => new AdminUndoWalkInUseCase(appointments),
     },
   ],
 })

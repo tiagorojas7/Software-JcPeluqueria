@@ -3,6 +3,7 @@ import {
   AppointmentNotFoundError,
   AppointmentNotStartedError,
   InvalidAppointmentTransitionError,
+  NotAWalkInError,
   SlotUnavailableError,
   UnexpectedDepositStateError,
 } from '@jc-barberia/domain';
@@ -42,6 +43,17 @@ export function rethrowAppointmentErrorAsHttp(error: unknown): never {
       message: `El turno ya está ${error.from} y no admite esta acción.`,
       from: error.from,
       to: error.to,
+    });
+  }
+
+  // "Deshacer walk-in" solo existe para el walk-in que se cargó por error —
+  // un turno realizado normal (telefónico/web) nunca es un walk-in, así que
+  // esta ruta lo rechaza en el dominio (`UndoWalkInUseCase`), nunca en el
+  // controller. Es un resultado de negocio esperado, no un fallo del
+  // servidor: la persona intentó reabrir algo que efectivamente sucedió.
+  if (error instanceof NotAWalkInError) {
+    throw new ConflictException({
+      message: 'Este turno no fue cargado como walk-in, así que no hay nada que deshacer.',
     });
   }
 

@@ -466,4 +466,80 @@ describe('appointment actions panel endpoints (App Nest levantada en memoria)', 
 
     expect(response.status).toBe(403);
   });
+
+  // The actual bug being closed: a walk-in loaded into `realizado` by
+  // mistake had no way back — `realizado` has no outgoing edges in
+  // AppointmentStateMachine. `UndoWalkInUseCase` is the one deliberate
+  // exception, gated on `channel === 'walk_in'`, wired here through
+  // `POST /appointments/:id/undo-walk-in`.
+  describe('deshacer un walk-in cargado por error', () => {
+    it('lets the owner undo a walk-in realizado, freeing the slot', async () => {
+      appointments.seed(
+        anAppointment({ id: 'walkin-undo-1', channel: 'walk_in', clientId: null, status: 'realizado' }),
+      );
+
+      const response = await withSession(
+        request(app.getHttpServer()).post('/appointments/walkin-undo-1/undo-walk-in'),
+        OWNER_SESSION,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ id: 'walkin-undo-1', status: 'cancelado' });
+      expect(appointments.updateStatusCalls).toContainEqual({ id: 'walkin-undo-1', status: 'cancelado' });
+    });
+
+    it('lets the secretary undo a walk-in too — same walkin:create permission that loads one', async () => {
+      appointments.seed(
+        anAppointment({ id: 'walkin-undo-sec', channel: 'walk_in', clientId: null, status: 'realizado' }),
+      );
+
+      const response = await withSession(
+        request(app.getHttpServer()).post('/appointments/walkin-undo-sec/undo-walk-in'),
+        SECRETARY_SESSION,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ id: 'walkin-undo-sec', status: 'cancelado' });
+    });
+
+    // Scope limit: a normal realizado appointment (any channel other than
+    // walk_in) that ran its course is finished business, not a mistake —
+    // this must NOT be swept into the new path.
+    it('rejects undoing a NORMAL realizado appointment (channel telefonico) with 409 — that is finished business', async () => {
+      appointments.seed(
+        anAppointment({ id: 'not-a-walkin', channel: 'telefonico', status: 'realizado' }),
+      );
+
+      const response = await withSession(
+        request(app.getHttpServer()).post('/appointments/not-a-walkin/undo-walk-in'),
+        OWNER_SESSION,
+      );
+
+      expect(response.status).toBe(409);
+      expect(appointments.updateStatusCalls.some((call) => call.id === 'not-a-walkin')).toBe(false);
+    });
+
+    it('rejects a barber undoing a walk-in — no walkin:create permission', async () => {
+      appointments.seed(
+        anAppointment({ id: 'walkin-forbidden', channel: 'walk_in', clientId: null, status: 'realizado' }),
+      );
+
+      const response = await withSession(
+        request(app.getHttpServer()).post('/appointments/walkin-forbidden/undo-walk-in'),
+        BARBER_A_SESSION,
+      );
+
+      expect(response.status).toBe(403);
+      expect(appointments.updateStatusCalls.some((call) => call.id === 'walkin-forbidden')).toBe(false);
+    });
+
+    it('returns 404 when the appointment does not exist', async () => {
+      const response = await withSession(
+        request(app.getHttpServer()).post('/appointments/does-not-exist/undo-walk-in'),
+        OWNER_SESSION,
+      );
+
+      expect(response.status).toBe(404);
+    });
+  });
 });

@@ -13,6 +13,7 @@ import {
   AdminCancelAppointmentUseCase,
   AdminConfirmAbsenceUseCase,
   AdminMarkCompletedUseCase,
+  AdminUndoWalkInUseCase,
   BarberConfirmAbsenceUseCase,
   BarberMarkCompletedUseCase,
   CreateWalkInUseCase,
@@ -116,6 +117,7 @@ export class AppointmentActionsController {
     private readonly editAppointmentUseCase: EditAppointmentUseCase,
     private readonly adminCancelAppointmentUseCase: AdminCancelAppointmentUseCase,
     private readonly createWalkInUseCase: CreateWalkInUseCase,
+    private readonly adminUndoWalkInUseCase: AdminUndoWalkInUseCase,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -194,6 +196,27 @@ export class AppointmentActionsController {
   async cancel(@Param('id') id: string): Promise<AppointmentResponse> {
     try {
       const appointment = await this.adminCancelAppointmentUseCase.execute(id);
+      return toResponse(appointment);
+    } catch (error) {
+      rethrowAsHttp(error);
+    }
+  }
+
+  /**
+   * Undoes a walk-in loaded by mistake (see `UndoWalkInUseCase` in
+   * `@jc-barberia/domain`). Gated on the SAME `walkin:create` permission
+   * that creates one, never a new permission name — only whoever could have
+   * made the mistake may correct it. A normal `realizado` appointment (any
+   * other channel) is rejected by the domain use case with
+   * `NotAWalkInError`, translated to a 409 below — this route can never
+   * reopen finished business.
+   */
+  @RequiresPermission('walkin:create')
+  @Post(':id/undo-walk-in')
+  @HttpCode(200)
+  async undoWalkIn(@Param('id') id: string): Promise<AppointmentResponse> {
+    try {
+      const appointment = await this.adminUndoWalkInUseCase.execute(id);
       return toResponse(appointment);
     } catch (error) {
       rethrowAsHttp(error);
