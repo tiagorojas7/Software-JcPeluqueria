@@ -29,6 +29,7 @@ export type { AbsenceRecord } from './absence-record';
 export type { AbsenceRecordRepository } from './absence-record-repository';
 export { ConfirmAbsenceUseCase, MissingActorError } from './confirm-absence';
 export type { ConfirmAbsenceInput, ConfirmAbsenceResult } from './confirm-absence';
+export { NotAWalkInError, UndoWalkInUseCase } from './undo-walk-in';
 export { AppointmentNotFoundError } from './appointment-repository';
 export type {
   AppointmentRepository,
