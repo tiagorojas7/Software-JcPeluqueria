@@ -14,9 +14,13 @@
  * `mark-completed` / `confirm-absence` → `appointment:mark-completed:any` /
  * `:own` (there is no separate confirm-absence permission — admin-operations
  * spec, "Marcado de realizados y resolución de pendientes" ties both
- * resolutions of a `sin_registrado` turno to the SAME permission).
+ * resolutions of a `sin_registrado` turno to the SAME permission),
+ * `undo-walk-in` → `walkin:create` — the SAME permission that loads a
+ * walk-in, never a new one, because undoing one is only ever offered to
+ * whoever could have created it (see `UndoWalkInUseCase` in
+ * `@jc-barberia/domain`).
  */
-export const SLOT_ACTIONS = ['edit', 'cancel', 'mark-completed', 'confirm-absence'] as const;
+export const SLOT_ACTIONS = ['edit', 'cancel', 'mark-completed', 'confirm-absence', 'undo-walk-in'] as const;
 export type SlotAction = (typeof SLOT_ACTIONS)[number];
 
 export interface DayBoardColumn {

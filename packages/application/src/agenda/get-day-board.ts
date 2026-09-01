@@ -90,9 +90,30 @@ export class GetDayBoardUseCase {
    */
   private async allowedActionsFor(slot: DayBoardSlotRecord, actor: ActorContext): Promise<SlotAction[]> {
     const status = toAppointmentStatus(slot.status);
-    // A hold (`held`/`liberado`) is not an appointment at all, and a
-    // terminal one is finished: neither offers anything to do.
-    if (!status || AppointmentStateMachine.isTerminal(status)) {
+    // A hold (`held`/`liberado`) is not an appointment at all — nothing to
+    // offer.
+    if (!status) {
+      return [];
+    }
+
+    // `undo-walk-in` is the one action a terminal `realizado` still offers —
+    // and only when `channel === 'walk_in'` (see `UndoWalkInUseCase` in
+    // @jc-barberia/domain for why channel, not status, is the gate: a normal
+    // appointment that ran its course through `reservado`/`sin_registrado`
+    // is finished business, not a mistake to undo). Checked BEFORE the
+    // general `isTerminal` early-return below, which would otherwise swallow
+    // it the same way it correctly swallows every other terminal status.
+    // Gated on `walkin:create` — the SAME permission that loads a walk-in in
+    // the first place, never a new one: only whoever could have created the
+    // mistake may undo it.
+    if (status === 'realizado' && slot.channel === 'walk_in') {
+      const canUndoWalkIn = await this.rolePermissions.hasPermission(actor.role, 'walkin:create');
+      return canUndoWalkIn ? ['undo-walk-in'] : [];
+    }
+
+    // A terminal status (realizado, cancelado, ausente) is finished: nothing
+    // more to do — except the walk-in case handled above.
+    if (AppointmentStateMachine.isTerminal(status)) {
       return [];
     }
 

@@ -123,6 +123,109 @@ describe('GetDayBoardUseCase — las acciones respetan el estado del turno', () 
   });
 });
 
+// cablear-el-mvp follow-up: a walk-in loaded by mistake reaches `realizado`
+// straight away (no reservado/sin_registrado step) and used to have no way
+// back — `AppointmentStateMachine.isTerminal('realizado')` is true, so the
+// general early-return above swallowed every action for it. `undo-walk-in`
+// is the one exception, gated on `channel === 'walk_in'` AND the SAME
+// `walkin:create` permission that could have loaded it in the first place —
+// never a new permission, and never offered to a normal realizado turno.
+describe('GetDayBoardUseCase — deshacer un walk-in', () => {
+  function rolePermissionsWithWalkInCreate(): FakeRolePermissionRepository {
+    return new FakeRolePermissionRepository(
+      new Map([
+        ['owner', new Set<Permission>(['walkin:create'])],
+        ['barber', new Set<Permission>(['appointment:mark-completed:own'])],
+      ]),
+    );
+  }
+
+  it('ofrece undo-walk-in sobre un walk-in en realizado cuando el actor tiene walkin:create', async () => {
+    const repository = new FakeDayBoardRepository();
+    seedOneSlot(repository, 'realizado');
+    repository.seed('2026-08-20', {
+      columns: [{ barberId: 'barber-a', barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' }],
+      slots: [
+        {
+          id: 'slot-1',
+          barberId: 'barber-a',
+          serviceId: 'service-1',
+          serviceName: 'Corte clasico',
+          clientId: null,
+          clientName: null,
+          clientAge: null,
+          clientPhone: null,
+          status: 'realizado',
+          channel: 'walk_in',
+          startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
+          endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
+        },
+      ],
+    });
+    const useCase = new GetDayBoardUseCase(repository, rolePermissionsWithWalkInCreate());
+
+    const board = await useCase.execute('2026-08-20', OWNER);
+
+    expect(board.slots[0]?.allowedActions).toEqual(['undo-walk-in']);
+  });
+
+  it('NO ofrece undo-walk-in sobre un turno realizado normal (channel telefonico), aunque el actor tenga walkin:create', async () => {
+    const repository = new FakeDayBoardRepository();
+    repository.seed('2026-08-20', {
+      columns: [{ barberId: 'barber-a', barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' }],
+      slots: [
+        {
+          id: 'slot-1',
+          barberId: 'barber-a',
+          serviceId: 'service-1',
+          serviceName: 'Corte clasico',
+          clientId: 'client-1',
+          clientName: 'Marcos',
+          clientAge: 34,
+          clientPhone: null,
+          status: 'realizado',
+          channel: 'telefonico',
+          startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
+          endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
+        },
+      ],
+    });
+    const useCase = new GetDayBoardUseCase(repository, rolePermissionsWithWalkInCreate());
+
+    const board = await useCase.execute('2026-08-20', OWNER);
+
+    expect(board.slots[0]?.allowedActions).toEqual([]);
+  });
+
+  it('NO ofrece undo-walk-in a un actor sin walkin:create, aunque el slot sea un walk-in en realizado', async () => {
+    const repository = new FakeDayBoardRepository();
+    repository.seed('2026-08-20', {
+      columns: [{ barberId: 'barber-a', barberName: 'Juan', opensAt: '09:00', closesAt: '18:00' }],
+      slots: [
+        {
+          id: 'slot-1',
+          barberId: 'barber-a',
+          serviceId: 'service-1',
+          serviceName: 'Corte clasico',
+          clientId: null,
+          clientName: null,
+          clientAge: null,
+          clientPhone: null,
+          status: 'realizado',
+          channel: 'walk_in',
+          startsAt: clock.localTimeToUtc('2026-08-20', '09:00'),
+          endsAt: clock.localTimeToUtc('2026-08-20', '09:30'),
+        },
+      ],
+    });
+    const useCase = new GetDayBoardUseCase(repository, rolePermissionsWithWalkInCreate());
+
+    const board = await useCase.execute('2026-08-20', BARBER_A);
+
+    expect(board.slots[0]?.allowedActions).toEqual([]);
+  });
+});
+
 describe('GetDayBoardUseCase', () => {
   it('grants edit, cancel and mark-completed on every slot for an owner (holds appointment:update/cancel/mark-completed:any)', async () => {
     const repository = new FakeDayBoardRepository();
