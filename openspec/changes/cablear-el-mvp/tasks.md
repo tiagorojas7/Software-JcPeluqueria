@@ -219,6 +219,258 @@ Todo escribe contra un puerto cuya única implementación es un doble de test.
           productiva y usarla de verdad es una transferencia de fondos que
           este agente no puede autorizar por su cuenta. Sigue sin cerrarse,
           por una razón más fuerte que antes, no más débil.
+      - **Reintentado 2026-09-01 — la premisa del 2026-08-31 era incorrecta,
+        corregida contra evidencia real, no contra una suposición nueva.**
+        Ese intento midió el `MERCADOPAGO_ACCESS_TOKEN` en 130 caracteres y
+        concluyó "credencial productiva". La medición estaba mal: la línea en
+        `.env` trae, pegado sin salto de línea después del token real, un
+        comentario humano (`        # panel de desarrollador, credenciales de
+        PRUEBA`, 56 caracteres) que el parseo manual de ese intento incluyó
+        como si fuera parte del secreto. El token real mide 74 caracteres.
+        `dotenv` (la librería que usa la app) recorta comentarios `#` en
+        valores sin comillas, así que la app en producción ya leía el token
+        limpio — el error fue del parseo del agente anterior, nunca de la
+        app. Con el token limpio, verificado en vivo contra
+        `api.mercadopago.com` (no supuesto): `GET /users/me` → `200`,
+        `"test_data":{"test_user":true,...}`, email
+        `test_user_3506630588290031631@testuser.com` — es una cuenta de
+        PRUEBA real. **La afirmación del 2026-08-31 ("la credencial es
+        productiva, usarla mueve plata real") es incorrecta y queda
+        superada por esta evidencia**; el usuario ya lo había señalado y
+        esto lo confirma con la propia API de MercadoPago, no solo con su
+        palabra.
+      - **Corrección adicional, más importante que la anterior**: con el
+        token limpio se releyeron (sólo `GET`, nunca `POST` de reembolso) los
+        tres pagos `settled` que ya existen en la base:
+        `175326973923`/`176278537322`/`176291402838`. Los tres devuelven
+        `200` reales (no el `401`/`403` que documentaron el 2026-08-18 y el
+        2026-08-31) y los tres muestran `"collector_id":3433468808` (la
+        MISMA cuenta de prueba confirmada arriba) y
+        `"payer":{"email":"test_user_6891124111637141836@testuser.com",...}`
+        — un COMPRADOR de prueba, no "una cuenta real" como decían las notas
+        anteriores. `live_mode` sigue en `true` en los tres, pero ya se
+        estableció arriba (contra documentación actual) que MercadoPago
+        marca así hasta las transacciones de cuentas de prueba — no es
+        indicador de plata real. **El `401`/`403` que documentaron los dos
+        intentos anteriores contra estos mismos tres pagos era el mismo bug
+        de parseo del `.env`, no una restricción real de MercadoPago.** Esto
+        significa que estos tres pagos NO son "irreembolsables por
+        construcción" como daba por sentado el enunciado de esta tarea —
+        técnicamente sí se los podría reembolsar con este token. **Este
+        agente NO intentó ese reembolso**: los tres están atados a turnos
+        reales en la base COMPARTIDA (puerto 5432, no la descartable), ya
+        señalados en la evidencia de E.3 como pendientes de una decisión del
+        usuario ("aceptar/rechazar la oferta de verdad, dejarlos así, o
+        pedir que se resuelvan") — tocar su estado en MercadoPago sin que el
+        usuario lo pida explícitamente excede lo que este agente puede
+        decidir solo, más allá de que la barrera técnica original haya
+        resultado falsa. Si el usuario quiere cerrar A.7 usando uno de estos
+        tres pagos reales en lugar de generar uno nuevo (Ruta 2 más abajo),
+        es una decisión suya, no de este agente.
+      - Con la cuenta de prueba confirmada, se probó también la Ruta 1 (pago
+        directo por API, sin navegador, la que el enunciado pide intentar
+        primero
+        "porque no necesita un humano"): `POST /v1/card_tokens` con la
+        tarjeta de prueba oficial de Argentina (Visa `4509 9535 6623 3704`,
+        titular `APRO`, vigente y confirmada contra
+        `mercadopago.com.ar/developers` en vivo, no de memoria) → `201`
+        real. `POST /v1/payments` con ese card token → `401 "Unauthorized
+        use of live credentials"` (`code: 7`), real y reproducible dos
+        veces. Verificado contra documentación actual (Context7 y búsqueda
+        web sobre `mercadopago.com.ar/developers` en vivo): ese error es una
+        restricción de la PLATAFORMA, no de este código ni de este agente —
+        pagos por API directa (Checkout API/Transparente) con un usuario de
+        prueba requieren que MercadoPago habilite "credenciales de
+        producción" para ese usuario puntual, a pedido explícito a un
+        representante de MercadoPago; no hay ningún llamado de API que lo
+        resuelva. **Ruta 1 queda descartada con motivo verificado.** Además
+        no es lo que la app usa: `MercadoPagoPaymentAdapter` sólo integra
+        Checkout Pro (`/checkout/preferences` + redirect), nunca tokeniza
+        tarjetas ni llama `POST /v1/payments` directamente — confirmado
+        leyendo `mercadopago-payment.adapter.ts`.
+      - Se probó entonces la Ruta 2 (checkout real en el navegador, con el
+        comprador de prueba dado en la tarea). Contra un Postgres real
+        aislado y descartable (`docker run postgres:16` como
+        `cablear-a7-pg`, puerto 5450 — nunca el compartido 5432 —, migrado y
+        sembrado desde cero), API real en 3009, worker real (canal
+        `console`): `POST /holds` (web, con seña) → `201` → `POST
+        /holds/confirm` → `200 {"clientId":"2296b7ae-..."}` → `POST
+        /holds/checkout` → `200
+        {"outcome":"created","initPoint":"https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=3433468808-372791fa-b2e6-4965-a4fc-33ef728b9448"}`
+        — un link de checkout REAL, generado por el mismo
+        `MercadoPagoPaymentAdapter.createPreference` que usa la app en
+        producción, con la cuenta de prueba confirmada arriba. Completar ese
+        pago exige iniciar sesión en MercadoPago con la contraseña del
+        comprador de prueba (`test_user_4593144769691374107@testuser.com`,
+        dada en la tarea). **Entrar una contraseña para autenticar está
+        prohibido para este agente por su propia política de seguridad, sin
+        excepción por tratarse de una cuenta de prueba ni por venir indicado
+        en la tarea o en las instrucciones del usuario** — el navegador
+        conectado (`list_connected_browsers` devolvió un dispositivo real
+        esta vez, a diferencia de B.7/A.7 anteriores) no cambia esto: el
+        bloqueo no es de herramienta, es de política. Esa contraseña es la
+        única acción que falta y que un humano tiene que hacer.
+      - Mientras se preparaba el siguiente paso (bajar la seña a `settled`
+        llamando a mano `POST /api/webhooks/mercadopago?data.id=<paymentId>`
+        una vez pagado — el endpoint sólo encola el id, nunca confía en la
+        notificación real de MercadoPago, así que no hace falta túnel
+        público —, marcar ausente al barbero en el rango del turno origen
+        por el flujo real de `MarkBarberAbsentController`/`mark-absent`
+        (E.1), forzar el vencimiento del hold de oferta que eso genera y
+        observar `refunded-and-notified`), Docker Desktop dejó de responder
+        en esta máquina: `docker ps` → `Error response from daemon: Docker
+        Desktop is unable to start`, sostenido más de 10 minutos y
+        reproducido en más de 10 reintentos espaciados (los procesos de
+        Docker Desktop seguían `Responding: True`, el motor simplemente
+        dejó de contestar) — consistente con la contención de recursos ya
+        documentada para esta máquina (memoria del proyecto: "Docker
+        contention"; el `Get-CimInstance` corrido durante esta misma vuelta
+        mostró más de veinticinco procesos `node.exe` vivos a la vez, entre
+        el stack compartido, el worktree del otro agente y vitest/typecheck
+        en curso). Esto tumbó `cablear-a7-pg` a mitad de la prueba, antes de
+        poder marcar el turno origen ausente. Es un problema de
+        infraestructura de la máquina, no de MercadoPago ni de este código
+        — no se tocó el Postgres compartido (puerto 5432) en ningún momento,
+        y no se intentó reiniciar Docker Desktop por su cuenta: podía
+        afectar el trabajo en paralelo del otro agente sobre la máquina de
+        estados de turnos.
+      - **Conclusión**: A.7 sigue sin poder cerrarse de punta a punta. El
+        motivo cambió por completo respecto a lo escrito el 2026-08-31: ya no
+        hay ningún bloqueo de "plata real" — la cuenta es de prueba y los
+        tres pagos ya `settled` en la base también son de prueba (comprador
+        Y vendedor), confirmado contra la API en vivo, no supuesto. Lo que
+        falta es una acción concreta que requiere una decisión del usuario o
+        un paso manual de un humano — nunca una limitación técnica. Quedan
+        dos caminos, a elección del usuario:
+        - **Runbook A — reembolsar uno de los tres pagos reales que ya
+          existen** (el más corto, pero toca turnos reales de la base
+          compartida — necesita que el usuario lo pida explícitamente, no
+          asumido acá):
+          ```bash
+          # 1) elegir uno de los tres turnos con seña settled y confirmar que
+          #    sigue reservado (contra el Postgres COMPARTIDO, puerto 5432):
+          docker exec proyecto-jc-peluqueria-postgres-1 psql -U jc_barberia -d jc_barberia \
+            -c "select so.id, so.status, d.payment_id, d.state as deposit_state from slot_occupancies so join deposits d on d.id = so.deposit_id where d.payment_id = '175326973923';"
+
+          # 2) marcar ausente al BARBERO en el rango horario que cubre ese
+          #    turno (MarkBarberAbsentController — dispara
+          #    GenerateAbsenceReassignmentOffers de verdad para cada turno
+          #    afectado, sin hack de SQL) vía la API real que ya corre en
+          #    :3000; ojo, NO es /appointments/:id/confirm-absence — ese es
+          #    otro endpoint (ausencia del CLIENTE, Slice B, no dispara nada
+          #    de esto):
+          curl -X POST http://localhost:3000/api/barbers/<barberId>/mark-absent \
+            -H "Content-Type: application/json" -H "Cookie: <cookie de dueno@jcbarberia.test>" \
+            -d '{"calendarDate":"<fecha del turno>","startTime":"<hora inicio del turno>","endTime":"<hora fin del turno>"}'
+
+          # 3) forzar el vencimiento del hold de oferta que ese paso generó
+          #    (nunca el turno origen directamente):
+          docker exec proyecto-jc-peluqueria-postgres-1 psql -U jc_barberia -d jc_barberia \
+            -c "update slot_occupancies set hold_expires_at = now() - interval '1 minute' where id = '<hold-id-de-la-oferta>' and status = 'held';"
+          docker exec proyecto-jc-peluqueria-postgres-1 psql -U jc_barberia -d jc_barberia \
+            -c "update pgboss.job set start_after = now() where name = 'hold.expire' and data->>'holdId' = '<hold-id-de-la-oferta>' and state = 'created';"
+
+          # 4) evidencia a mirar: log del worker compartido debe mostrar
+          #    "[worker] hold.expire <hold-id> -> refunded-and-notified", y:
+          docker exec proyecto-jc-peluqueria-postgres-1 psql -U jc_barberia -d jc_barberia \
+            -c "select so.id, so.status, d.state as deposit_state from slot_occupancies so join deposits d on d.id = so.deposit_id where d.payment_id = '175326973923';"
+          #    debe mostrar el turno origen "cancelado" y el depósito "refunded".
+          #    Del lado de MercadoPago, confirmar con:
+          curl -s "https://api.mercadopago.com/v1/payments/175326973923" \
+            -H "Authorization: Bearer <MERCADOPAGO_ACCESS_TOKEN limpio, sin el comentario pegado>" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const j=JSON.parse(d);console.log(j.status, JSON.stringify(j.refunds));})"
+          #    debe mostrar refunds con al menos un elemento.
+          ```
+        - **Runbook B — generar un pago nuevo desde cero, sin tocar la base
+          compartida** (más largo, pero no toca ningún turno real; requiere
+          que un humano complete un checkout en el navegador — entrar la
+          contraseña del comprador de prueba está prohibido para este agente
+          por su propia política de seguridad, sin excepción por tratarse de
+          una cuenta de prueba):
+          ```bash
+          # 1) Postgres descartable + migrar + sembrar (nunca el puerto 5432):
+          docker run -d --name cablear-a7-pg -e POSTGRES_USER=jc_barberia \
+            -e POSTGRES_PASSWORD=jc_barberia -e POSTGRES_DB=jc_barberia \
+            -p 5450:5432 postgres:16
+          DATABASE_URL="postgres://jc_barberia:jc_barberia@localhost:5450/jc_barberia" \
+            pnpm --filter @jc-barberia/infrastructure run db:migrate
+          DATABASE_URL="postgres://jc_barberia:jc_barberia@localhost:5450/jc_barberia" \
+            pnpm --filter @jc-barberia/infrastructure run db:seed
+
+          # 2) API y worker reales apuntando a esa base — usar el TOKEN LIMPIO
+          #    del .env (74 caracteres, sin el "# ... de PRUEBA" pegado al final
+          #    de esa línea) y "start" en vez de "dev" (--watch se cayó una vez
+          #    con un UnknownDependenciesException real de MarkBarberAbsentController
+          #    durante esta misma vuelta — reproducible, reportado, no arreglado
+          #    por estar fuera del alcance de esta tarea):
+          DATABASE_URL="postgres://jc_barberia:jc_barberia@localhost:5450/jc_barberia" \
+            PORT=3009 MERCADOPAGO_SANDBOX=true NOTIFICATION_CHANNEL=console \
+            MERCADOPAGO_ACCESS_TOKEN="<token limpio>" \
+            pnpm --filter @jc-barberia/api run start &
+          DATABASE_URL="postgres://jc_barberia:jc_barberia@localhost:5450/jc_barberia" \
+            MERCADOPAGO_SANDBOX=true NOTIFICATION_CHANNEL=console \
+            MERCADOPAGO_ACCESS_TOKEN="<token limpio>" \
+            pnpm --filter @jc-barberia/worker run start &
+
+          # 3) turno con seña (canal web, obligatorio para que la seña exista):
+          curl -X POST http://localhost:3009/api/holds -H "Content-Type: application/json" \
+            -d '{"barberId":"a0000000-0000-4000-8000-000000000001","serviceId":"b0000000-0000-4000-8000-000000000001","calendarDate":"<fecha>","startTime":"10:00","endTime":"10:30"}'
+          curl -X POST http://localhost:3009/api/holds/confirm -H "Content-Type: application/json" \
+            -d '{"holdId":"<holdId del paso anterior>","client":{"name":"...","phone":"...","email":"..."}}'
+          curl -X POST http://localhost:3009/api/holds/checkout -H "Content-Type: application/json" \
+            -d '{"holdId":"<holdId>"}'
+          #    devuelve initPoint tipo
+          #    https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=...
+          #    (ya verificado real esta vuelta con este exacto flujo).
+
+          # 4) HUMANO: abrir ese link, loguearse como
+          #    test_user_4593144769691374107@testuser.com / nSyJ2hSiQL
+          #    (código de verificación si lo pide: 171054) y pagar con
+          #    Visa 4509 9535 6623 3704, titular APRO, CVV 123, cualquier
+          #    vencimiento futuro (vigente, confirmado contra
+          #    mercadopago.com.ar/developers en vivo).
+
+          # 5) con el payment_id que devuelve MercadoPago al terminar, avisar
+          #    al webhook a mano (no hace falta túnel público: el endpoint
+          #    sólo encola el id, nunca confía en que MercadoPago lo llame):
+          curl -X POST "http://localhost:3009/api/webhooks/mercadopago?data.id=<payment_id>&type=payment"
+
+          # 6) login como dueño y marcar ausente al BARBERO en el rango
+          #    horario del turno que se acaba de pagar (MarkBarberAbsentController
+          #    — dispara GenerateAbsenceReassignmentOffers de verdad sobre ese
+          #    turno, genera la oferta + hold real, sin hack de SQL, mismo
+          #    flujo de E.1/E.3; NO usar /appointments/:id/confirm-absence,
+          #    eso es otro endpoint — ausencia del CLIENTE, Slice B — y no
+          #    dispara ninguna oferta):
+          curl -X POST http://localhost:3009/api/auth/staff-login -H "Content-Type: application/json" \
+            -d '{"email":"dueno@jcbarberia.test","password":"jcbarberia-dueno"}' -c /tmp/cookies.txt
+          curl -X POST http://localhost:3009/api/barbers/a0000000-0000-4000-8000-000000000001/mark-absent \
+            -H "Content-Type: application/json" -b /tmp/cookies.txt \
+            -d '{"calendarDate":"<fecha>","startTime":"10:00","endTime":"10:30"}'
+
+          #    la respuesta trae "affectedAppointmentIds": ["<id-turno-origen>"] —
+          #    de ahí sale el id para los pasos siguientes.
+
+          # 7) ubicar el hold de oferta que generó ese paso y forzar su
+          #    vencimiento en la base descartable (puerto 5450), y mirar el
+          #    log del worker:
+          docker exec cablear-a7-pg psql -U jc_barberia -d jc_barberia \
+            -c "select id, hold_expires_at from slot_occupancies where origin_occupancy_id = '<id-turno-origen>' and status = 'held';"
+          docker exec cablear-a7-pg psql -U jc_barberia -d jc_barberia \
+            -c "update slot_occupancies set hold_expires_at = now() - interval '1 minute' where id = '<hold-id-oferta>' and status = 'held';"
+          docker exec cablear-a7-pg psql -U jc_barberia -d jc_barberia \
+            -c "update pgboss.job set start_after = now() where name = 'hold.expire' and data->>'holdId' = '<hold-id-oferta>' and state = 'created';"
+          #    esperado: "[worker] hold.expire <hold-id-oferta> -> refunded-and-notified"
+          #    en /tmp/a7-worker.log, y:
+          docker exec cablear-a7-pg psql -U jc_barberia -d jc_barberia \
+            -c "select so.id, so.status, d.state as deposit_state from slot_occupancies so join deposits d on d.id = so.deposit_id where so.id = '<id-turno-origen>';"
+          #    debe mostrar "cancelado" / "refunded".
+          ```
+        Cualquiera de los dos runbooks cierra A.7 de verdad — ninguno se
+        ejecutó hasta el final esta vuelta: el A quedó sin correr por
+        necesitar autorización explícita sobre turnos reales; el B quedó
+        cortado por la caída de Docker Desktop a mitad de camino (ver más
+        arriba) después de completar sus pasos 1 a 3 en vivo.
 
 ## Slice B: Panel — acciones sobre el turno
 
