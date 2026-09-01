@@ -37,6 +37,7 @@ const ACTION_LABELS: Record<SlotAction, string> = {
   cancel: 'Cancelar',
   'mark-completed': 'Marcar realizado',
   'confirm-absence': 'Confirmar ausencia',
+  'undo-walk-in': 'Deshacer walk-in',
 };
 
 

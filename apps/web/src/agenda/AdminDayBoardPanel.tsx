@@ -21,6 +21,7 @@ const ACTION_PATH: Partial<Record<SlotAction, string>> = {
   cancel: 'cancel',
   'mark-completed': 'mark-completed',
   'confirm-absence': 'confirm-absence',
+  'undo-walk-in': 'undo-walk-in',
 };
 
 /**
