@@ -110,6 +110,61 @@ Todo escribe contra un puerto cuya única implementación es un doble de test.
         repite el error de marcarlo hecho.
 - [ ] A.7 **Evidencia en pantalla**: reservar un turno, forzar el vencimiento del
       hold, y ver el mail salir por el canal `console` en el log del worker.
+      - **2026-09-02 — la rama `refunded-and-notified` está bloqueada por una
+        regla de plataforma de MercadoPago, no por el código de este
+        repositorio. Diagnóstico cerrado; queda pendiente una acción externa.**
+        Se ejecutó el Runbook B completo contra una Postgres descartable
+        (`cablear-a7-pg`, puerto 5450), API real en :3009 y worker real con
+        canal `console`. Todo lo previo al reembolso funcionó de punta a punta
+        con dinero de prueba real:
+        1. `POST /api/holds` → `POST /api/holds/confirm` → `POST
+           /api/holds/checkout` devolvió una preferencia real.
+        2. Un humano pagó el checkout logueado como el comprador de prueba
+           `test_user_4593144769691374107@testuser.com`: pago
+           **`176946672700`**, `approved`/`accredited`, ARS 4.000,
+           `external_reference` = el `holdId`, `payer.email` = ese test user.
+        3. `POST /api/webhooks/mercadopago` → **HTTP 200**; el depósito quedó
+           `settled` y el turno `reservado` en la base.
+        4. `POST /api/barbers/:id/mark-absent` como dueño → respondió
+           `affectedAppointmentIds` con ese turno y
+           `GenerateAbsenceReassignmentOffers` creó la oferta real
+           `d3759c04-3a52-42e2-a721-24547dbc2686` — sin el `UPDATE
+           origin_occupancy_id` a mano que hizo falta el 2026-08-18.
+        5. Forzado el vencimiento de esa oferta, el worker tomó el job y el
+           reembolso falló: `MercadoPago API error 401: {"message":
+           "Unauthorized use of live credentials", ...}`.
+        **Lo que esto descarta**: la hipótesis anterior de que el 401 se debía
+        a que los pagos previos los había hecho un comprador REAL. Este pago lo
+        hizo el comprador de PRUEBA y el 401 aparece igual. Se confirmó además
+        que el vendedor del `.env` es un test user (`GET /users/me` → 200,
+        `"tags":["test_user"]`) y que `MercadoPagoPaymentAdapter.refund` está
+        bien construido: pega a `api.mercadopago.com` con el token del entorno
+        y `X-Idempotency-Key`; el flag `MERCADOPAGO_SANDBOX` solo afecta el
+        link del checkout, nunca el reembolso. La misma llamada repetida a mano
+        con `curl` y el token limpio también devolvió **401**, lo que descarta
+        que el worker estuviera recibiendo un token distinto.
+        **Comportamiento correcto ante el fallo**: el turno quedó `reservado` y
+        el depósito `settled`. La app no perdió el dinero ni marcó nada como
+        reembolsado — falló de forma ruidosa y el job reintenta.
+        **Para cerrar A.7 hace falta una acción externa**: que el soporte de
+        MercadoPago habilite credenciales de producción para ese test user, o
+        una cuenta con permisos de reembolso. Ningún cambio en este repositorio
+        levanta ese 401.
+        **Dos correcciones al Runbook B, encontradas al ejecutarlo**:
+        - El paso del webhook NO funciona solo con query params: el endpoint
+          persiste `raw_payload` y sin cuerpo falla con
+          `null value in column "raw_payload" ... violates not-null constraint`
+          (HTTP 500). Hay que mandar el cuerpo real de la notificación:
+          `-H "Content-Type: application/json" -d '{"type":"payment",
+          "action":"payment.updated","data":{"id":"<payment_id>"},
+          "live_mode":true}'`.
+        - El `initPoint` que devuelve `/api/holds/checkout` con
+          `MERCADOPAGO_SANDBOX=true` apunta a `sandbox.mercadopago.com.ar`, un
+          dominio que quedó obsoleto con el modelo de test users: el navegador
+          entra en bucle de redirecciones incluso en una ventana limpia. Hay
+          que usar el `init_point` normal (`www.mercadopago.com.ar`), que la
+          preferencia expone igual. Vale revisar si el flag todavía tiene
+          sentido.
       - **Verificado 2026-08-18, con un límite real y documentado — no se
         cierra completo.** Stack real: `cablear-a-pg` (Postgres 16, puerto
         5442, contenedor reusado de la sesión anterior), API real en :3001,
