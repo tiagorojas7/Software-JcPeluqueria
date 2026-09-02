@@ -555,10 +555,10 @@ criterio de aceptación distinto y más duro:
 >
 > Hay que elegir **uno** de los dos entornos y quedarse entero adentro:
 >
-> | | Vendedor | Comprador | `MERCADOPAGO_SANDBOX` | Plata |
-> |---|---|---|---|---|
-> | **Prueba** | Usuario de prueba (el actual) | **Otro usuario de prueba** + tarjetas de prueba | `true` | Ficticia |
-> | **Producción** | Credenciales de la cuenta real de la barbería | Cliente real | `false` | Real |
+> | | Vendedor | Comprador | Plata |
+> |---|---|---|---|
+> | **Prueba** | Usuario de prueba (el actual) | **Otro usuario de prueba** + tarjetas de prueba | Ficticia |
+> | **Producción** | Credenciales de la cuenta real de la barbería | Cliente real | Real |
 >
 > Lo que hay hoy es un vendedor de prueba con un comprador que pagó de verdad: la única combinación que no funciona. Y mientras siga así, **cada reserva de prueba cobra plata real** que ese vendedor no puede devolver.
 

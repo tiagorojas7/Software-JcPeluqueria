@@ -30,13 +30,6 @@ GMAIL_USER=tu-cuenta@gmail.com
 GMAIL_APP_PASSWORD=your-16-character-gmail-app-password
 GMAIL_FROM=JC Barberia <tu-cuenta@gmail.com>
 
-# Cobrar en el checkout de sandbox (sandbox.mercadopago.com) en vez del
-# productivo. OBLIGATORIO cuando el ACCESS_TOKEN es de prueba: el checkout
-# productivo rechaza las tarjetas de prueba con "estas usando datos de
-# prueba". MercadoPago devuelve las dos URLs en cada preferencia, asi que el
-# codigo no puede deducir cual corresponde — hay que decirselo.
-MERCADOPAGO_SANDBOX=true
-
 # Introduced by this arranque slice.
 PORT=3000
 WEB_ORIGIN=http://localhost:5173

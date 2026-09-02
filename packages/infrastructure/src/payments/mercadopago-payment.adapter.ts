@@ -81,21 +81,6 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     // the exact same adapter every existing test already exercises,
     // unchanged.
     private readonly publicBaseUrl?: string,
-    /**
-     * Whether to send the buyer to MercadoPago's SANDBOX checkout
-     * (`sandbox_init_point`) instead of the production one (`init_point`).
-     *
-     * MercadoPago returns BOTH URLs on every preference, whichever credential
-     * created it, so the response alone cannot tell us which one the caller
-     * needs — hence an explicit flag rather than a guess. Getting it wrong is
-     * not a subtle failure: a test card on the production checkout is rejected
-     * with "estas usando datos de prueba", and no test payment can ever be
-     * completed.
-     *
-     * `false` by default, so production behaviour is unchanged for any caller
-     * that does not opt in.
-     */
-    private readonly useSandbox: boolean = false,
   ) {}
 
   async createPreference(input: {
@@ -106,7 +91,6 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
     const response = await this.request<{
       id: string;
       init_point: string;
-      sandbox_init_point?: string;
     }>('/checkout/preferences', {
       method: 'POST',
       body: JSON.stringify({
@@ -134,13 +118,19 @@ export class MercadoPagoPaymentAdapter implements PaymentPort {
           : {}),
       }),
     });
-    // Falls back to the production URL when sandbox was asked for but
-    // MercadoPago did not return one: a broken checkout link is worse than
-    // the wrong environment, and the caller finds out immediately.
-    const initPoint =
-      this.useSandbox && response.sandbox_init_point ? response.sandbox_init_point : response.init_point;
-
-    return { preferenceId: response.id, initPoint };
+    // ALWAYS `init_point`, never `sandbox_init_point`. There used to be a
+    // `useSandbox` flag here that chose `sandbox_init_point`
+    // (`sandbox.mercadopago.com.ar`) for TEST credentials — verified by hand
+    // 2026-09-02 that this domain is dead under MercadoPago's current
+    // test-user model: opening it loops on redirects forever, even in a
+    // clean guest window, regardless of credential. The SAME preference's
+    // `init_point` (`www.mercadopago.com.ar`) completed a real end-to-end
+    // test payment (`176946672700`, approved) with those same TEST
+    // credentials. "Test" vs. "production" is decided entirely by which
+    // MERCADOPAGO_ACCESS_TOKEN created the preference and which account logs
+    // in as buyer — never by which checkout domain the buyer is sent to; see
+    // `openspec/changes/cablear-el-mvp/tasks.md`, A.7.
+    return { preferenceId: response.id, initPoint: response.init_point };
   }
 
   async getPayment(paymentId: string): Promise<PaymentStatusResult> {

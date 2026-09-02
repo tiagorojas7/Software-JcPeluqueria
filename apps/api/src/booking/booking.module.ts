@@ -135,17 +135,20 @@ import {
       // preference. Left undefined (every other module's own adapter
       // instance, used only for `getPayment`/`refund`) keeps today's
       // behavior exactly as it was.
+      //
+      // cablear-el-mvp A.7 (2026-09-02): there used to be a fourth argument
+      // here, `MERCADOPAGO_SANDBOX === 'true'`, asking `createPreference` for
+      // `sandbox_init_point` instead of `init_point`. Removed — verified by
+      // hand that `sandbox.mercadopago.com.ar` loops on redirects forever
+      // under MercadoPago's current test-user model, while `init_point` from
+      // that SAME preference completed a real test payment end to end with
+      // the same TEST credentials. See the adapter's own doc comment.
       provide: PAYMENT_PORT,
       useFactory: () =>
         new MercadoPagoPaymentAdapter(
           process.env.MERCADOPAGO_ACCESS_TOKEN ?? '',
           undefined,
           process.env.PUBLIC_BASE_URL,
-          // Con credenciales de prueba hay que cobrar en el checkout de
-          // sandbox: el productivo rechaza las tarjetas de prueba. Explicito
-          // porque la respuesta de MercadoPago trae las dos URLs siempre y no
-          // permite deducir cual corresponde.
-          process.env.MERCADOPAGO_SANDBOX === 'true',
         ),
     },
     {

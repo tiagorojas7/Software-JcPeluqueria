@@ -165,6 +165,25 @@ Todo escribe contra un puerto cuya única implementación es un doble de test.
           que usar el `init_point` normal (`www.mercadopago.com.ar`), que la
           preferencia expone igual. Vale revisar si el flag todavía tiene
           sentido.
+      - **2026-09-02 — las dos correcciones de Runbook B de arriba ya no son
+        solo texto para quien corre el runbook a mano: quedaron resueltas en
+        código, con test que primero falló contra el código viejo (RED) y
+        pasó recién después del fix (GREEN).** El webhook valida el cuerpo
+        con `MercadoPagoWebhookBodySchema` (`@jc-barberia/contracts`) antes
+        de tocar la base: una notificación sin JSON usable ahora responde
+        `400` en vez de llegar a `payment_events` y romper su `NOT NULL` con
+        un `500` que MercadoPago reintenta para siempre — el happy path con
+        cuerpo real sigue exactamente igual. Y
+        `MercadoPagoPaymentAdapter.createPreference` ya no elige entre
+        `init_point`/`sandbox_init_point`: siempre devuelve `init_point`,
+        confirmado que `sandbox.mercadopago.com.ar` está muerto (bucle de
+        redirecciones) bajo el modelo de test users actual, mientras que
+        `init_point` de esa misma preferencia fue lo que completó el pago de
+        prueba real documentado arriba. El flag `MERCADOPAGO_SANDBOX` se quitó
+        del adaptador, de `BookingModule` y de la documentación (`README.md`,
+        `docs/DEMO.md`): dejó de seleccionar nada que sirviera. Ninguno de los
+        dos cambios toca el bloqueo de reembolso — A.7 sigue abierto solo por
+        esa razón, ajena al código.
       - **Verificado 2026-08-18, con un límite real y documentado — no se
         cierra completo.** Stack real: `cablear-a-pg` (Postgres 16, puerto
         5442, contenedor reusado de la sesión anterior), API real en :3001,
