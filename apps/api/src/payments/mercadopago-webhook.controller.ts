@@ -1,4 +1,5 @@
-import { Body, Controller, Headers, HttpCode, Inject, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Headers, HttpCode, Inject, Post, Query } from '@nestjs/common';
+import { MercadoPagoWebhookBodySchema } from '@jc-barberia/contracts';
 import type { PaymentEventRepository, PaymentJobQueue } from '@jc-barberia/domain';
 import { verifyMercadoPagoSignature } from '@jc-barberia/infrastructure';
 
@@ -72,6 +73,18 @@ export class MercadoPagoWebhookController {
       return { received: true };
     }
 
+    // A public endpoint gets whatever the caller feels like sending —
+    // verified in production: a notification with no usable JSON body (no
+    // `Content-Type: application/json`, an empty body) used to reach
+    // `events.record` anyway and die on `payment_events.raw_payload`'s
+    // `NOT NULL`, answering with a 500 that MercadoPago retries forever. See
+    // `MercadoPagoWebhookBodySchema`'s own doc comment for why this checks
+    // shape only, never MercadoPago's actual fields.
+    const parsedBody = MercadoPagoWebhookBodySchema.safeParse(body);
+    if (!parsedBody.success) {
+      throw new BadRequestException(parsedBody.error.flatten());
+    }
+
     // Recorded for the audit trail, never used as a gate — see this class's
     // own doc comment for why.
     const signatureValid = verifyMercadoPagoSignature({
@@ -81,7 +94,7 @@ export class MercadoPagoWebhookController {
       secret: this.webhookSecret,
     });
 
-    await this.events.record({ paymentId, rawPayload: body, signatureValid });
+    await this.events.record({ paymentId, rawPayload: parsedBody.data, signatureValid });
     await this.queue.enqueueProcessPayment({ paymentId: paymentId.toLowerCase() });
     return { received: true };
   }

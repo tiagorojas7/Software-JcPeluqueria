@@ -73,6 +73,7 @@ export type {
   CreateHoldRequest,
   GetAvailabilityQuery,
   HoldResponse,
+  MercadoPagoWebhookBody,
   PublicBarberResponse,
   PublicBarbersResponse,
   PublicServiceResponse,
@@ -84,6 +85,7 @@ export {
   ConfirmReservationRequestSchema,
   CreateHoldRequestSchema,
   GetAvailabilityQuerySchema,
+  MercadoPagoWebhookBodySchema,
 } from './booking';
 export type {
   AddBarberRequest,

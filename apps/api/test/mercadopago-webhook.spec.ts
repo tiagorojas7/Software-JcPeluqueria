@@ -156,6 +156,29 @@ describe('MercadoPago webhook (App Nest levantada en memoria)', () => {
     );
   });
 
+  // RED — found in production 2026-09-02 (cablear-el-mvp A.7): the Runbook B
+  // curl that only carried query params, no `-d` and no `Content-Type`, made
+  // it all the way to `payment_events.record` with `rawPayload: undefined`
+  // and died there — `PostgresError: null value in column "raw_payload" ...
+  // violates not-null constraint` — answered as an HTTP 500, which
+  // MercadoPago retries forever. A public webhook must not let unparseable
+  // input reach the database; it must fail as a clean 400 instead, with
+  // nothing recorded and nothing enqueued.
+  it('rechaza con 400 una notificacion sin cuerpo JSON usable, en vez de llegar a la base y romper con un 500', async () => {
+    const recordsBefore = events.records.length;
+    const enqueuedBefore = queue.enqueuedPaymentIds.length;
+
+    const response = await request(app.getHttpServer())
+      .post('/webhooks/mercadopago?data.id=222222&type=payment')
+      .set('x-signature', signatureHeaderFor('222222', 1700000004));
+    // Deliberately NO .send(...): exactamente el curl real que rompio en
+    // produccion — solo query params, sin cuerpo y sin Content-Type.
+
+    expect(response.status).toBe(400);
+    expect(events.records).toHaveLength(recordsBefore);
+    expect(queue.enqueuedPaymentIds).toHaveLength(enqueuedBefore);
+  });
+
   it('is public — reachable with no session cookie, proving PermissionsGuard does not block it', async () => {
     const ts = 1700000003;
     const response = await request(app.getHttpServer())

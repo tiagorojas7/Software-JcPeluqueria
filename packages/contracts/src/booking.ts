@@ -138,3 +138,30 @@ export type ClaimPaymentRequest = z.infer<typeof ClaimPaymentRequestSchema>;
 export interface ClaimPaymentResponseBody {
   readonly claimed: true;
 }
+
+/**
+ * cablear-el-mvp A.7 (2026-09-02): the ONLY thing this schema guarantees is
+ * that MercadoPago's webhook body is a storable JSON object — never what it
+ * MEANS. `payment_events.raw_payload` is `jsonb NOT NULL`
+ * (`packages/infrastructure/src/db/schema/payments.ts`), and a notification
+ * that reached `MercadoPagoWebhookController` with no parseable JSON object —
+ * no `Content-Type: application/json`, an empty body, a bare `null` — used to
+ * sail past the controller and die at that constraint instead: a real
+ * `PostgresError: null value in column "raw_payload" ... violates not-null
+ * constraint`, answered as an HTTP 500 that MercadoPago retries forever.
+ * Verified against real traffic 2026-09-02
+ * (`openspec/changes/cablear-el-mvp/tasks.md`, A.7).
+ *
+ * Deliberately NOT a strict shape of MercadoPago's own fields (`type`,
+ * `action`, `data.id`, `live_mode`). `MercadoPagoWebhookController` never
+ * reads any of them: the payment id and the notification kind it acts on
+ * both come from the QUERY STRING, which is what MercadoPago actually signs
+ * — the body is stored purely as an opaque audit trail (see that class's own
+ * doc comment). Requiring named fields here would reject a real notification
+ * the moment MercadoPago's payload shape drifts even slightly; requiring
+ * only "a JSON object, not `null`/`undefined`/an array/a bare primitive" is
+ * the entire contract a column that only needs to store it actually has.
+ */
+export const MercadoPagoWebhookBodySchema = z.record(z.string(), z.unknown());
+
+export type MercadoPagoWebhookBody = z.infer<typeof MercadoPagoWebhookBodySchema>;
